@@ -681,6 +681,26 @@ def test_tableau_sans_colonne_designation_ne_l_efface_pas(page, tmp_path):
     assert next(f for f in stock["forfaits"] if f["ref"] == "EX-F1-3S")["exemple"] is True  # le repère « exemple » aussi
 
 
+def test_tableau_la_barre_oblique_veut_dire_pas_de_donnees(page, tmp_path):
+    """Dans les tableaux remplis à la main, « / » = pas de données : jamais un élément nommé « / »."""
+    chemin = ecrire_tableau(
+        tmp_path / "barre.csv",
+        ["EX-F1-3S;/;800,00;960,00;F1;/;/;/;/", "NV-1;Forfait neuf;100,00;120,00;/;/;/;/;/"],
+    )
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("1 nouveau, 1 modifié, 0 inchangé")
+    expect(d).not_to_contain_text("n'existent pas encore")  # aucun élément « / » à créer
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    par_ref = {c["ref"]: c for c in cartes(page)}
+    assert par_ref["EX-F1-3S"]["elements"] == {"Taximètre": "F1"}  # « / » comme une case vide : l'imprimante 3S est retirée
+    assert par_ref["EX-F1-3S"]["designation"] == ""
+    assert par_ref["NV-1"]["elements"] == {}
+    assert (
+        page.evaluate("JSON.parse(localStorage.getItem('forfaits.donnees.v1')).elements.filter(e => e.nom === '/').length") == 0
+    )
+
+
 def test_import_d_un_mauvais_fichier_refuse(page, tmp_path):
     cas = {
         "texte.json": "bonjour",

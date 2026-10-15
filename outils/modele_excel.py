@@ -34,17 +34,21 @@ FAMILLES = {
     "Installation": [],
 }
 COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC"]
+PAS_DE_DONNEES = "/"  # en tête de chaque liste : l'outil le lit comme une case vide
 
 ROUGE = "E30613"
 NOIR = "000000"
 BLANC = "FFFFFF"
 
 MODE_D_EMPLOI = [
-    ("1. Complète les listes", "Onglet « Listes » : un taximètre, boîtier, imprimante… par ligne, sous le titre de sa famille."),
+    (
+        "1. Complète les listes",
+        "Onglet « Listes » : un taximètre, boîtier, imprimante… par ligne, sous le titre de sa famille (le « / » en tête veut dire « pas de données » : ne pas l'enlever).",
+    ),
     (
         "2. Une ligne par forfait",
         "Onglet « Forfaits » : référence, désignation (le contenu), prix HT et prix TTC tels qu'écrits sur le tarif. "
-        "Puis choisis chaque élément dans la liste déroulante (laisse vide si le forfait n'en a pas).",
+        "Puis choisis chaque élément dans la liste déroulante. Si le forfait n'en a pas : « / » (pas de données) ou case vide, c'est pareil.",
     ),
     (
         "3. Les couleurs aident",
@@ -90,7 +94,7 @@ def fabriquer() -> Workbook:
         cellule.fill = PatternFill("solid", start_color=NOIR)
         cellule.font = entete_police
         listes.column_dimensions[get_column_letter(col)].width = 26
-        for ligne, element in enumerate(elements, start=2):
+        for ligne, element in enumerate([PAS_DE_DONNEES, *elements], start=2):
             listes.cell(row=ligne, column=col, value=element)
     listes.freeze_panes = "A2"
 

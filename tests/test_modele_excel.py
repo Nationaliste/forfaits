@@ -42,7 +42,7 @@ def test_modele_a_les_listes_de_depart_de_l_outil(modele):
     for colonne, (identifiant, nom) in enumerate(familles_de_l_outil(), start=1):
         assert listes.cell(row=1, column=colonne).value == nom
         valeurs = [c.value for c in listes[openpyxl.utils.get_column_letter(colonne)][1:] if c.value]
-        assert valeurs == attendu[identifiant], nom
+        assert valeurs == ["/", *attendu[identifiant]], nom  # « / » (pas de données) en tête, puis les éléments de départ
 
 
 def test_modele_est_vide_et_controle_les_saisies(modele):

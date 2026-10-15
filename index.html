@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-I36V/eKYgILicwCKslTzTZyimkmt7g65X4EUgdIio+M='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8QYJd7ekLK9SJUTQHfFFb0DRia8PU0ft0Zcl9wUT2T8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1607,7 +1607,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ligne = lignes[n];
       if (ligne.every((c) => !String(c).trim())) continue;
       // L'export de l'outil protège avec une apostrophe les cellules qui commencent par = + - @.
-      const lire = (cle) => (colonnes.has(cle) ? String(ligne[colonnes.get(cle)] ?? '').trim().replace(/^'(?=[=+\-@])/, '') : '');
+      // Dans les tableaux remplis à la main, « / » veut dire « pas de données » : même chose qu'une case vide.
+      const lire = (cle) => {
+        const texte = colonnes.has(cle) ? String(ligne[colonnes.get(cle)] ?? '').trim().replace(/^'(?=[=+\-@])/, '') : '';
+        return texte === '/' ? '' : texte;
+      };
       const ref = lire('ref');
       if (!ref) { erreurs.push(`Ligne ${n + 1} : la référence est vide.`); continue; }
       const lieu = `Ligne ${n + 1} (${ref.slice(0, 40)})`;

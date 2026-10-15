@@ -235,19 +235,19 @@ def test_carte_complete_et_prix_au_format_francais(page):
     assert espaces(carte["ttc"]) == "1 380,00 €"
     assert carte["elements"] == {"Taximètre": "M1 STD", "Boîtier": "Gamma 7", "Imprimante": "3S", "Installation": "Pose EXEMPLE"}
     chercher(page, "EX-M1-G7-3S")
-    assert espaces(cartes(page)[0]["ttc"]) == "1 228,40 €"
+    assert espaces(cartes(page)[0]["ttc"]) == "1 481,40 €"
     assert " " not in cartes(page)[0]["ttc"]  # espace visible avec toutes les polices
-    assert espaces(cartes(page)[0]["ht"]) == "1 023,67 €"
+    assert espaces(cartes(page)[0]["ht"]) == "1 234,50 €"
     expect(page.locator(".badge-exemple").first).to_have_text("EXEMPLE")
 
 
 def test_lecture_des_prix_saisis(page):
     cas = {
-        "1 228,40": 122840,
-        "1228,4": 122840,
-        "1228.40": 122840,
-        "1.228,40": 122840,
-        "1228,40 €": 122840,
+        "1 234,50": 123450,
+        "1234,5": 123450,
+        "1234.50": 123450,
+        "1.234,50": 123450,
+        "1234,50 €": 123450,
         "0": 0,
         "12": 1200,
         "abc": None,
@@ -281,8 +281,8 @@ def test_ajouter_modifier_supprimer(page):
     remplir(
         page,
         "TX-100",
-        "1 023,67",
-        "1 228,40",
+        "1 234,50",
+        "1 481,40",
         {"Taximètre": "F1", "Boîtier": "Gammatech X", "Imprimante": "4S"},
         designation="Pack F1 complet",
     )
@@ -290,7 +290,7 @@ def test_ajouter_modifier_supprimer(page):
     chercher(page, "tx100")
     (carte,) = cartes(page)
     assert carte["ref"] == "TX-100" and carte["designation"] == "Pack F1 complet"
-    assert espaces(carte["ttc"]) == "1 228,40 €"
+    assert espaces(carte["ttc"]) == "1 481,40 €"
     assert carte["elements"] == {"Taximètre": "F1", "Boîtier": "Gammatech X", "Imprimante": "4S"}
 
     modifier(page, "TX-100")
@@ -400,7 +400,7 @@ def test_listes_ajouter_renommer_et_proteger(page):
     d.get_by_label("Nouvel élément pour Boîtier").press("Enter")
     expect(d.locator(".msg-erreur")).to_contain_text("existe déjà")
     d.get_by_label("Nom de l'élément Gamma 7").fill("Gamma 7 Plus")
-    d.get_by_label("Nom de l'élément Gamma 7").press("Tab")
+    # Clic direct sur un autre bouton juste après le renommage : il ne doit pas être perdu.
     d.get_by_role("button", name="Supprimer 3S").click()  # utilisé : suppression refusée
     expect(dialogue(page)).to_contain_text("Suppression impossible")
     dialogue(page).get_by_role("button", name="Compris").click()
@@ -514,7 +514,7 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
     )
     assert len(lignes) == 12
     ligne = next(x for x in lignes if x.startswith("EX-M1-G7-3S;"))
-    assert ";1023,67;1228,40;M1 STD;Gamma 7;3S;;;oui;" in ligne
+    assert ";1234,50;1481,40;M1 STD;Gamma 7;3S;;;oui;" in ligne
 
 
 def test_import_d_un_mauvais_fichier_refuse(page, tmp_path):
@@ -553,8 +553,77 @@ def test_rappel_d_exporter(page, tmp_path):
     ouvrir_ajout(page)
     remplir(page, "R-1", "100", "120")
     expect(page.locator("#rappel")).to_contain_text("1 modification pas encore exportée")
+    page.click("#btn-rappel-exporter")  # le bouton du rappel ouvre l'export
+    expect(dialogue(page)).to_contain_text("Fichier de sauvegarde (.json)")
+    dialogue(page).get_by_role("button", name="Fermer").click()
     exporter_json(page, tmp_path / "r.json")
     expect(page.locator("#rappel")).to_be_hidden()
+
+
+def test_boutons_vider_et_tout_effacer(page):
+    chercher(page, "zzz")
+    page.click("#btn-vider")
+    expect(page.locator("#recherche")).to_have_value("")
+    assert refs(page) == TOUS
+    chercher(page, "3S")
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    dialogue(page).get_by_role("button", name="F1", exact=True).click()
+    assert refs(page) == AVEC_F1_ET_3S
+    page.click("#btn-tout-effacer")  # efface le texte ET les filtres
+    expect(page.locator("#recherche")).to_have_value("")
+    expect(page.locator("#etiquettes")).to_be_hidden()
+    assert refs(page) == TOUS
+
+
+def test_exemple_modifie_devient_un_vrai_forfait(page):
+    activer_modif(page)
+    modifier(page, "EX-F1-3S")
+    expect(dialogue(page).locator(".note-exemple")).to_contain_text("devient un vrai forfait")
+    remplir(page, ref="VRAI-F1-3S", ht="500", ttc="600", designation="Vrai forfait")
+    page.click("#btn-suppr-exemples")
+    dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
+    expect(page.locator("#resultats .carte")).to_have_count(1)
+    assert refs(page) == {"VRAI-F1-3S"}
+    expect(page.locator(".badge-exemple")).to_have_count(0)
+
+
+def test_date_absurde_dans_un_fichier_ne_bloque_rien(appareils, tmp_path):
+    a = appareils().page
+    fichier = exporter_json(a, tmp_path / "base.json")
+    for f in fichier["forfaits"]:
+        if f["ref"] == "EX-F1-3S":
+            f["maj"] = 1e20
+            f["ttc"] = 99999
+    piege = tmp_path / "piege.json"
+    piege.write_text(json.dumps(fichier), encoding="utf-8")
+    importer(a, piege)
+    chercher(a, "EX-F1-3S")
+    assert espaces(cartes(a)[0]["ttc"]) == "999,99 €"
+    expect(a.locator("#etat-donnees")).to_contain_text("Données du")
+    # La date a été ramenée à demain au plus : une vraie modification plus tard l'emportera encore.
+    a.reload()
+    a.wait_for_selector("#resultats .carte")
+    assert a.evaluate(
+        "JSON.parse(localStorage.getItem('forfaits.donnees.v1')).forfaits.every(f => f.maj <= Date.now() + 86400000)"
+    )
+
+
+def test_meme_element_cree_par_deux_responsables_signale(appareils, tmp_path):
+    a = appareils().page
+    b = appareils().page
+    for p in (a, b):
+        activer_modif(p)
+        p.click("#btn-menu")
+        p.click("#btn-listes")
+        champ = dialogue(p).get_by_label("Nouvel élément pour Boîtier")
+        champ.fill("Gamma 8")
+        champ.press("Enter")
+        dialogue(p).get_by_role("button", name="Terminé").click()
+    exporter_json(b, tmp_path / "b.json")
+    a.set_input_files("#fichier-import", str(tmp_path / "b.json"))
+    dialogue(a).get_by_role("button", name="Mettre à jour").click()
+    expect(dialogue(a)).to_contain_text("Doublons à corriger")
+    expect(dialogue(a)).to_contain_text("Boîtier : Gamma 8 (2 fois)")
 
 
 # ---------------------------------------------------------------- téléphone, hors ligne, fichier local

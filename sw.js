@@ -12,7 +12,8 @@ self.addEventListener('install', (ev) => {
 self.addEventListener('activate', (ev) => {
   ev.waitUntil(
     caches.keys()
-      .then((noms) => Promise.all(noms.filter((nom) => nom !== CACHE).map((nom) => caches.delete(nom))))
+      // Seulement nos anciennes copies : d'autres pages du même site peuvent avoir les leurs.
+      .then((noms) => Promise.all(noms.filter((nom) => nom.startsWith('forfaits-') && nom !== CACHE).map((nom) => caches.delete(nom))))
       .then(() => self.clients.claim()),
   );
 });

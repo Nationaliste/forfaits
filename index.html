@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-7oI7gN2Sn9ab8yUfPBzF2bejuAGvKuDumHCIoEJksQo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-f/TbJ+58Dq4JpTMCTCKitRIEkNEXfMAr3rMsHyBaFLo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#121212">
@@ -431,6 +431,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const VERSION_FORMAT = 1;
   const VERSION_OUTIL = '1.0';
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
+  const TAUX_TVA = `${Math.round(TVA * 100)} %`;
   const TOLERANCE_TVA = 2;         // écart toléré (en centimes) entre TTC saisi et HT + TVA
   const JOURS_RAPPEL_IMPORT = 30;  // au-delà, on conseille de réimporter
   const SANS = '__sans__';         // valeur de filtre « sans élément de cette famille »
@@ -484,7 +485,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return a.trim().toLocaleUpperCase('fr') === b.trim().toLocaleUpperCase('fr');
   }
 
-  // « 1 228,40 € » ou « 1228.4 » → 122840 (centimes). null si la saisie n'est pas un prix.
+  // « 1 234,50 € » ou « 1234.5 » → 123450 (centimes). null si la saisie n'est pas un prix.
   function lirePrix(saisie) {
     let t = String(saisie ?? '').replace(/[\s  €]/g, '');
     if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
@@ -492,9 +493,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const [entier, decimales = ''] = t.split('.');
     return Number(entier) * 100 + Number(decimales.padEnd(2, '0'));
   }
-  // « 1 228,40 € » : espace insécable classique, car certaines polices n'affichent pas l'espace fine.
+  // « 1 234,50 € » : espace insécable classique, car certaines polices n'affichent pas l'espace fine.
   const formatPrix = (centimes) => fmtEuro.format(centimes / 100).replace(/ /g, ' ');
-  const prixSaisie = (centimes) => (centimes / 100).toFixed(2).replace('.', ','); // « 1228,40 »
+  const prixSaisie = (centimes) => (centimes / 100).toFixed(2).replace('.', ','); // « 1234,50 »
   const ttcDepuisHt = (ht) => Math.round(ht * (1 + TVA));
   const htDepuisTtc = (ttc) => Math.round(ttc / (1 + TVA));
   const dateCourte = (ms) => fmtDate.format(new Date(ms));
@@ -548,7 +549,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       return { id: 'fft-' + norm(ref), ref, designation: 'EXEMPLE — ' + texte, ht, ttc, elements: elementsDuForfait, exemple: true, maj: 0 };
     };
     const forfaits = [
-      f('EX-M1-G7-3S', 102367, 122840, ['elt-m1std', 'elt-gamma7', 'elt-3s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S'),
+      f('EX-M1-G7-3S', 123450, 148140, ['elt-m1std', 'elt-gamma7', 'elt-3s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S'),
       f('EX-M1-G7-4S', 110000, 132000, ['elt-m1std', 'elt-gamma7', 'elt-4s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 4S'),
       f('EX-M1-SPX-3S', 95000, 114000, ['elt-m1std', 'elt-starplastx', 'elt-3s'], 'Taximètre M1 STD + boîtier Starplast X + imprimante 3S'),
       f('EX-M1-GTX-4S', 120000, 144000, ['elt-m1std', 'elt-gammatechx', 'elt-4s'], 'Taximètre M1 STD + boîtier Gammatech X + imprimante 4S'),
@@ -584,7 +585,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
       return v;
     };
     const texte = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-    const date = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+    // Date bornée : une date absurde (an 3000…) bloquerait l'affichage et gagnerait toutes les fusions.
+    const limite = Date.now() + 86400000;
+    const date = (v) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), limite) : 0);
     const marques = (x) => ({ ...(x.supprime === true ? { supprime: true } : {}), ...(x.exemple === true ? { exemple: true } : {}) });
     const objet = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : echec('Fichier abîmé : enregistrement invalide.'));
 
@@ -666,6 +669,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function noterModif() {
     appareil.modifsEnAttente += 1;
     sauverAppareil();
+    demanderStockageDurable();
+  }
+
+  // Demande au navigateur de ne pas effacer les données de lui-même. Firefox pose alors une
+  // question : on ne la pose qu'après une action utile (modification, import), pas à l'ouverture.
+  let stockageDurableDemande = false;
+  function demanderStockageDurable() {
+    if (stockageDurableDemande || !navigator.storage?.persisted) return;
+    stockageDurableDemande = true;
+    navigator.storage.persisted().then((deja) => (deja ? true : navigator.storage.persist())).catch(() => {});
   }
 
   // Fusion de deux jeux de données : pour chaque enregistrement, la version la plus récente gagne.
@@ -1071,8 +1084,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const champRef = h('input', { id: 'f-ref', class: 'champ', value: existant?.ref ?? '', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
     const msgRef = h('p', { class: 'msg-champ', 'aria-live': 'polite' });
     const champDes = h('textarea', { id: 'f-des', class: 'champ', rows: 3, maxlength: 2000 }, existant?.designation ?? '');
-    const champHt = h('input', { id: 'f-ht', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 023,67', value: existant ? prixSaisie(existant.ht) : '' });
-    const champTtc = h('input', { id: 'f-ttc', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 228,40', value: existant ? prixSaisie(existant.ttc) : '' });
+    const champHt = h('input', { id: 'f-ht', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 234,50', value: existant ? prixSaisie(existant.ht) : '' });
+    const champTtc = h('input', { id: 'f-ttc', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 481,40', value: existant ? prixSaisie(existant.ttc) : '' });
     const calcul = (source, cible, conversion) => () => {
       const valeur = lirePrix(source.value);
       if (valeur !== null) cible.value = prixSaisie(conversion(valeur));
@@ -1101,8 +1114,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ttc = lirePrix(champTtc.value);
       const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
         : doublon ? ['Cette référence existe déjà : choisis-en une autre.', champRef]
-        : ht === null ? ['Prix HT invalide (exemple : 1 023,67).', champHt]
-        : ttc === null ? ['Prix TTC invalide (exemple : 1 228,40).', champTtc]
+        : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
+        : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
         : ['', null];
       msgErreur.textContent = probleme;
       if (probleme) { champFautif.focus(); return; }
@@ -1117,7 +1130,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const memes = cle ? index.forfaits.filter((f) => autre(f) && cleCombinaison(f.elements) === cle) : [];
       if (memes.length) avertissements.push(`Même combinaison d'éléments que : ${memes.map((f) => f.ref).join(', ')}.`);
       const attendu = ttcDepuisHt(ht);
-      if (Math.abs(ttc - attendu) > TOLERANCE_TVA) avertissements.push(`Le TTC (${formatPrix(ttc)}) ne correspond pas au HT + 20 % (${formatPrix(attendu)}).`);
+      if (Math.abs(ttc - attendu) > TOLERANCE_TVA) avertissements.push(`Le TTC (${formatPrix(ttc)}) ne correspond pas au HT + ${TAUX_TVA} (${formatPrix(attendu)}).`);
       if (avertissements.length) {
         const ok = await demander({
           titre: "Vérifie avant d'enregistrer", liste: avertissements,
@@ -1126,7 +1139,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
         if (!ok) return;
       }
 
-      const forfait = { ...(existant || { id: nouvelId('fft') }), ref, designation: champDes.value.trim(), ht, ttc, elements, maj: Date.now() };
+      // Un exemple modifié devient un vrai forfait : il ne sera pas effacé avec les exemples.
+      const { exemple: _ancienExemple, ...base } = existant || { id: nouvelId('fft') };
+      const forfait = { ...base, ref, designation: champDes.value.trim(), ht, ttc, elements, maj: Date.now() };
       remplacer(donnees.forfaits, forfait);
       sauver();
       noterModif();
@@ -1141,12 +1156,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
       classe: 'dlg-large',
       surEnvoi: enregistrer,
       corps: [
-        existant?.exemple ? h('p', { class: 'note-exemple' }, 'Ce forfait est un EXEMPLE : il sera effacé avec « Supprimer les exemples ».') : null,
+        existant?.exemple ? h('p', { class: 'note-exemple' }, 'Ce forfait est un EXEMPLE. Une fois enregistré, il devient un vrai forfait : vérifie bien la référence et les prix.') : null,
         groupe('Référence *', champRef, msgRef),
         groupe('Désignation / contenu', champDes),
         h('div', { class: 'ligne-prix' },
           groupe('Prix HT *', champHt, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champTtc, champHt, htDepuisTtc) }, 'Calculer depuis le TTC')),
-          groupe('Prix TTC *', champTtc, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champHt, champTtc, ttcDepuisHt) }, 'Calculer depuis le HT (+ 20 %)'))),
+          groupe('Prix TTC *', champTtc, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champHt, champTtc, ttcDepuisHt) }, `Calculer depuis le HT (+ ${TAUX_TVA})`))),
         h('div', { class: 'grille-familles' }, index.fams.map((fam, i) => groupe(fam.nom, listes[i]))),
         msgErreur,
       ],
@@ -1202,10 +1217,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const message = h('p', { class: 'msg-erreur', role: 'alert' });
     const conteneur = h('div', {});
     const signaler = (texte) => { message.textContent = texte; };
-    const changer = () => {
+    // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
+    const changer = (redessinerAussi = true) => {
       sauver();
       noterModif();
-      redessiner();
+      if (redessinerAussi) redessiner(); else index = construireIndex();
     };
     const redessiner = () => {
       index = construireIndex();
@@ -1228,15 +1244,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const blocs = fams.map((fam, i) => {
       const champNom = h('input', { class: 'champ', value: fam.nom, maxlength: 60, 'aria-label': 'Nom de la famille ' + fam.nom });
       champNom.addEventListener('change', () => {
+        const courante = donnees.familles.find((x) => x.id === fam.id);
         const nom = champNom.value.trim();
-        if (!nom || !nomLibre(nom, fams, fam.id)) {
+        if (!nom || !nomLibre(nom, index.fams, fam.id)) {
           signaler(nom ? `La famille « ${nom} » existe déjà.` : 'Le nom ne peut pas être vide.');
-          champNom.value = fam.nom;
+          champNom.value = courante.nom;
           return;
         }
         signaler('');
-        remplacer(donnees.familles, { ...fam, nom, maj: Date.now() });
-        changer();
+        remplacer(donnees.familles, { ...courante, nom, maj: Date.now() });
+        changer(false);
       });
       const champNouveau = h('input', { class: 'champ', maxlength: 60, placeholder: 'Nouvel élément', 'aria-label': 'Nouvel élément pour ' + fam.nom });
       const ajouter = () => {
@@ -1258,15 +1275,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('ul', { class: 'liste-elements' }, elementsDe(fam.id).map((e) => {
           const champ = h('input', { class: 'champ', value: e.nom, maxlength: 60, 'aria-label': `Nom de l'élément ${e.nom}` });
           champ.addEventListener('change', () => {
+            const courant = donnees.elements.find((x) => x.id === e.id);
             const nom = champ.value.trim();
             if (!nom || !nomLibre(nom, elementsDe(fam.id), e.id)) {
               signaler(nom ? `« ${nom} » existe déjà dans ${fam.nom}.` : 'Le nom ne peut pas être vide.');
-              champ.value = e.nom;
+              champ.value = courant.nom;
               return;
             }
             signaler('');
-            remplacer(donnees.elements, { ...e, nom, maj: Date.now() });
-            changer();
+            remplacer(donnees.elements, { ...courant, nom, maj: Date.now() });
+            changer(false);
           });
           return h('li', {}, champ,
             h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Supprimer ${e.nom}`, onclick: () => supprimerElement(e, fam, changer) }, '✕'));
@@ -1465,18 +1483,18 @@ textarea.champ { resize: vertical; min-height: 90px; }
     }
     donneesIllisibles = false;
     appareil.dernierImport = Date.now();
+    demanderStockageDurable();
     sauver();
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
-    // Deux responsables ont pu créer la même référence chacun de leur côté.
+    // Deux responsables ont pu créer la même référence, ou le même élément, chacun de leur côté.
     const vues = new Map();
-    for (const f of index.forfaits) {
-      const cle = f.ref.trim().toLocaleUpperCase('fr');
-      vues.set(cle, (vues.get(cle) || 0) + 1);
-    }
-    const doublons = [...vues].filter(([, n]) => n > 1).map(([ref, n]) => `${ref} (${n} fois)`);
-    if (doublons.length) await informer('Références en double', 'Après la mise à jour, ces références existent plusieurs fois. Un responsable doit corriger :', doublons);
+    const compter = (cle, libelle) => vues.set(cle, { libelle, n: (vues.get(cle)?.n || 0) + 1 });
+    for (const f of index.forfaits) compter('ref|' + f.ref.trim().toLocaleUpperCase('fr'), `Référence ${f.ref}`);
+    for (const e of index.elsActifs) compter(`elt|${e.familleId}|${norm(e.nom)}`, `${index.famParId.get(e.familleId).nom} : ${e.nom}`);
+    const doublons = [...vues.values()].filter((v) => v.n > 1).map((v) => `${v.libelle} (${v.n} fois)`);
+    if (doublons.length) await informer('Doublons à corriger', 'Après la mise à jour, ces références ou éléments existent plusieurs fois. Un responsable doit corriger :', doublons);
   }
 
   /* =====================================================================
@@ -1580,12 +1598,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
   rafraichir();
   if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
 
-  // Mode hors ligne (seulement quand la page vient d'une adresse web) et stockage durable.
+  // Mode hors ligne (seulement quand la page vient d'une adresse web).
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  navigator.storage?.persist?.().catch(() => {});
 
-  // Fonctions exposées pour les tests automatiques.
-  window.Forfaits = Object.freeze({ norm, lirePrix, formatPrix, fusionner, version: VERSION_OUTIL });
+  // Fonction exposée pour les tests automatiques.
+  window.Forfaits = Object.freeze({ lirePrix });
 })();
 </script>
 </body>

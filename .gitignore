@@ -1,10 +1,17 @@
 # Jamais de vraies données dans ce dépôt public
 prive/
 forfaits-*.json
+*.json
 *.csv
+*.xls*
+*.ods
+*.pdf
+*.doc*
+.env*
 
 # Fichiers de travail
 captures/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.venv/

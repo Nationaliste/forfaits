@@ -1,0 +1,1609 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-f/TbJ+58Dq4JpTMCTCKitRIEkNEXfMAr3rMsHyBaFLo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#121212">
+<title>Forfaits</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+/* ============ Couleurs et réglages (rouge et noir) ============ */
+:root {
+  --rouge: #c8102e;
+  --rouge-fonce: #9b0c23;
+  --rouge-pale: #fbe9ec;
+  --noir: #121212;
+  --noir-2: #2a2a2a;
+  --blanc: #ffffff;
+  --fond: #f4f3f1;
+  --gris-clair: #e4e2df;
+  --gris: #8a8784;
+  --gris-fonce: #57534f;
+  --texte: #151515;
+  --vert: #1f7a3a;
+  --orange: #8a4b00;
+  --orange-pale: #fff1dc;
+  --voile: rgb(18 18 18 / 0.6);
+  --ombre: 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 14px rgb(0 0 0 / 0.06);
+  --ombre-forte: 0 10px 30px rgb(0 0 0 / 0.18);
+  /* Polices déjà présentes sur les appareils : l'outil marche sans internet. */
+  --police: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --police-titre: Bahnschrift, "DIN Alternate", sans-serif-condensed, system-ui, sans-serif;
+  --tactile: 48px; /* hauteur minimale des boutons (doigt) */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; color-scheme: light; }
+body {
+  margin: 0;
+  font-family: var(--police);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--texte);
+  background: var(--fond);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--rouge); outline-offset: 2px; }
+
+/* ============ Boutons ============ */
+.btn {
+  min-height: var(--tactile);
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  transition: transform .12s ease, background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn:disabled { opacity: .4; cursor: default; transform: none; }
+.btn-rouge { background: var(--rouge); color: var(--blanc); }
+.btn-rouge:hover { background: var(--rouge-fonce); }
+.btn-noir { background: var(--noir); color: var(--blanc); }
+.btn-noir:hover { background: var(--noir-2); }
+.btn-clair { background: transparent; color: var(--blanc); border-color: var(--gris-fonce); }
+.btn-clair:hover { border-color: var(--blanc); }
+.btn-bord { background: var(--blanc); color: var(--texte); border-color: var(--gris-clair); }
+.btn-bord:hover { border-color: var(--noir); }
+.btn-danger { background: var(--blanc); color: var(--rouge); border-color: var(--rouge); }
+.btn-danger:hover { background: var(--rouge-pale); }
+.btn-carre { width: var(--tactile); min-width: var(--tactile); padding: 0; }
+.btn-lien {
+  background: none; border: 0; padding: 6px 0; min-height: 36px;
+  color: var(--rouge); text-decoration: underline; cursor: pointer; font-size: 14px;
+}
+.btn-icone {
+  width: var(--tactile); height: var(--tactile); flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 20px;
+  transition: background-color .12s ease;
+}
+
+/* ============ En-tête ============ */
+.entete {
+  background: var(--noir);
+  color: var(--blanc);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.entete :focus-visible { outline-color: var(--blanc); }
+.marque { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.marque-bloc {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 46px; height: 44px; padding-right: 6px;
+  background: var(--rouge); color: var(--blanc);
+  font-family: var(--police-titre); font-weight: 700; font-size: 26px;
+  clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
+}
+.marque-texte { min-width: 0; }
+.marque h1 {
+  margin: 0;
+  font-family: var(--police-titre);
+  font-size: 24px; line-height: 1;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+.etat { margin: 4px 0 0; font-size: 13px; color: var(--gris-clair); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entete-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.entete .btn-icone { color: var(--blanc); border: 2px solid var(--gris-fonce); }
+.entete .btn-icone:hover { border-color: var(--blanc); }
+/* Bande en damier, clin d'œil aux taxis */
+.damier {
+  height: 12px;
+  background: repeating-conic-gradient(var(--rouge) 0 25%, var(--noir) 0 50%) 0 0 / 12px 12px;
+}
+.barre-modif {
+  background: var(--rouge); color: var(--blanc);
+  text-align: center; font-weight: 700; font-size: 14px; padding: 6px 16px;
+}
+
+/* ============ Bandeaux d'information ============ */
+.bandeaux { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.bandeau {
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
+  margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+  background: var(--orange-pale); color: var(--orange); font-weight: 600;
+}
+.bandeau p { margin: 0; flex: 1 1 220px; }
+.bandeau-erreur { background: var(--rouge-pale); color: var(--rouge-fonce); }
+
+/* ============ Recherche ============ */
+.zone-recherche {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--fond);
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--gris-clair);
+}
+.zone-recherche > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.champ-recherche {
+  position: relative;
+  display: flex; align-items: center;
+  background: var(--blanc);
+  border: 3px solid var(--noir);
+  border-radius: 14px;
+  /* ombre décalée rouge : la barre ressort d'un coup d'œil */
+  box-shadow: 6px 6px 0 var(--rouge);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.champ-recherche:focus-within { box-shadow: 3px 3px 0 var(--rouge); transform: translate(3px, 3px); }
+.loupe { width: 24px; height: 24px; margin-left: 14px; flex-shrink: 0; color: var(--gris-fonce); }
+#recherche {
+  flex: 1; min-width: 0;
+  border: 0; outline: 0; background: transparent;
+  font-size: 20px; padding: 14px 10px;
+}
+#recherche::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+#btn-vider { color: var(--gris-fonce); margin-right: 4px; }
+#btn-vider:hover { background: var(--fond); }
+.suggestions {
+  position: absolute; left: -3px; right: -3px; top: calc(100% + 8px); z-index: 30;
+  margin: 0; padding: 6px; list-style: none;
+  background: var(--blanc);
+  border: 2px solid var(--noir); border-radius: 12px;
+  box-shadow: var(--ombre-forte);
+  max-height: 60vh; overflow: auto;
+}
+.suggestion {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  min-height: var(--tactile); padding: 8px 12px; border-radius: 8px; cursor: pointer;
+}
+.suggestion:hover, .suggestion[aria-selected="true"] { background: var(--rouge-pale); }
+.suggestion-nom { font-weight: 700; font-size: 18px; }
+.suggestion-famille { font-size: 12px; font-weight: 700; color: var(--gris-fonce); text-transform: uppercase; letter-spacing: .06em; }
+.etiquettes, .filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.etiquette {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 6px 8px 6px 14px;
+  background: var(--noir); color: var(--blanc);
+  border: 0; border-radius: 999px; font-weight: 600; cursor: pointer;
+  transition: transform .12s ease;
+}
+.etiquette:hover { transform: translateY(-1px); }
+.croix { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--rouge); font-size: 14px; }
+.filtre {
+  min-height: var(--tactile); padding: 8px 14px;
+  border: 2px solid var(--noir); border-radius: 10px;
+  background: var(--blanc); font-weight: 600; cursor: pointer;
+  transition: transform .12s ease, background-color .12s ease;
+}
+.filtre:hover { transform: translateY(-1px); }
+.filtre[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
+
+/* ============ Résultats ============ */
+main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
+.barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+#compte { margin: 0; font-weight: 700; font-size: 18px; }
+.resultats { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--gris-fonce); }
+.vide p { margin: 0 0 12px; font-size: 18px; }
+.carte {
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--blanc);
+  border-left: 8px solid var(--rouge); border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--ombre);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.carte:hover { transform: translateY(-2px); box-shadow: var(--ombre-forte); }
+.carte-exemple { border-left-color: var(--gris); }
+.carte-haut { display: flex; flex-direction: column; gap: 6px; }
+.carte-ref { margin: 0; font-family: var(--police-titre); font-size: 26px; line-height: 1.1; letter-spacing: .02em; overflow-wrap: anywhere; }
+.badge-exemple {
+  display: inline-block; margin-bottom: 4px; padding: 2px 8px; border-radius: 6px;
+  background: var(--orange-pale); color: var(--orange);
+  font-size: 12px; font-weight: 800; letter-spacing: .1em;
+}
+.carte-prix { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.prix { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.prix-montant { font-family: var(--police-titre); font-size: 22px; font-weight: 700; }
+.prix-ttc .prix-montant { color: var(--rouge); }
+.prix-type { font-size: 12px; font-weight: 700; color: var(--gris-fonce); }
+.carte-designation { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--gris-fonce); }
+.carte-elements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.carte-elements li { display: flex; flex-direction: column; padding: 4px 10px; border-radius: 8px; background: var(--fond); border: 1px solid var(--gris-clair); }
+.el-famille { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--gris-fonce); }
+.el-nom { font-weight: 700; }
+.carte-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.carte-actions .btn { flex: 1 1 auto; }
+
+/* ============ Rappel d'export et messages ============ */
+.rappel {
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 40;
+  max-width: 720px; margin: 0 auto;
+  display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--noir); color: var(--blanc);
+  border-left: 8px solid var(--rouge); border-radius: 14px;
+  box-shadow: var(--ombre-forte);
+}
+.rappel p { margin: 0; flex: 1 1 220px; font-weight: 600; }
+.toast {
+  position: fixed; left: 50%; bottom: 96px; z-index: 60;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px; border-radius: 999px;
+  background: var(--vert); color: var(--blanc); font-weight: 600; text-align: center;
+  opacity: 0; pointer-events: none; transform: translate(-50%, 20px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.toast.erreur { background: var(--rouge); }
+
+/* ============ Fenêtres (dialogues) ============ */
+.dlg {
+  border: 0; padding: 0;
+  width: min(600px, calc(100vw - 24px)); max-width: none;
+  max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
+  border-radius: 16px;
+  background: var(--blanc); color: var(--texte);
+  box-shadow: var(--ombre-forte);
+}
+.dlg[open] { display: flex; flex-direction: column; animation: monte .18s ease-out; }
+.dlg::backdrop { background: var(--voile); }
+.dlg-large { width: min(820px, calc(100vw - 24px)); }
+.dlg-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.dlg-tete {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 10px 10px 20px;
+  background: var(--noir); color: var(--blanc);
+  border-bottom: 4px solid var(--rouge);
+}
+.dlg-tete h2 { margin: 0; font-family: var(--police-titre); font-size: 22px; overflow-wrap: anywhere; }
+.dlg-tete .btn-icone { color: var(--blanc); }
+.dlg-tete .btn-icone:hover { background: var(--noir-2); }
+.dlg-corps { padding: 16px 20px; overflow: auto; flex: 1; }
+.dlg-pied { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--gris-clair); }
+.dlg-pied .btn { flex: 1 1 150px; }
+.dlg-message { margin: 0 0 10px; }
+.dlg-liste { margin: 0 0 10px; padding-left: 20px; }
+.dlg-liste li { margin-bottom: 6px; }
+
+/* Formulaire */
+.champ-groupe { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.champ-groupe label { font-weight: 700; }
+.champ {
+  width: 100%; min-height: var(--tactile);
+  padding: 10px 12px;
+  border: 2px solid var(--gris-clair); border-radius: 10px;
+  background: var(--blanc); font-size: 17px;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.champ:focus { border-color: var(--noir); box-shadow: 0 0 0 3px var(--rouge-pale); outline: none; }
+textarea.champ { resize: vertical; min-height: 90px; }
+.ligne-prix { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.grille-familles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
+.msg-champ { margin: 0; font-size: 14px; font-weight: 600; }
+.msg-champ.erreur, .msg-erreur { color: var(--rouge); }
+.msg-champ.attention { color: var(--orange); }
+.msg-erreur { margin: 0 0 10px; font-weight: 700; }
+.note-exemple { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--orange-pale); color: var(--orange); font-weight: 600; }
+
+/* Choix d'un filtre */
+.grille-choix { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.choix {
+  min-height: 56px; padding: 8px 12px;
+  border: 2px solid var(--noir); border-radius: 12px;
+  background: var(--blanc); font-weight: 700; font-size: 17px; cursor: pointer;
+  transition: transform .12s ease;
+}
+.choix:hover { transform: translateY(-1px); }
+.choix[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
+
+/* Menu */
+.menu-liste { display: flex; flex-direction: column; gap: 10px; }
+.menu-liste > .btn { justify-content: flex-start; text-align: left; }
+.menu-mode { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border-radius: 12px; background: var(--fond); }
+.menu-mode p { margin: 2px 0 0; font-size: 14px; color: var(--gris-fonce); }
+.menu-info { margin: 6px 0 0; font-size: 14px; color: var(--gris-fonce); }
+
+/* Listes des éléments */
+.famille-bloc { border: 2px solid var(--gris-clair); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+.famille-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.famille-tete .champ { flex: 1 1 160px; width: auto; font-weight: 700; }
+.liste-elements { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.liste-elements li { display: flex; gap: 8px; }
+.ajout-ligne { display: flex; gap: 8px; }
+.ajout-ligne .champ { flex: 1; width: auto; min-width: 0; }
+.aide-texte { margin: 0 0 14px; color: var(--gris-fonce); }
+.etapes { margin: 0; padding-left: 22px; }
+.etapes li { margin-bottom: 10px; }
+
+@keyframes monte { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ============ Téléphone ============ */
+@media (max-width: 600px) {
+  .dlg, .dlg-large { width: 100vw; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; margin: 0; }
+}
+@media (max-width: 600px) {
+  /* Sur téléphone, les boutons de filtre tiennent sur une ligne qu'on fait défiler du doigt,
+     pour que la zone de recherche (qui reste en haut) ne mange pas l'écran. */
+  .filtres { flex-wrap: nowrap; overflow-x: auto; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; scrollbar-width: none; }
+  .filtres::-webkit-scrollbar { display: none; }
+  .filtre { flex-shrink: 0; }
+}
+@media (max-width: 440px) {
+  .ligne-prix { grid-template-columns: 1fr; }
+  #recherche { font-size: 18px; }
+}
+@media (max-width: 400px) {
+  .marque-bloc { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="entete">
+  <div class="marque">
+    <span class="marque-bloc" aria-hidden="true">F</span>
+    <div class="marque-texte">
+      <h1>Forfaits</h1>
+      <p class="etat" id="etat-donnees"></p>
+    </div>
+  </div>
+  <div class="entete-actions">
+    <button type="button" class="btn btn-clair" id="btn-importer">Importer</button>
+    <button type="button" class="btn-icone" id="btn-menu" aria-label="Menu" aria-haspopup="dialog">☰</button>
+  </div>
+</header>
+<div class="damier" aria-hidden="true"></div>
+<div class="barre-modif" id="barre-modif" hidden>Mode modification activé</div>
+<div class="bandeaux" id="bandeaux"></div>
+
+<section class="zone-recherche" role="search">
+  <div class="champ-recherche">
+    <svg class="loupe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+    <label for="recherche" class="sr">Rechercher un forfait</label>
+    <input id="recherche" type="search" placeholder="Référence, 3S, M1 STD, Gamma…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
+    <button type="button" class="btn-icone" id="btn-vider" aria-label="Effacer la recherche" hidden>✕</button>
+    <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
+  </div>
+  <div class="etiquettes" id="etiquettes" hidden></div>
+  <div class="filtres" id="filtres" role="group" aria-label="Filtrer par élément"></div>
+</section>
+
+<main>
+  <div class="barre-resultats">
+    <div class="barre-resultats-gauche">
+      <p id="compte" aria-live="polite"></p>
+      <button type="button" class="btn-lien" id="btn-tout-effacer" hidden>Effacer la recherche</button>
+    </div>
+    <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+ Ajouter un forfait</button>
+  </div>
+  <div class="resultats" id="resultats"></div>
+</main>
+
+<div class="rappel" id="rappel" role="status" hidden>
+  <p id="rappel-texte"></p>
+  <button type="button" class="btn btn-rouge" id="btn-rappel-exporter">Exporter</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fichier-import" hidden>
+
+<script>
+'use strict';
+(() => {
+  /* =====================================================================
+     RÉGLAGES
+     ===================================================================== */
+  const CLE_DONNEES = 'forfaits.donnees.v1';   // forfaits + listes, sur cet appareil
+  const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
+  const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
+  const VERSION_FORMAT = 1;
+  const VERSION_OUTIL = '1.0';
+  const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
+  const TAUX_TVA = `${Math.round(TVA * 100)} %`;
+  const TOLERANCE_TVA = 2;         // écart toléré (en centimes) entre TTC saisi et HT + TVA
+  const JOURS_RAPPEL_IMPORT = 30;  // au-delà, on conseille de réimporter
+  const SANS = '__sans__';         // valeur de filtre « sans élément de cette famille »
+
+  const tri = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
+  const fmtEuro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+  const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmtDateHeure = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const $ = (id) => document.getElementById(id);
+
+  /* =====================================================================
+     PETITS OUTILS
+     ===================================================================== */
+
+  // Crée un élément HTML. Le texte est toujours inséré comme texte (jamais comme HTML) :
+  // une référence contenant « <script> » s'affiche telle quelle, sans danger.
+  function h(balise, attributs, ...enfants) {
+    const el = document.createElement(balise);
+    for (const [nom, valeur] of Object.entries(attributs || {})) {
+      if (valeur === undefined || valeur === null || valeur === false) continue;
+      if (typeof valeur === 'function') el.addEventListener(nom.replace(/^on/, ''), valeur);
+      else if (nom === 'class') el.className = valeur;
+      else el.setAttribute(nom, valeur === true ? '' : String(valeur));
+    }
+    for (const enfant of enfants.flat(Infinity)) {
+      if (enfant === undefined || enfant === null || enfant === false || enfant === '') continue;
+      el.append(enfant instanceof Node ? enfant : String(enfant));
+    }
+    return el;
+  }
+
+  // Identifiant unique, ex. « fft-3f9a0c1b2d4e5f60 ».
+  function nouvelId(prefixe) {
+    const octets = new Uint8Array(8);
+    crypto.getRandomValues(octets);
+    return prefixe + '-' + Array.from(octets, (o) => o.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Texte « à plat » pour comparer : minuscules, sans accents, sans espaces ni tirets.
+  // « M1-STD », « m1 std » et « M1STD » donnent tous « m1std ».
+  function norm(texte) {
+    return String(texte ?? '')
+      .toLowerCase()
+      .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  // Deux références identiques (majuscules et espaces autour ignorés).
+  function memeRef(a, b) {
+    return a.trim().toLocaleUpperCase('fr') === b.trim().toLocaleUpperCase('fr');
+  }
+
+  // « 1 234,50 € » ou « 1234.5 » → 123450 (centimes). null si la saisie n'est pas un prix.
+  function lirePrix(saisie) {
+    let t = String(saisie ?? '').replace(/[\s  €]/g, '');
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    if (!/^\d{1,7}(\.\d{1,2})?$/.test(t)) return null;
+    const [entier, decimales = ''] = t.split('.');
+    return Number(entier) * 100 + Number(decimales.padEnd(2, '0'));
+  }
+  // « 1 234,50 € » : espace insécable classique, car certaines polices n'affichent pas l'espace fine.
+  const formatPrix = (centimes) => fmtEuro.format(centimes / 100).replace(/ /g, ' ');
+  const prixSaisie = (centimes) => (centimes / 100).toFixed(2).replace('.', ','); // « 1234,50 »
+  const ttcDepuisHt = (ht) => Math.round(ht * (1 + TVA));
+  const htDepuisTtc = (ttc) => Math.round(ttc / (1 + TVA));
+  const dateCourte = (ms) => fmtDate.format(new Date(ms));
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+  // Horodatage pour les noms de fichiers : 2026-10-15-14h32
+  function horodatage(d = new Date()) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}h${p(d.getMinutes())}`;
+  }
+
+  // Remplace un enregistrement (même id) ou l'ajoute.
+  function remplacer(liste, nouveau) {
+    const i = liste.findIndex((x) => x.id === nouveau.id);
+    if (i >= 0) liste[i] = nouveau; else liste.push(nouveau);
+  }
+
+  /* =====================================================================
+     DONNÉES
+     Trois listes : familles (Taximètre…), éléments (M1 STD…) et forfaits.
+     Chaque enregistrement porte « maj » (date de dernière modification).
+     Une suppression ne retire pas l'enregistrement : elle le marque « supprime »,
+     pour que la suppression se propage aux autres appareils à l'import.
+     ===================================================================== */
+
+  function donneesInitiales() {
+    const familles = [
+      { id: 'fam-taximetre', nom: 'Taximètre', ordre: 1, maj: 0 },
+      { id: 'fam-boitier', nom: 'Boîtier', ordre: 2, maj: 0 },
+      { id: 'fam-imprimante', nom: 'Imprimante', ordre: 3, maj: 0 },
+      { id: 'fam-lumineux', nom: 'Lumineux', ordre: 4, maj: 0 },
+      { id: 'fam-installation', nom: 'Installation', ordre: 5, maj: 0 },
+    ];
+    const el = (id, familleId, nom, exemple) => ({ id, familleId, nom, maj: 0, ...(exemple ? { exemple: true } : {}) });
+    const elements = [
+      el('elt-m1std', 'fam-taximetre', 'M1 STD'),
+      el('elt-f1', 'fam-taximetre', 'F1'),
+      el('elt-gamma7', 'fam-boitier', 'Gamma 7'),
+      el('elt-starplastx', 'fam-boitier', 'Starplast X'),
+      el('elt-gammatechx', 'fam-boitier', 'Gammatech X'),
+      el('elt-starplastu', 'fam-boitier', 'Starplast universelle'),
+      el('elt-3s', 'fam-imprimante', '3S'),
+      el('elt-4s', 'fam-imprimante', '4S'),
+      el('elt-ex-lumineux', 'fam-lumineux', 'Lumineux EXEMPLE', true),
+      el('elt-ex-pose', 'fam-installation', 'Pose EXEMPLE', true),
+    ];
+    // Forfaits d'exemple : références et prix INVENTÉS, à supprimer avant de saisir les vrais.
+    const f = (ref, ht, ttc, ids, texte) => {
+      const elementsDuForfait = {};
+      for (const id of ids) elementsDuForfait[elements.find((e) => e.id === id).familleId] = id;
+      return { id: 'fft-' + norm(ref), ref, designation: 'EXEMPLE — ' + texte, ht, ttc, elements: elementsDuForfait, exemple: true, maj: 0 };
+    };
+    const forfaits = [
+      f('EX-M1-G7-3S', 123450, 148140, ['elt-m1std', 'elt-gamma7', 'elt-3s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S'),
+      f('EX-M1-G7-4S', 110000, 132000, ['elt-m1std', 'elt-gamma7', 'elt-4s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 4S'),
+      f('EX-M1-SPX-3S', 95000, 114000, ['elt-m1std', 'elt-starplastx', 'elt-3s'], 'Taximètre M1 STD + boîtier Starplast X + imprimante 3S'),
+      f('EX-M1-GTX-4S', 120000, 144000, ['elt-m1std', 'elt-gammatechx', 'elt-4s'], 'Taximètre M1 STD + boîtier Gammatech X + imprimante 4S'),
+      f('EX-F1-G7-3S', 98000, 117600, ['elt-f1', 'elt-gamma7', 'elt-3s'], 'Taximètre F1 + boîtier Gamma 7 + imprimante 3S'),
+      f('EX-F1-SPX-4S', 105000, 126000, ['elt-f1', 'elt-starplastx', 'elt-4s'], 'Taximètre F1 + boîtier Starplast X + imprimante 4S'),
+      f('EX-F1-GTX-3S', 99000, 118800, ['elt-f1', 'elt-gammatechx', 'elt-3s'], 'Taximètre F1 + boîtier Gammatech X + imprimante 3S'),
+      f('EX-F1-SPU-4S', 90000, 108000, ['elt-f1', 'elt-starplastu', 'elt-4s'], 'Taximètre F1 + boîtier Starplast universelle + imprimante 4S'),
+      f('EX-F1-3S', 70000, 84000, ['elt-f1', 'elt-3s'], 'Taximètre F1 + imprimante 3S, sans boîtier'),
+      f('EX-LUM-POSE', 45000, 54000, ['elt-ex-lumineux', 'elt-ex-pose'], 'Lumineux + pose, sans taximètre'),
+      f('EX-M1-G7-3S-P', 115000, 138000, ['elt-m1std', 'elt-gamma7', 'elt-3s', 'elt-ex-pose'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S, avec pose'),
+    ];
+    return { familles, elements, forfaits };
+  }
+
+  // Vérifie et nettoie des données (fichier importé ou stockage de l'appareil).
+  // Lève une erreur au message compréhensible si le fichier n'est pas valable.
+  function valider(obj) {
+    const echec = (message) => { throw new Error(message); };
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.format !== FORMAT) {
+      echec("Ce n'est pas un fichier de forfaits exporté par l'outil.");
+    }
+    if (!Number.isInteger(obj.version) || obj.version < 1) echec('Version du fichier inconnue.');
+    if (obj.version > VERSION_FORMAT) echec("Ce fichier vient d'une version plus récente de l'outil : recharge la page pour mettre l'outil à jour, puis réessaie.");
+    for (const cle of ['familles', 'elements', 'forfaits']) {
+      if (!Array.isArray(obj[cle])) echec(`Fichier incomplet (« ${cle} » manquant).`);
+    }
+    const motifId = /^[a-z]{2,6}-[a-z0-9-]{1,64}$/;
+    const vus = new Set();
+    const id = (v) => {
+      if (typeof v !== 'string' || !motifId.test(v)) echec('Fichier abîmé : identifiant invalide.');
+      if (vus.has(v)) echec('Fichier abîmé : identifiant en double.');
+      vus.add(v);
+      return v;
+    };
+    const texte = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    // Date bornée : une date absurde (an 3000…) bloquerait l'affichage et gagnerait toutes les fusions.
+    const limite = Date.now() + 86400000;
+    const date = (v) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), limite) : 0);
+    const marques = (x) => ({ ...(x.supprime === true ? { supprime: true } : {}), ...(x.exemple === true ? { exemple: true } : {}) });
+    const objet = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : echec('Fichier abîmé : enregistrement invalide.'));
+
+    const familles = obj.familles.map((x) => {
+      objet(x);
+      const f = { id: id(x.id), nom: texte(x.nom, 60), ordre: Number.isFinite(x.ordre) ? x.ordre : 0, maj: date(x.maj), ...marques(x) };
+      if (!f.supprime && !f.nom) echec('Fichier abîmé : famille sans nom.');
+      return f;
+    });
+    const elements = obj.elements.map((x) => {
+      objet(x);
+      const e = { id: id(x.id), familleId: texte(x.familleId, 80), nom: texte(x.nom, 60), maj: date(x.maj), ...marques(x) };
+      if (!e.supprime && (!e.nom || !motifId.test(e.familleId))) echec('Fichier abîmé : élément invalide.');
+      return e;
+    });
+    const forfaits = obj.forfaits.map((x) => {
+      objet(x);
+      const choisis = {};
+      if (x.elements && typeof x.elements === 'object' && !Array.isArray(x.elements)) {
+        for (const [fam, elt] of Object.entries(x.elements).slice(0, 50)) {
+          if (motifId.test(fam) && typeof elt === 'string' && motifId.test(elt)) choisis[fam] = elt;
+        }
+      }
+      const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= 999999999 ? v : null);
+      const f = {
+        id: id(x.id), ref: texte(x.ref, 80), designation: texte(x.designation, 2000),
+        ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x),
+      };
+      if (!f.supprime && (!f.ref || prix(x.ht) === null || prix(x.ttc) === null)) echec(`Fichier abîmé : forfait « ${f.ref || '?'} » invalide.`);
+      return f;
+    });
+    return { familles, elements, forfaits };
+  }
+
+  let stockageOk = true;      // faux si l'appareil refuse d'enregistrer (navigation privée…)
+  let donneesIllisibles = false;
+
+  function charger() {
+    let brut = null;
+    try { brut = localStorage.getItem(CLE_DONNEES); } catch { stockageOk = false; }
+    if (brut === null) return donneesInitiales();
+    try {
+      return valider(JSON.parse(brut));
+    } catch {
+      // Données abîmées : on les met de côté plutôt que de les écraser.
+      try { localStorage.setItem(CLE_DONNEES + '.illisible.' + Date.now(), brut); } catch { /* tant pis */ }
+      donneesIllisibles = true;
+      return donneesInitiales();
+    }
+  }
+
+  function sauver() {
+    try {
+      localStorage.setItem(CLE_DONNEES, JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, ...donnees }));
+      stockageOk = true;
+    } catch {
+      stockageOk = false;
+    }
+  }
+
+  function chargerAppareil() {
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0 };
+    try {
+      const lu = JSON.parse(localStorage.getItem(CLE_APPAREIL) || '{}');
+      return {
+        modeModif: lu.modeModif === true,
+        modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
+        dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
+        dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
+      };
+    } catch {
+      return defaut;
+    }
+  }
+  function sauverAppareil() {
+    try { localStorage.setItem(CLE_APPAREIL, JSON.stringify(appareil)); } catch { stockageOk = false; }
+  }
+  // À appeler après chaque changement fait sur cet appareil (sert au rappel d'export).
+  function noterModif() {
+    appareil.modifsEnAttente += 1;
+    sauverAppareil();
+    demanderStockageDurable();
+  }
+
+  // Demande au navigateur de ne pas effacer les données de lui-même. Firefox pose alors une
+  // question : on ne la pose qu'après une action utile (modification, import), pas à l'ouverture.
+  let stockageDurableDemande = false;
+  function demanderStockageDurable() {
+    if (stockageDurableDemande || !navigator.storage?.persisted) return;
+    stockageDurableDemande = true;
+    navigator.storage.persisted().then((deja) => (deja ? true : navigator.storage.persist())).catch(() => {});
+  }
+
+  // Fusion de deux jeux de données : pour chaque enregistrement, la version la plus récente gagne.
+  function fusionner(local, entrant) {
+    const resultat = {};
+    for (const cle of ['familles', 'elements', 'forfaits']) {
+      const parId = new Map(local[cle].map((x) => [x.id, x]));
+      for (const x of entrant[cle]) {
+        const actuel = parId.get(x.id);
+        if (!actuel || x.maj > actuel.maj) parId.set(x.id, x);
+      }
+      resultat[cle] = [...parId.values()];
+    }
+    return resultat;
+  }
+
+  // Date de la dernière modification (0 = données d'exemple jamais touchées).
+  function derniereModif(d) {
+    let max = 0;
+    for (const cle of ['familles', 'elements', 'forfaits']) {
+      for (const x of d[cle]) if (x.maj > max) max = x.maj;
+    }
+    return max;
+  }
+
+  let donnees = charger();
+  let appareil = chargerAppareil();
+
+  /* =====================================================================
+     INDEX : vues prêtes à l'emploi, recalculées après chaque changement
+     ===================================================================== */
+  let index = null;
+
+  function construireIndex() {
+    const fams = donnees.familles.filter((f) => !f.supprime)
+      .sort((a, b) => a.ordre - b.ordre || tri.compare(a.nom, b.nom));
+    const famParId = new Map(fams.map((f) => [f.id, f]));
+    const elsActifs = donnees.elements.filter((e) => !e.supprime && famParId.has(e.familleId))
+      .sort((a, b) => famParId.get(a.familleId).ordre - famParId.get(b.familleId).ordre || tri.compare(a.nom, b.nom));
+    const elParId = new Map(elsActifs.map((e) => [e.id, e]));
+    // Nom « à plat » → éléments (pour reconnaître « 3S » ou « M1 STD » tapés en entier).
+    const parNom = new Map();
+    for (const e of elsActifs) {
+      const cle = norm(e.nom);
+      if (!cle) continue;
+      if (!parNom.has(cle)) parNom.set(cle, []);
+      parNom.get(cle).push(e);
+    }
+    const forfaits = donnees.forfaits.filter((f) => !f.supprime);
+    const elementsForfait = new Map();
+    const champs = new Map();
+    for (const f of forfaits) {
+      const els = fams.map((fam) => elParId.get(f.elements[fam.id])).filter((e, i) => e && e.familleId === fams[i].id);
+      elementsForfait.set(f.id, els);
+      champs.set(f.id, [
+        norm(f.ref), norm(f.designation),
+        ...els.map((e) => norm(e.nom)),
+        ...els.map((e) => norm(famParId.get(e.familleId).nom)),
+      ]);
+    }
+    return { fams, famParId, elsActifs, elParId, parNom, forfaits, elementsForfait, champs };
+  }
+
+  const elementsDe = (familleId) => index.elsActifs.filter((e) => e.familleId === familleId);
+
+  // Clé d'une combinaison d'éléments (sert à repérer deux forfaits identiques).
+  function cleCombinaison(elements) {
+    return Object.entries(elements)
+      .filter(([fam, elt]) => index.elParId.get(elt)?.familleId === fam)
+      .map(([fam, elt]) => fam + ':' + elt)
+      .sort()
+      .join('|');
+  }
+
+  /* =====================================================================
+     RECHERCHE
+     ===================================================================== */
+  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1 };
+
+  const decouper = (texte) => texte.split(/[\s,;+]+/).filter((m) => norm(m) !== '');
+
+  // Découpe la recherche en contraintes. Un nom d'élément tapé en entier (« 3S », « M1 STD »,
+  // « m1std ») devient un filtre exact sur cet élément ; tout le reste cherche un morceau de
+  // texte dans la référence, la désignation et les éléments. Chaque contrainte réduit la liste.
+  function analyserRecherche(texte) {
+    const mots = decouper(texte).map(norm);
+    const contraintes = [];
+    let i = 0;
+    while (i < mots.length) {
+      let reconnu = false;
+      for (let j = mots.length; j > i; j--) {
+        const elements = index.parNom.get(mots.slice(i, j).join(''));
+        if (elements) {
+          contraintes.push({ type: 'element', ids: new Set(elements.map((e) => e.id)) });
+          i = j;
+          reconnu = true;
+          break;
+        }
+      }
+      if (!reconnu) contraintes.push({ type: 'texte', valeur: mots[i++] });
+    }
+    return { mots, contraintes };
+  }
+
+  function correspond(forfait, contraintes) {
+    const els = index.elementsForfait.get(forfait.id);
+    for (const [familleId, valeur] of etatUi.filtres) {
+      const present = els.find((e) => e.familleId === familleId);
+      if (valeur === SANS ? present : present?.id !== valeur) return false;
+    }
+    const champs = index.champs.get(forfait.id);
+    for (const c of contraintes) {
+      if (c.type === 'element' ? !els.some((e) => c.ids.has(e.id)) : !champs.some((ch) => ch.includes(c.valeur))) return false;
+    }
+    return true;
+  }
+
+  // Suggestions d'éléments pendant la frappe, d'après les derniers mots tapés
+  // (« gam » → Gamma 7, Gammatech X ; « starplast u » → Starplast universelle).
+  // Un nom déjà tapé en entier (« 3S ») filtre déjà : pas de liste qui cacherait l'écran.
+  function calculerSuggestions(texte) {
+    const mots = decouper(texte).map(norm);
+    for (let k = Math.min(3, mots.length); k >= 1; k--) {
+      const morceau = mots.slice(-k).join('');
+      if (index.parNom.has(morceau)) break;
+      const liste = index.elsActifs.filter((e) => norm(e.nom).includes(morceau) && etatUi.filtres.get(e.familleId) !== e.id);
+      if (liste.length) {
+        const debut = (e) => Number(norm(e.nom).startsWith(morceau));
+        liste.sort((a, b) => debut(b) - debut(a)); // tri stable : l'ordre des familles est conservé
+        return { liste: liste.slice(0, 8), nbMots: k };
+      }
+    }
+    return { liste: [], nbMots: 0 };
+  }
+
+  /* =====================================================================
+     AFFICHAGE
+     ===================================================================== */
+  function rafraichir() {
+    index = construireIndex();
+    // Retire les filtres devenus invalides (élément ou famille supprimés).
+    for (const [familleId, valeur] of etatUi.filtres) {
+      if (!index.famParId.has(familleId) || (valeur !== SANS && !index.elParId.has(valeur))) etatUi.filtres.delete(familleId);
+    }
+    rendreEntete();
+    rendreBandeaux();
+    rendreRecherche();
+    rendreRappel();
+  }
+
+  function rendreRecherche() {
+    rendreFiltres();
+    rendreEtiquettes();
+    rendreResultats();
+    majSuggestions();
+  }
+
+  function rendreEntete() {
+    const derniere = derniereModif(donnees);
+    $('etat-donnees').textContent = derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple";
+    $('barre-modif').hidden = !appareil.modeModif;
+  }
+
+  function bandeau(texte, bouton, erreur) {
+    return h('div', { class: 'bandeau' + (erreur ? ' bandeau-erreur' : '') }, h('p', {}, texte), bouton);
+  }
+
+  function rendreBandeaux() {
+    const liste = [];
+    if (!stockageOk) liste.push(bandeau("Cet appareil n'enregistre pas les données (navigation privée ?). Exporte avant de fermer la page.", null, true));
+    if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer'), true));
+    const exemples = index.forfaits.some((f) => f.exemple);
+    if (exemples) {
+      liste.push(bandeau(
+        'Les forfaits marqués EXEMPLE sont faux (références et prix inventés).',
+        appareil.modeModif
+          ? h('button', { type: 'button', class: 'btn btn-noir', id: 'btn-suppr-exemples', onclick: supprimerExemples }, 'Supprimer les exemples')
+          : h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer le vrai fichier'),
+      ));
+    } else if (!appareil.modeModif && appareil.dernierImport) {
+      const jours = Math.floor((Date.now() - appareil.dernierImport) / 86400000);
+      if (jours > JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer')));
+    }
+    $('bandeaux').replaceChildren(...liste);
+  }
+
+  function rendreFiltres() {
+    $('filtres').replaceChildren(...index.fams.map((fam) => {
+      const valeur = etatUi.filtres.get(fam.id);
+      const libelle = valeur === undefined ? fam.nom : `${fam.nom} : ${valeur === SANS ? 'sans' : index.elParId.get(valeur).nom}`;
+      return h('button', { type: 'button', class: 'filtre', 'aria-pressed': String(valeur !== undefined), onclick: () => ouvrirChoixFiltre(fam) }, libelle, ' ▾');
+    }));
+  }
+
+  function rendreEtiquettes() {
+    const zone = $('etiquettes');
+    zone.replaceChildren(...[...etatUi.filtres].map(([familleId, valeur]) => {
+      const fam = index.famParId.get(familleId);
+      const nom = valeur === SANS ? 'sans' : index.elParId.get(valeur).nom;
+      return h('button', {
+        type: 'button', class: 'etiquette', 'aria-label': `Retirer le filtre ${fam.nom} : ${nom}`,
+        onclick: () => { etatUi.filtres.delete(familleId); rendreRecherche(); },
+      }, h('span', {}, `${fam.nom} : ${nom}`), h('span', { class: 'croix', 'aria-hidden': 'true' }, '✕'));
+    }));
+    zone.hidden = etatUi.filtres.size === 0;
+  }
+
+  function rendreResultats() {
+    const texte = $('recherche').value;
+    const analyse = analyserRecherche(texte);
+    const total = index.forfaits.length;
+    const resultats = index.forfaits.filter((f) => correspond(f, analyse.contraintes));
+    const tape = analyse.mots.join('');
+    // Une référence tapée en entier passe en premier, puis ordre alphabétique des références.
+    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || tri.compare(a.ref, b.ref));
+    const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
+
+    $('compte').textContent = total === 0 ? '' : resultats.length === 0 ? 'Aucun forfait ne correspond'
+      : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
+    $('btn-tout-effacer').hidden = !actif;
+    $('btn-ajouter').hidden = !appareil.modeModif;
+    $('btn-vider').hidden = texte === '';
+
+    let contenu;
+    if (total === 0) {
+      contenu = [h('div', { class: 'vide' },
+        h('p', {}, 'Aucun forfait enregistré sur cet appareil.'),
+        appareil.modeModif
+          ? h('button', { type: 'button', class: 'btn btn-rouge', onclick: () => ouvrirFormulaire(null) }, '+ Ajouter un forfait')
+          : h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer le fichier des forfaits'))];
+    } else if (resultats.length === 0) {
+      contenu = [h('div', { class: 'vide' },
+        h('p', {}, 'Aucun forfait ne correspond à cette recherche.'),
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: toutEffacer }, 'Effacer la recherche'))];
+    } else {
+      contenu = resultats.map(carte);
+    }
+    $('resultats').replaceChildren(...contenu);
+  }
+
+  function carte(f) {
+    return h('article', { class: 'carte' + (f.exemple ? ' carte-exemple' : ''), 'data-id': f.id },
+      h('div', { class: 'carte-haut' },
+        h('div', {},
+          f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
+          h('h2', { class: 'carte-ref' }, f.ref)),
+        h('div', { class: 'carte-prix' },
+          h('div', { class: 'prix prix-ht' }, h('span', { class: 'prix-montant' }, formatPrix(f.ht)), h('span', { class: 'prix-type' }, 'HT')),
+          h('div', { class: 'prix prix-ttc' }, h('span', { class: 'prix-montant' }, formatPrix(f.ttc)), h('span', { class: 'prix-type' }, 'TTC')))),
+      f.designation ? h('p', { class: 'carte-designation' }, f.designation) : null,
+      h('ul', { class: 'carte-elements' }, index.elementsForfait.get(f.id).map((e) =>
+        h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))),
+      h('div', { class: 'carte-actions' },
+        h('button', { type: 'button', class: 'btn btn-noir', onclick: () => copier(f.ref) }, 'Copier la référence'),
+        appareil.modeModif ? [
+          h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
+          h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer'),
+        ] : null));
+  }
+
+  function rendreRappel() {
+    const n = appareil.modifsEnAttente;
+    $('rappel').hidden = n === 0;
+    $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
+  }
+
+  /* ---------- Suggestions ---------- */
+  function majSuggestions() {
+    const champ = $('recherche');
+    const liste = $('suggestions');
+    const { liste: suggestions, nbMots } = document.activeElement === champ ? calculerSuggestions(champ.value) : { liste: [], nbMots: 0 };
+    etatUi.suggestions = suggestions;
+    etatUi.nbMotsSuggestion = nbMots;
+    etatUi.suggestionActive = -1;
+    liste.replaceChildren(...suggestions.map((e, i) => h('li', {
+      id: 'sugg-' + i, role: 'option', class: 'suggestion', 'aria-selected': 'false',
+      onpointerdown: (ev) => ev.preventDefault(), // garde le clavier ouvert le temps du clic
+      onclick: () => choisirSuggestion(i, false),
+    }, h('span', { class: 'suggestion-nom' }, e.nom), h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom))));
+    liste.hidden = suggestions.length === 0;
+    champ.setAttribute('aria-expanded', String(suggestions.length > 0));
+    champ.removeAttribute('aria-activedescendant');
+  }
+
+  function activerSuggestion(i) {
+    etatUi.suggestionActive = i;
+    $('suggestions').querySelectorAll('.suggestion').forEach((li, j) => li.setAttribute('aria-selected', String(i === j)));
+    $('recherche').setAttribute('aria-activedescendant', 'sugg-' + i);
+    $('sugg-' + i)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Transforme la suggestion en étiquette et retire les mots correspondants de la barre.
+  function choisirSuggestion(i, auClavier) {
+    const e = etatUi.suggestions[i];
+    if (!e) return;
+    etatUi.filtres.set(e.familleId, e.id);
+    const champ = $('recherche');
+    const mots = decouper(champ.value);
+    const reste = mots.slice(0, mots.length - etatUi.nbMotsSuggestion).join(' ');
+    champ.value = reste ? reste + ' ' : '';
+    if (!auClavier) champ.blur(); // au doigt : on range le clavier pour voir les résultats
+    rendreRecherche();
+  }
+
+  function toutEffacer() {
+    $('recherche').value = '';
+    etatUi.filtres.clear();
+    rendreRecherche();
+  }
+
+  /* =====================================================================
+     FENÊTRES
+     ===================================================================== */
+  function ouvrirDialogue({ titre, corps, pied, surEnvoi, classe }) {
+    const idTitre = nouvelId('dlg');
+    const contenu = [h('div', { class: 'dlg-corps' }, corps), pied ? h('div', { class: 'dlg-pied' }, pied) : null];
+    const dlg = h('dialog', { class: 'dlg ' + (classe || ''), 'aria-labelledby': idTitre },
+      h('div', { class: 'dlg-tete' },
+        h('h2', { id: idTitre }, titre),
+        h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => dlg.close() }, '✕')),
+      surEnvoi
+        ? h('form', { class: 'dlg-form', novalidate: true, onsubmit: (ev) => { ev.preventDefault(); surEnvoi(); } }, contenu)
+        : contenu);
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+    return dlg;
+  }
+
+  // Pose une question ; renvoie la valeur du bouton choisi (null si fermé).
+  function demander({ titre, message, liste, boutons }) {
+    return new Promise((resoudre) => {
+      let valeur = null;
+      const dlg = ouvrirDialogue({
+        titre,
+        corps: [
+          message ? h('p', { class: 'dlg-message' }, message) : null,
+          liste?.length ? h('ul', { class: 'dlg-liste' }, liste.map((x) => h('li', {}, x))) : null,
+        ],
+        pied: boutons.map((b) => h('button', {
+          type: 'button', class: 'btn ' + (b.classe || 'btn-bord'),
+          onclick: () => { valeur = b.valeur; dlg.close(); },
+        }, b.texte)),
+      });
+      dlg.addEventListener('close', () => resoudre(valeur));
+    });
+  }
+  const informer = (titre, message, liste) => demander({ titre, message, liste, boutons: [{ texte: 'Compris', valeur: true, classe: 'btn-noir' }] });
+
+  let minuteurToast = 0;
+  function toast(message, erreur = false) {
+    const t = $('toast');
+    t.textContent = message;
+    t.classList.toggle('erreur', erreur);
+    t.classList.add('visible');
+    clearTimeout(minuteurToast);
+    minuteurToast = setTimeout(() => t.classList.remove('visible'), 3000);
+  }
+
+  /* ---------- Choix d'un filtre (boutons sous la barre) ---------- */
+  function ouvrirChoixFiltre(fam) {
+    const actuel = etatUi.filtres.get(fam.id);
+    const choix = [
+      { valeur: undefined, nom: 'Tous' },
+      ...elementsDe(fam.id).map((e) => ({ valeur: e.id, nom: e.nom })),
+      { valeur: SANS, nom: `Sans ${fam.nom.toLocaleLowerCase('fr')}` },
+    ];
+    const dlg = ouvrirDialogue({
+      titre: fam.nom,
+      corps: h('div', { class: 'grille-choix' }, choix.map((c) => h('button', {
+        type: 'button', class: 'choix', 'aria-pressed': String(c.valeur === actuel),
+        onclick: () => {
+          if (c.valeur === undefined) etatUi.filtres.delete(fam.id); else etatUi.filtres.set(fam.id, c.valeur);
+          dlg.close();
+          rendreRecherche();
+        },
+      }, c.nom))),
+    });
+  }
+
+  /* ---------- Copier la référence ---------- */
+  async function copier(texte) {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(texte);
+      ok = true;
+    } catch {
+      // Ancienne méthode, pour les navigateurs qui refusent la première.
+      const zone = h('textarea', { class: 'sr', readonly: true }, texte);
+      document.body.append(zone);
+      zone.select();
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      zone.remove();
+    }
+    toast(ok ? `Référence ${texte} copiée` : 'Copie impossible : sélectionne la référence à la main', !ok);
+  }
+
+  /* =====================================================================
+     AJOUTER / MODIFIER / SUPPRIMER UN FORFAIT
+     ===================================================================== */
+  function ouvrirFormulaire(existant) {
+    const autre = (f) => f.id !== existant?.id;
+    const champRef = h('input', { id: 'f-ref', class: 'champ', value: existant?.ref ?? '', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
+    const msgRef = h('p', { class: 'msg-champ', 'aria-live': 'polite' });
+    const champDes = h('textarea', { id: 'f-des', class: 'champ', rows: 3, maxlength: 2000 }, existant?.designation ?? '');
+    const champHt = h('input', { id: 'f-ht', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 234,50', value: existant ? prixSaisie(existant.ht) : '' });
+    const champTtc = h('input', { id: 'f-ttc', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 481,40', value: existant ? prixSaisie(existant.ttc) : '' });
+    const calcul = (source, cible, conversion) => () => {
+      const valeur = lirePrix(source.value);
+      if (valeur !== null) cible.value = prixSaisie(conversion(valeur));
+    };
+    const listes = index.fams.map((fam) => h('select', { id: 'f-fam-' + fam.id, class: 'champ', 'data-famille': fam.id },
+      h('option', { value: '' }, '— Aucun —'),
+      elementsDe(fam.id).map((e) => h('option', { value: e.id, selected: existant?.elements[fam.id] === e.id }, e.nom))));
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+
+    // Contrôle de la référence pendant la frappe.
+    const verifierRef = () => {
+      const ref = champRef.value.trim();
+      const doublon = ref ? index.forfaits.find((f) => autre(f) && memeRef(f.ref, ref)) : null;
+      const proche = ref && !doublon ? index.forfaits.find((f) => autre(f) && norm(f.ref) === norm(ref)) : null;
+      msgRef.className = 'msg-champ' + (doublon ? ' erreur' : proche ? ' attention' : '');
+      msgRef.textContent = doublon ? `Cette référence existe déjà${doublon.designation ? ' : ' + doublon.designation : ''}.`
+        : proche ? `Ressemble à la référence existante ${proche.ref}.` : '';
+      return { doublon, proche };
+    };
+    champRef.addEventListener('input', verifierRef);
+
+    const enregistrer = async () => {
+      const { doublon, proche } = verifierRef();
+      const ref = champRef.value.trim();
+      const ht = lirePrix(champHt.value);
+      const ttc = lirePrix(champTtc.value);
+      const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
+        : doublon ? ['Cette référence existe déjà : choisis-en une autre.', champRef]
+        : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
+        : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
+        : ['', null];
+      msgErreur.textContent = probleme;
+      if (probleme) { champFautif.focus(); return; }
+
+      const elements = {};
+      for (const liste of listes) if (liste.value) elements[liste.dataset.famille] = liste.value;
+
+      // Avertissements : on laisse enregistrer après confirmation.
+      const avertissements = [];
+      if (proche) avertissements.push(`La référence ressemble à ${proche.ref}.`);
+      const cle = cleCombinaison(elements);
+      const memes = cle ? index.forfaits.filter((f) => autre(f) && cleCombinaison(f.elements) === cle) : [];
+      if (memes.length) avertissements.push(`Même combinaison d'éléments que : ${memes.map((f) => f.ref).join(', ')}.`);
+      const attendu = ttcDepuisHt(ht);
+      if (Math.abs(ttc - attendu) > TOLERANCE_TVA) avertissements.push(`Le TTC (${formatPrix(ttc)}) ne correspond pas au HT + ${TAUX_TVA} (${formatPrix(attendu)}).`);
+      if (avertissements.length) {
+        const ok = await demander({
+          titre: "Vérifie avant d'enregistrer", liste: avertissements,
+          boutons: [{ texte: 'Enregistrer quand même', valeur: true, classe: 'btn-rouge' }, { texte: 'Revenir', valeur: false }],
+        });
+        if (!ok) return;
+      }
+
+      // Un exemple modifié devient un vrai forfait : il ne sera pas effacé avec les exemples.
+      const { exemple: _ancienExemple, ...base } = existant || { id: nouvelId('fft') };
+      const forfait = { ...base, ref, designation: champDes.value.trim(), ht, ttc, elements, maj: Date.now() };
+      remplacer(donnees.forfaits, forfait);
+      sauver();
+      noterModif();
+      dlg.close();
+      rafraichir();
+      toast(existant ? `Forfait ${ref} modifié` : `Forfait ${ref} ajouté`);
+    };
+
+    const groupe = (label, champ, ...apres) => h('div', { class: 'champ-groupe' }, h('label', { for: champ.id }, label), champ, apres);
+    const dlg = ouvrirDialogue({
+      titre: existant ? `Modifier ${existant.ref}` : 'Ajouter un forfait',
+      classe: 'dlg-large',
+      surEnvoi: enregistrer,
+      corps: [
+        existant?.exemple ? h('p', { class: 'note-exemple' }, 'Ce forfait est un EXEMPLE. Une fois enregistré, il devient un vrai forfait : vérifie bien la référence et les prix.') : null,
+        groupe('Référence *', champRef, msgRef),
+        groupe('Désignation / contenu', champDes),
+        h('div', { class: 'ligne-prix' },
+          groupe('Prix HT *', champHt, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champTtc, champHt, htDepuisTtc) }, 'Calculer depuis le TTC')),
+          groupe('Prix TTC *', champTtc, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champHt, champTtc, ttcDepuisHt) }, `Calculer depuis le HT (+ ${TAUX_TVA})`))),
+        h('div', { class: 'grille-familles' }, index.fams.map((fam, i) => groupe(fam.nom, listes[i]))),
+        msgErreur,
+      ],
+      pied: [
+        h('button', { type: 'submit', class: 'btn btn-rouge', id: 'f-enregistrer' }, 'Enregistrer'),
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler'),
+      ],
+    });
+    verifierRef();
+    champRef.focus();
+  }
+
+  async function supprimerForfait(f) {
+    const ok = await demander({
+      titre: 'Supprimer ce forfait ?',
+      message: [h('strong', {}, f.ref), f.designation ? ' — ' + f.designation : ''],
+      liste: ["La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export."],
+      boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+    });
+    if (!ok) return;
+    remplacer(donnees.forfaits, { ...f, supprime: true, maj: Date.now() });
+    sauver();
+    noterModif();
+    rafraichir();
+    toast(`Forfait ${f.ref} supprimé`);
+  }
+
+  async function supprimerExemples() {
+    const exemples = index.forfaits.filter((f) => f.exemple);
+    const ok = await demander({
+      titre: 'Supprimer les exemples ?',
+      message: `Les ${pluriel(exemples.length, 'forfait')} marqués EXEMPLE seront supprimés. Tes vrais forfaits ne bougent pas.`,
+      boutons: [{ texte: 'Supprimer les exemples', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+    });
+    if (!ok) return;
+    const maintenant = Date.now();
+    for (const f of exemples) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
+    // Les éléments d'exemple devenus inutiles disparaissent aussi.
+    const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
+    for (const e of donnees.elements) {
+      if (e.exemple && !e.supprime && !utilises.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
+    }
+    sauver();
+    noterModif();
+    rafraichir();
+    toast('Exemples supprimés');
+  }
+
+  /* =====================================================================
+     LISTES DES ÉLÉMENTS (familles et éléments, modifiables sans toucher au code)
+     ===================================================================== */
+  function ouvrirListes() {
+    const message = h('p', { class: 'msg-erreur', role: 'alert' });
+    const conteneur = h('div', {});
+    const signaler = (texte) => { message.textContent = texte; };
+    // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
+    const changer = (redessinerAussi = true) => {
+      sauver();
+      noterModif();
+      if (redessinerAussi) redessiner(); else index = construireIndex();
+    };
+    const redessiner = () => {
+      index = construireIndex();
+      conteneur.replaceChildren(...contenuListes(signaler, changer));
+    };
+    const dlg = ouvrirDialogue({
+      titre: 'Listes des éléments',
+      classe: 'dlg-large',
+      corps: [h('p', { class: 'aide-texte' }, 'Ajoute ici les nouveaux taximètres, boîtiers, imprimantes… Ils apparaissent tout de suite dans la recherche et dans le formulaire.'), message, conteneur],
+      pied: [h('button', { type: 'button', class: 'btn btn-noir', onclick: () => dlg.close() }, 'Terminé')],
+    });
+    dlg.addEventListener('close', rafraichir);
+    redessiner();
+  }
+
+  function contenuListes(signaler, changer) {
+    const fams = index.fams;
+    const nomLibre = (nom, liste, idActuel) => !liste.some((x) => x.id !== idActuel && norm(x.nom) === norm(nom));
+
+    const blocs = fams.map((fam, i) => {
+      const champNom = h('input', { class: 'champ', value: fam.nom, maxlength: 60, 'aria-label': 'Nom de la famille ' + fam.nom });
+      champNom.addEventListener('change', () => {
+        const courante = donnees.familles.find((x) => x.id === fam.id);
+        const nom = champNom.value.trim();
+        if (!nom || !nomLibre(nom, index.fams, fam.id)) {
+          signaler(nom ? `La famille « ${nom} » existe déjà.` : 'Le nom ne peut pas être vide.');
+          champNom.value = courante.nom;
+          return;
+        }
+        signaler('');
+        remplacer(donnees.familles, { ...courante, nom, maj: Date.now() });
+        changer(false);
+      });
+      const champNouveau = h('input', { class: 'champ', maxlength: 60, placeholder: 'Nouvel élément', 'aria-label': 'Nouvel élément pour ' + fam.nom });
+      const ajouter = () => {
+        const nom = champNouveau.value.trim();
+        if (!nom) return;
+        if (!nomLibre(nom, elementsDe(fam.id))) { signaler(`« ${nom} » existe déjà dans ${fam.nom}.`); return; }
+        signaler('');
+        donnees.elements.push({ id: nouvelId('elt'), familleId: fam.id, nom, maj: Date.now() });
+        changer();
+      };
+      champNouveau.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ajouter(); } });
+
+      return h('section', { class: 'famille-bloc' },
+        h('div', { class: 'famille-tete' },
+          champNom,
+          h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacerFamille(i, -1, changer) }, '↑'),
+          h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Descendre ${fam.nom}`, disabled: i === fams.length - 1, onclick: () => deplacerFamille(i, 1, changer) }, '↓'),
+          h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerFamille(fam, changer) }, 'Supprimer la famille')),
+        h('ul', { class: 'liste-elements' }, elementsDe(fam.id).map((e) => {
+          const champ = h('input', { class: 'champ', value: e.nom, maxlength: 60, 'aria-label': `Nom de l'élément ${e.nom}` });
+          champ.addEventListener('change', () => {
+            const courant = donnees.elements.find((x) => x.id === e.id);
+            const nom = champ.value.trim();
+            if (!nom || !nomLibre(nom, elementsDe(fam.id), e.id)) {
+              signaler(nom ? `« ${nom} » existe déjà dans ${fam.nom}.` : 'Le nom ne peut pas être vide.');
+              champ.value = courant.nom;
+              return;
+            }
+            signaler('');
+            remplacer(donnees.elements, { ...courant, nom, maj: Date.now() });
+            changer(false);
+          });
+          return h('li', {}, champ,
+            h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Supprimer ${e.nom}`, onclick: () => supprimerElement(e, fam, changer) }, '✕'));
+        })),
+        h('div', { class: 'ajout-ligne' }, champNouveau, h('button', { type: 'button', class: 'btn btn-noir', onclick: ajouter }, 'Ajouter')));
+    });
+
+    const champFamille = h('input', { class: 'champ', id: 'nouvelle-famille', maxlength: 60, placeholder: 'Ex. : TPE, Rétroviseur…', 'aria-label': 'Nouvelle famille' });
+    const ajouterFamille = () => {
+      const nom = champFamille.value.trim();
+      if (!nom) return;
+      if (!nomLibre(nom, fams)) { signaler(`La famille « ${nom} » existe déjà.`); return; }
+      signaler('');
+      const ordre = Math.max(0, ...donnees.familles.map((f) => f.ordre)) + 1;
+      donnees.familles.push({ id: nouvelId('fam'), nom, ordre, maj: Date.now() });
+      changer();
+    };
+    champFamille.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ajouterFamille(); } });
+
+    return [...blocs, h('section', { class: 'famille-bloc' },
+      h('label', { for: 'nouvelle-famille', class: 'el-nom' }, 'Ajouter une famille'),
+      h('div', { class: 'ajout-ligne' }, champFamille, h('button', { type: 'button', class: 'btn btn-rouge', onclick: ajouterFamille }, 'Ajouter')))];
+  }
+
+  function deplacerFamille(i, sens, changer) {
+    const ordre = [...index.fams];
+    [ordre[i], ordre[i + sens]] = [ordre[i + sens], ordre[i]];
+    const maintenant = Date.now();
+    ordre.forEach((fam, rang) => {
+      if (fam.ordre !== rang + 1) remplacer(donnees.familles, { ...fam, ordre: rang + 1, maj: maintenant });
+    });
+    changer();
+  }
+
+  // On refuse de supprimer un élément encore utilisé : on ne perd jamais une info sans le voir.
+  async function supprimerElement(e, fam, changer) {
+    const utilisateurs = index.forfaits.filter((f) => f.elements[fam.id] === e.id);
+    if (utilisateurs.length) {
+      await informer('Suppression impossible', `« ${e.nom} » est utilisé par ${pluriel(utilisateurs.length, 'forfait')}. Renomme-le, ou modifie d'abord ces forfaits :`, refsAbregees(utilisateurs));
+      return;
+    }
+    const ok = await demander({
+      titre: 'Supprimer cet élément ?', message: `« ${e.nom} » sera retiré de la liste ${fam.nom}.`,
+      boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+    });
+    if (!ok) return;
+    remplacer(donnees.elements, { ...e, supprime: true, maj: Date.now() });
+    changer();
+  }
+
+  async function supprimerFamille(fam, changer) {
+    const ids = new Set(elementsDe(fam.id).map((e) => e.id));
+    const utilisateurs = index.forfaits.filter((f) => ids.has(f.elements[fam.id]));
+    if (utilisateurs.length) {
+      await informer('Suppression impossible', `La famille ${fam.nom} est utilisée par ${pluriel(utilisateurs.length, 'forfait')} :`, refsAbregees(utilisateurs));
+      return;
+    }
+    const ok = await demander({
+      titre: 'Supprimer cette famille ?', message: `La famille ${fam.nom} et sa liste (${pluriel(ids.size, 'élément')}) seront supprimées.`,
+      boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+    });
+    if (!ok) return;
+    const maintenant = Date.now();
+    remplacer(donnees.familles, { ...fam, supprime: true, maj: maintenant });
+    for (const e of donnees.elements) if (ids.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
+    changer();
+  }
+
+  const refsAbregees = (forfaits) => [...forfaits.slice(0, 10).map((f) => f.ref), forfaits.length > 10 ? `… et ${forfaits.length - 10} autres` : null].filter(Boolean);
+
+  /* =====================================================================
+     EXPORTER / IMPORTER
+     ===================================================================== */
+  function telecharger(nom, contenu, type) {
+    const url = URL.createObjectURL(new Blob([contenu], { type }));
+    const lien = h('a', { href: url, download: nom, hidden: true });
+    document.body.append(lien);
+    lien.click();
+    lien.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function exporterJson() {
+    const contenu = JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, exporteLe: new Date().toISOString(), ...donnees }, null, 1);
+    telecharger(`forfaits-${horodatage()}.json`, contenu, 'application/json');
+    appareil.modifsEnAttente = 0;
+    appareil.dernierExport = Date.now();
+    sauverAppareil();
+    rendreRappel();
+  }
+
+  // Tableau lisible dans Excel (séparateur « ; » et accents corrects).
+  function contenuCsv() {
+    const fams = index.fams;
+    const cellule = (v) => {
+      let s = String(v ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // empêche Excel d'exécuter une formule
+      return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', ...fams.map((f) => f.nom), 'Exemple', 'Modifié le']];
+    for (const f of [...index.forfaits].sort((a, b) => tri.compare(a.ref, b.ref))) {
+      const els = index.elementsForfait.get(f.id);
+      lignes.push([
+        f.ref, f.designation, prixSaisie(f.ht), prixSaisie(f.ttc),
+        ...fams.map((fam) => els.find((e) => e.familleId === fam.id)?.nom ?? ''),
+        f.exemple ? 'oui' : '', f.maj ? dateCourte(f.maj) : '',
+      ]);
+    }
+    return '﻿' + lignes.map((l) => l.map(cellule).join(';')).join('\r\n');
+  }
+
+  function ouvrirExport() {
+    const dlg = ouvrirDialogue({
+      titre: 'Exporter',
+      corps: [
+        h('p', { class: 'dlg-message' }, 'Le fichier de sauvegarde sert à partager les forfaits : range-le dans le dossier OneDrive des forfaits. Les autres font ensuite « Importer ».'),
+        h('div', { class: 'menu-liste' },
+          h('button', {
+            type: 'button', class: 'btn btn-rouge', id: 'btn-export-json',
+            onclick: () => { exporterJson(); dlg.close(); toast('Fichier enregistré dans Téléchargements : range-le dans OneDrive'); },
+          }, 'Fichier de sauvegarde (.json)'),
+          h('button', {
+            type: 'button', class: 'btn btn-bord', id: 'btn-export-csv',
+            onclick: () => { telecharger(`forfaits-${horodatage()}.csv`, contenuCsv(), 'text/csv;charset=utf-8'); dlg.close(); toast('Tableau Excel enregistré dans Téléchargements'); },
+          }, 'Tableau pour Excel (.csv)')),
+      ],
+    });
+  }
+
+  function lancerImport() {
+    const champ = $('fichier-import');
+    champ.value = '';
+    champ.click();
+  }
+
+  // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire.
+  function bilanFusion(entrant) {
+    const locaux = new Map(donnees.forfaits.map((f) => [f.id, f]));
+    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0 };
+    for (const f of entrant.forfaits) {
+      const l = locaux.get(f.id);
+      if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
+      if (f.maj <= l.maj) continue;
+      if (f.supprime && !l.supprime) bilan.supprimes++;
+      else if (!f.supprime && l.supprime) bilan.nouveaux++;
+      else if (!f.supprime) bilan.modifies++;
+    }
+    return bilan;
+  }
+
+  async function importerFichier(fichier) {
+    if (!fichier) return;
+    if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
+    let entrant, exporteLe;
+    try {
+      const obj = JSON.parse(await fichier.text());
+      entrant = valider(obj);
+      exporteLe = Date.parse(obj.exporteLe);
+    } catch (err) {
+      await informer('Import impossible', err instanceof SyntaxError
+        ? "Ce fichier n'est pas un fichier de forfaits. Choisis le fichier .json exporté par l'outil (pas le .csv)."
+        : err.message);
+      return;
+    }
+    const bilan = bilanFusion(entrant);
+    const nbEntrants = entrant.forfaits.filter((f) => !f.supprime).length;
+    const plusAncien = derniereModif(entrant) < derniereModif(donnees);
+    const choix = await demander({
+      titre: 'Importer ce fichier ?',
+      message: `${fichier.name} — ${Number.isFinite(exporteLe) ? 'exporté le ' + fmtDateHeure.format(new Date(exporteLe)) + ', ' : ''}${pluriel(nbEntrants, 'forfait')}.`,
+      liste: [
+        `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
+        'Remplacer tout : cet appareil devient une copie exacte du fichier.',
+        plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,
+      ].filter(Boolean),
+      boutons: [
+        { texte: 'Mettre à jour', valeur: 'fusion', classe: 'btn-rouge' },
+        { texte: 'Remplacer tout', valeur: 'remplacer' },
+        { texte: 'Annuler', valeur: null },
+      ],
+    });
+    if (!choix) return;
+    if (choix === 'remplacer' && appareil.modifsEnAttente > 0) {
+      const ok = await demander({
+        titre: 'Remplacer tout ?',
+        message: `Tu as ${pluriel(appareil.modifsEnAttente, 'modification')} pas encore exportée(s) sur cet appareil : elles seront perdues.`,
+        boutons: [{ texte: 'Remplacer quand même', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+      });
+      if (!ok) return;
+    }
+    if (choix === 'fusion') {
+      donnees = fusionner(donnees, entrant);
+    } else {
+      donnees = entrant;
+      appareil.modifsEnAttente = 0;
+    }
+    donneesIllisibles = false;
+    appareil.dernierImport = Date.now();
+    demanderStockageDurable();
+    sauver();
+    sauverAppareil();
+    rafraichir();
+    toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
+    // Deux responsables ont pu créer la même référence, ou le même élément, chacun de leur côté.
+    const vues = new Map();
+    const compter = (cle, libelle) => vues.set(cle, { libelle, n: (vues.get(cle)?.n || 0) + 1 });
+    for (const f of index.forfaits) compter('ref|' + f.ref.trim().toLocaleUpperCase('fr'), `Référence ${f.ref}`);
+    for (const e of index.elsActifs) compter(`elt|${e.familleId}|${norm(e.nom)}`, `${index.famParId.get(e.familleId).nom} : ${e.nom}`);
+    const doublons = [...vues.values()].filter((v) => v.n > 1).map((v) => `${v.libelle} (${v.n} fois)`);
+    if (doublons.length) await informer('Doublons à corriger', 'Après la mise à jour, ces références ou éléments existent plusieurs fois. Un responsable doit corriger :', doublons);
+  }
+
+  /* =====================================================================
+     MENU, MODE MODIFICATION, AIDE
+     ===================================================================== */
+  function ouvrirMenu() {
+    const fermerPuis = (action) => () => { dlg.close(); action(); };
+    const exemples = index.forfaits.some((f) => f.exemple);
+    const dlg = ouvrirDialogue({
+      titre: 'Menu',
+      corps: h('div', { class: 'menu-liste' },
+        h('div', { class: 'menu-mode' },
+          h('div', {}, h('strong', {}, 'Mode modification'), h('p', {}, 'Pour les responsables : ajouter, modifier, supprimer.')),
+          h('button', {
+            type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-rouge' : 'btn-bord'),
+            'aria-pressed': String(appareil.modeModif), onclick: fermerPuis(basculerModeModif),
+          }, appareil.modeModif ? 'Activé' : 'Désactivé')),
+        appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
+        appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer un fichier'),
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
+        appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
+        h('p', { class: 'menu-info' },
+          `${pluriel(index.forfaits.length, 'forfait')} · dernier export : ${appareil.dernierExport ? dateCourte(appareil.dernierExport) : 'jamais'}`
+          + ` · dernier import : ${appareil.dernierImport ? dateCourte(appareil.dernierImport) : 'jamais'} · version ${VERSION_OUTIL}`)),
+    });
+  }
+
+  async function basculerModeModif() {
+    if (!appareil.modeModif) {
+      const ok = await demander({
+        titre: 'Activer le mode modification ?',
+        message: 'Réservé aux 1 ou 2 responsables des forfaits.',
+        liste: [
+          'Avant de modifier : importe le dernier fichier du dossier OneDrive.',
+          'Après avoir modifié : Exporter, puis range le fichier dans OneDrive.',
+        ],
+        boutons: [{ texte: 'Activer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+      });
+      if (!ok) return;
+    }
+    appareil.modeModif = !appareil.modeModif;
+    sauverAppareil();
+    rafraichir();
+    toast(appareil.modeModif ? 'Mode modification activé' : 'Mode modification désactivé');
+  }
+
+  function ouvrirAide() {
+    ouvrirDialogue({
+      titre: "Mode d'emploi",
+      corps: h('ol', { class: 'etapes' },
+        h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Elle marche ensuite sans internet."),
+        h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3S », « M1 STD »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
+        h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
+        h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
+        h('li', {}, h('strong', {}, 'Sauvegarde : '), "le fichier dans OneDrive est la vraie sauvegarde. Le navigateur peut être vidé : ne compte pas sur lui.")),
+    });
+  }
+
+  /* =====================================================================
+     DÉMARRAGE
+     ===================================================================== */
+  const champ = $('recherche');
+  champ.addEventListener('input', () => { rendreResultats(); majSuggestions(); });
+  champ.addEventListener('focus', majSuggestions);
+  // Petit délai : au doigt, le champ perd le focus juste avant le clic sur une suggestion.
+  champ.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== champ) majSuggestions(); }, 250));
+  champ.addEventListener('keydown', (ev) => {
+    const n = etatUi.suggestions.length;
+    if (ev.key === 'ArrowDown' && n) { ev.preventDefault(); activerSuggestion((etatUi.suggestionActive + 1) % n); }
+    else if (ev.key === 'ArrowUp' && n) { ev.preventDefault(); activerSuggestion((etatUi.suggestionActive - 1 + n) % n); }
+    else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (etatUi.suggestionActive >= 0) choisirSuggestion(etatUi.suggestionActive, true);
+      else champ.blur(); // les résultats sont déjà là : on range le clavier
+    } else if (ev.key === 'Escape' && n) {
+      ev.preventDefault();
+      etatUi.suggestions = [];
+      $('suggestions').hidden = true;
+      champ.setAttribute('aria-expanded', 'false');
+      champ.removeAttribute('aria-activedescendant');
+    }
+  });
+  $('btn-vider').addEventListener('click', () => { champ.value = ''; champ.focus(); rendreResultats(); majSuggestions(); });
+  $('btn-tout-effacer').addEventListener('click', toutEffacer);
+  $('btn-ajouter').addEventListener('click', () => ouvrirFormulaire(null));
+  $('btn-importer').addEventListener('click', lancerImport);
+  $('btn-menu').addEventListener('click', ouvrirMenu);
+  $('btn-rappel-exporter').addEventListener('click', ouvrirExport);
+  $('fichier-import').addEventListener('change', (ev) => importerFichier(ev.target.files[0]));
+
+  // Si la page est ouverte dans deux onglets, ils restent d'accord.
+  window.addEventListener('storage', (ev) => {
+    if (ev.key === CLE_DONNEES) donnees = charger();
+    else if (ev.key === CLE_APPAREIL) appareil = chargerAppareil();
+    else return;
+    rafraichir();
+  });
+
+  rafraichir();
+  if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
+
+  // Mode hors ligne (seulement quand la page vient d'une adresse web).
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  // Fonction exposée pour les tests automatiques.
+  window.Forfaits = Object.freeze({ lirePrix });
+})();
+</script>
+</body>
+</html>

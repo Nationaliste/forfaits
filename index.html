@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-H3P9qC83wY4zvBi4lbKI0nvbn7fCjxR0SohAaTw3818='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-I36V/eKYgILicwCKslTzTZyimkmt7g65X4EUgdIio+M='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1262,6 +1262,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
     toast(`Forfait ${f.ref} supprimé`);
   }
 
+  // Marque supprimés les forfaits EXEMPLE, puis les éléments d'exemple devenus inutiles.
+  function marquerExemplesSupprimes() {
+    const maintenant = Date.now();
+    for (const f of donnees.forfaits.filter((x) => x.exemple && !x.supprime)) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
+    const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
+    for (const e of donnees.elements) {
+      if (e.exemple && !e.supprime && !utilises.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
+    }
+  }
+
   async function supprimerExemples() {
     const exemples = index.forfaits.filter((f) => f.exemple);
     const ok = await demander({
@@ -1270,13 +1280,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       boutons: [{ texte: 'Supprimer les exemples', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
     });
     if (!ok) return;
-    const maintenant = Date.now();
-    for (const f of exemples) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
-    // Les éléments d'exemple devenus inutiles disparaissent aussi.
-    const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
-    for (const e of donnees.elements) {
-      if (e.exemple && !e.supprime && !utilises.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
-    }
+    marquerExemplesSupprimes();
     sauver();
     noterModif();
     rafraichir();
@@ -1508,9 +1512,199 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return bilan;
   }
 
+  /* ---------- Tableau Excel (.csv) : remplir ou mettre à jour les forfaits depuis Excel ---------- */
+
+  // Titres de colonnes reconnus (comparés « à plat », voir norm) ; null = colonne ignorée.
+  // Les autres titres doivent être des noms de familles (Taximètre, Boîtier…).
+  const COLONNES_TABLEAU = new Map([
+    ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
+    ['exemple', 'exemple'], ['modifiele', null],
+  ]);
+  const LIGNES_TABLEAU_MAX = 5000;
+
+  // Texte d'un fichier : UTF-8 (« CSV UTF-8 » d'Excel), sinon Windows-1252 (ancien « CSV » d'Excel).
+  async function lireTexte(fichier) {
+    const octets = await fichier.arrayBuffer();
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(octets);
+    } catch {
+      return new TextDecoder('windows-1252').decode(octets);
+    }
+  }
+
+  // Découpe un CSV en lignes de cellules : séparateur « ; », virgule ou tabulation, guillemets,
+  // retours à la ligne dans une cellule. Le numéro de ligne dans Excel = position + 1.
+  function decouperCsv(texte) {
+    const t = texte.replace(/^﻿/, '');
+    const premiere = t.split(/\r?\n/, 1)[0];
+    const sep = [';', '\t', ','].map((s) => [s, premiere.split(s).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const lignes = [];
+    let ligne = [];
+    let cellule = '';
+    let entreGuillemets = false;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (entreGuillemets) {
+        if (c !== '"') cellule += c;
+        else if (t[i + 1] === '"') { cellule += '"'; i++; }
+        else entreGuillemets = false;
+      } else if (c === '"' && cellule === '') {
+        entreGuillemets = true;
+      } else if (c === sep) {
+        ligne.push(cellule);
+        cellule = '';
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && t[i + 1] === '\n') i++;
+        ligne.push(cellule);
+        lignes.push(ligne);
+        ligne = [];
+        cellule = '';
+      } else {
+        cellule += c;
+      }
+    }
+    if (cellule !== '' || ligne.length) { ligne.push(cellule); lignes.push(ligne); }
+    return lignes;
+  }
+
+  // Transforme le tableau en données prêtes à fusionner, ou renvoie la liste des problèmes (rien n'est modifié).
+  // Un forfait garde son identifiant si sa référence existe déjà : on le met à jour au lieu de le dupliquer.
+  function analyserTableau(texte) {
+    const lignes = decouperCsv(texte);
+    // Excel ajoute des lignes vides à la fin de chaque colonne mise en forme : on les écarte avant de compter.
+    while (lignes.length && lignes[lignes.length - 1].every((c) => !String(c).trim())) lignes.pop();
+    if (lignes.length > LIGNES_TABLEAU_MAX + 1) return { erreurs: [`Trop de lignes : ${LIGNES_TABLEAU_MAX} forfaits au maximum.`] };
+    const colonnes = new Map(); // 'ref', 'ht'… ou 'fam:<id>' → numéro de colonne
+    const famParNom = new Map(index.fams.map((f) => [norm(f.nom), f]));
+    const inconnues = [];
+    (lignes[0] || []).forEach((titre, i) => {
+      const cle = norm(titre);
+      if (!cle) return;
+      const champ = COLONNES_TABLEAU.has(cle) ? COLONNES_TABLEAU.get(cle) : famParNom.has(cle) ? 'fam:' + famParNom.get(cle).id : undefined;
+      if (champ === undefined) inconnues.push(String(titre).trim());
+      else if (champ && !colonnes.has(champ)) colonnes.set(champ, i);
+    });
+    const manquantes = [['ref', 'Référence'], ['ht', 'Prix HT'], ['ttc', 'Prix TTC']].filter(([champ]) => !colonnes.has(champ)).map(([, nom]) => nom);
+    if (manquantes.length || inconnues.length) {
+      return {
+        erreurs: [
+          ...manquantes.map((nom) => `Colonne « ${nom} » introuvable : la première ligne doit contenir les titres du modèle.`),
+          ...inconnues.map((nom) => `Colonne « ${nom} » inconnue. Pour une nouvelle famille, crée-la d'abord (Menu → Listes des éléments), ou enlève la colonne.`),
+        ],
+      };
+    }
+
+    const maintenant = Date.now();
+    const erreurs = [];
+    const avertissements = [];
+    const nouveauxElements = [];
+    const elementsCrees = [];
+    const elementsConnus = new Map(index.elsActifs.map((e) => [`${e.familleId}|${norm(e.nom)}`, e]));
+    const lignesParRef = new Map();
+    const forfaits = [];
+    let avecExemples = false;
+    for (let n = 1; n < lignes.length; n++) {
+      const ligne = lignes[n];
+      if (ligne.every((c) => !String(c).trim())) continue;
+      // L'export de l'outil protège avec une apostrophe les cellules qui commencent par = + - @.
+      const lire = (cle) => (colonnes.has(cle) ? String(ligne[colonnes.get(cle)] ?? '').trim().replace(/^'(?=[=+\-@])/, '') : '');
+      const ref = lire('ref');
+      if (!ref) { erreurs.push(`Ligne ${n + 1} : la référence est vide.`); continue; }
+      const lieu = `Ligne ${n + 1} (${ref.slice(0, 40)})`;
+      if (ref.length > 80) { erreurs.push(`${lieu} : référence trop longue (80 caractères au maximum).`); continue; }
+      const cleRef = ref.toLocaleUpperCase('fr');
+      if (lignesParRef.has(cleRef)) { erreurs.push(`${lieu} : cette référence est déjà à la ligne ${lignesParRef.get(cleRef)}.`); continue; }
+      lignesParRef.set(cleRef, n + 1);
+      const ht = lirePrix(lire('ht'));
+      const ttc = lirePrix(lire('ttc'));
+      if (ht === null) erreurs.push(`${lieu} : prix HT ${lire('ht') ? `illisible « ${lire('ht').slice(0, 30)} »` : 'manquant'}.`);
+      if (ttc === null) erreurs.push(`${lieu} : prix TTC ${lire('ttc') ? `illisible « ${lire('ttc').slice(0, 30)} »` : 'manquant'}.`);
+      if (ht === null || ttc === null) continue;
+      if (Math.abs(ttc - ttcDepuisHt(ht)) > TOLERANCE_TVA) avertissements.push(`${ref} : ${formatPrix(ttc)} au lieu de ${formatPrix(ttcDepuisHt(ht))}`);
+
+      const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => memeRef(f.ref, ref));
+      // Une famille absente du tableau n'est pas touchée ; une cellule vide retire l'élément.
+      const elements = { ...(existant?.elements ?? {}) };
+      for (const fam of index.fams) {
+        const cle = 'fam:' + fam.id;
+        if (!colonnes.has(cle)) continue;
+        const nom = lire(cle);
+        if (!nom) { delete elements[fam.id]; continue; }
+        if (!norm(nom)) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)} » illisible.`); continue; }
+        const cleElement = `${fam.id}|${norm(nom)}`;
+        let element = elementsConnus.get(cleElement);
+        if (!element) {
+          element = { id: nouvelId('elt'), familleId: fam.id, nom: nom.slice(0, 60), maj: maintenant };
+          elementsConnus.set(cleElement, element);
+          elementsCrees.push(element);
+          nouveauxElements.push(`${fam.nom} : ${element.nom}`);
+        }
+        elements[fam.id] = element.id;
+      }
+
+      // Comme pour les familles : une colonne absente du tableau ne touche pas à ce que l'outil contient déjà.
+      const designation = colonnes.has('designation') || !existant ? lire('designation') : existant.designation;
+      const exemple = colonnes.has('exemple') || !existant ? norm(lire('exemple')) === 'oui' : !!existant.exemple;
+      if (exemple) avecExemples = true;
+      const inchange = existant && !existant.supprime && existant.ref === ref && existant.designation === designation
+        && existant.ht === ht && existant.ttc === ttc && !existant.exemple === !exemple
+        && JSON.stringify(Object.entries(existant.elements).sort()) === JSON.stringify(Object.entries(elements).sort());
+      forfaits.push(inchange ? existant : {
+        id: existant?.id ?? nouvelId('fft'), ref, designation, ht, ttc, elements, maj: maintenant, ...(exemple ? { exemple: true } : {}),
+      });
+    }
+    if (!erreurs.length && !forfaits.length) erreurs.push('Le tableau ne contient aucun forfait.');
+    if (erreurs.length) return { erreurs };
+    try {
+      // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
+      const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: donnees.familles, elements: [...donnees.elements, ...elementsCrees], forfaits });
+      return { entrant, nbForfaits: forfaits.length, nouveauxElements, avertissements, avecExemples };
+    } catch (err) {
+      return { erreurs: [err.message] };
+    }
+  }
+
+  async function importerTableau(fichier) {
+    const analyse = analyserTableau(await lireTexte(fichier));
+    if (analyse.erreurs) {
+      const max = 12;
+      await informer('Import impossible', "Le tableau n'a pas été importé : rien n'a changé. Corrige-le, enregistre-le de nouveau, puis réessaie.",
+        [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
+      return;
+    }
+    const { entrant, nbForfaits, nouveauxElements, avertissements, avecExemples } = analyse;
+    const bilan = bilanFusion(entrant);
+    const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
+    const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
+    // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
+    const exemplesRestants = !avecExemples && donnees.forfaits.some((f) => f.exemple && !f.supprime);
+    const choix = await demander({
+      titre: 'Importer ce tableau ?',
+      message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}.`,
+      liste: [
+        `${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${inchanges} inchangé${inchanges > 1 ? 's' : ''}. Les autres forfaits de cet appareil ne bougent pas.`,
+        resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
+        resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
+      ].filter(Boolean),
+      boutons: [
+        { texte: 'Importer', valeur: 'fusion', classe: exemplesRestants ? 'btn-bord' : 'btn-rouge' },
+        exemplesRestants ? { texte: 'Importer et supprimer les exemples', valeur: 'sans-exemples', classe: 'btn-rouge' } : null,
+        { texte: 'Annuler', valeur: null },
+      ].filter(Boolean),
+    });
+    if (!choix) return;
+    donnees = fusionner(donnees, entrant);
+    if (choix === 'sans-exemples') marquerExemplesSupprimes();
+    sauver();
+    if (bilan.nouveaux || bilan.modifies || nouveauxElements.length || choix === 'sans-exemples') noterModif();
+    rafraichir();
+    toast('Tableau importé');
+  }
+
   async function importerFichier(fichier) {
     if (!fichier) return;
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
+    if (/\.csv$/i.test(fichier.name)) { await importerTableau(fichier); return; }
     let entrant, exporteLe;
     try {
       const obj = JSON.parse(await fichier.text());
@@ -1518,7 +1712,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       exporteLe = Date.parse(obj.exporteLe);
     } catch (err) {
       await informer('Import impossible', err instanceof SyntaxError
-        ? "Ce fichier n'est pas un fichier de forfaits. Choisis le fichier .json exporté par l'outil (pas le .csv)."
+        ? "Ce fichier n'est pas un fichier de forfaits. Choisis le fichier .json exporté par l'outil, ou le tableau .csv du modèle Excel."
         : err.message);
       return;
     }
@@ -1590,7 +1784,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
           choixTheme()),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
-        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer un fichier'),
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer (sauvegarde ou tableau Excel)'),
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
         appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
@@ -1641,6 +1835,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3S », « M1 STD »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
+        h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
         h('li', {}, h('strong', {}, 'Sauvegarde : '), "le fichier dans OneDrive est la vraie sauvegarde. Le navigateur peut être vidé : ne compte pas sur lui.")),
     });

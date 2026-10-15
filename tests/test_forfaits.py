@@ -531,6 +531,149 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
     assert ";1234,50;1481,40;M1 STD;Gamma 7;3S;;;oui;" in ligne
 
 
+# ---------------------------------------------------------------- tableau Excel (.csv)
+
+EN_TETE_TABLEAU = "Référence;Désignation;Prix HT;Prix TTC;Taximètre;Boîtier;Imprimante;Lumineux;Installation"
+
+
+def ecrire_tableau(chemin, lignes, encodage="utf-8-sig", en_tete=EN_TETE_TABLEAU, vides=5):
+    """Écrit un tableau comme Excel : « ; », prix à virgule, fins de ligne Windows, lignes vides à la fin."""
+    texte = "\r\n".join([en_tete, *lignes, *[";;;;;;;;"] * vides]) + "\r\n"
+    chemin.write_bytes(texte.encode(encodage))
+    return chemin
+
+
+def ouvrir_tableau(page, chemin):
+    page.set_input_files(
+        "#fichier-import", []
+    )  # le bouton « Importer » vide le champ : sans cela, un même fichier ne se rouvre pas
+    page.set_input_files("#fichier-import", str(chemin))
+    d = dialogue(page)
+    expect(d).to_contain_text("Importer ce tableau")
+    return d
+
+
+@pytest.mark.parametrize("encodage", ["utf-8-sig", "cp1252"])  # « CSV UTF-8 » d'Excel, puis l'ancien « CSV »
+def test_importer_un_tableau_excel_et_supprimer_les_exemples(appareils, tmp_path, encodage):
+    page = appareils().page
+    chemin = ecrire_tableau(
+        tmp_path / "tableau.csv",
+        [
+            "T-1;Taximètre M1 STD + Gamma 7;1234,50;1481,40;M1 STD;Gamma 7;3S;;",
+            't-2;"Ligne 1\nLigne 2 « guillemets » et ""doubles""";1000,00;1200,00;F1;;4S;;',
+            "001;Référence qui ressemble à un nombre;99,90;119,88;;Gamma 9;;;",
+            "T-4;- désignation qui commence par un tiret;100,00;130,00;F1;;;;",
+        ],
+        encodage,
+    )
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("4 forfaits")
+    expect(d).to_contain_text("4 nouveaux, 0 modifié, 0 inchangé")
+    expect(d).to_contain_text("Boîtier : Gamma 9")  # élément inconnu : annoncé avant d'être créé
+    expect(d).to_contain_text("TTC à vérifier")  # TTC qui ne correspond pas au HT + 20 %
+    expect(d).to_contain_text("T-4 : 130,00")
+    d.get_by_role("button", name="Importer et supprimer les exemples", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    assert refs(page) == {"T-1", "t-2", "001", "T-4"}
+    carte = {c["ref"]: c for c in cartes(page)}
+    assert espaces(carte["T-1"]["ht"]) == "1 234,50 €"
+    assert espaces(carte["T-1"]["ttc"]) == "1 481,40 €"
+    assert carte["T-1"]["elements"] == {"Taximètre": "M1 STD", "Boîtier": "Gamma 7", "Imprimante": "3S"}
+    assert carte["t-2"]["designation"] == 'Ligne 1\nLigne 2 « guillemets » et "doubles"'
+    assert carte["001"]["elements"] == {"Boîtier": "Gamma 9"}
+    assert carte["T-4"]["designation"] == "- désignation qui commence par un tiret"
+
+    fichier = exporter_json(page, tmp_path / "apres.json")
+    assert [e["familleId"] for e in fichier["elements"] if e["nom"] == "Gamma 9"] == ["fam-boitier"]  # créé une seule fois
+    assert not [f for f in fichier["forfaits"] if f.get("exemple") and not f.get("supprime")]
+
+
+def test_tableau_refuse_avec_les_numeros_de_ligne(page, tmp_path):
+    chemin = ecrire_tableau(
+        tmp_path / "faux.csv",
+        [
+            "A-1;ok;100,00;120,00;;;;;",
+            ";sans référence;100,00;120,00;;;;;",
+            "A-3;prix illisible;12 abc;120,00;;;;;",
+            "A-4;ttc manquant;100,00;;;;;;",
+            "a-1;doublon;100,00;120,00;;;;;",
+        ],
+    )
+    page.set_input_files("#fichier-import", str(chemin))
+    d = dialogue(page)
+    expect(d).to_contain_text("Import impossible")
+    texte = d.text_content()
+    assert "Ligne 3 : la référence est vide." in texte
+    assert "Ligne 4 (A-3) : prix HT illisible « 12 abc »" in texte
+    assert "Ligne 5 (A-4) : prix TTC manquant" in texte
+    assert "Ligne 6 (a-1) : cette référence est déjà à la ligne 2" in texte
+    d.get_by_role("button", name="Compris").click()
+    assert refs(page) == TOUS  # rien n'a bougé : même la ligne « A-1 », correcte, n'est pas importée
+
+
+def test_tableau_colonnes_inconnues_ou_absentes(page, tmp_path):
+    cas = {
+        "couleur.csv": (f"{EN_TETE_TABLEAU};Couleur", "Colonne « Couleur » inconnue"),
+        "titres.csv": ("Code;Prix", "Colonne « Référence » introuvable"),
+    }
+    for nom, (en_tete, attendu) in cas.items():
+        chemin = ecrire_tableau(tmp_path / nom, [], en_tete=en_tete, vides=0)
+        page.set_input_files("#fichier-import", str(chemin))
+        d = dialogue(page)
+        expect(d).to_contain_text("Import impossible")
+        assert attendu in d.text_content(), nom
+        d.get_by_role("button", name="Compris").click()
+    assert refs(page) == TOUS
+
+
+def test_tableau_exporte_par_l_outil_se_reimporte_sans_changement(page, tmp_path):
+    page.click("#btn-menu")
+    page.click("#btn-menu-exporter")
+    with page.expect_download() as telechargement:
+        page.click("#btn-export-csv")
+    chemin = tmp_path / "export.csv"
+    telechargement.value.save_as(chemin)
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("11 forfaits")
+    expect(d).to_contain_text("0 nouveau, 0 modifié, 11 inchangés")
+    expect(d.get_by_role("button", name="Importer et supprimer les exemples")).to_have_count(0)  # ce sont des exemples
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    assert refs(page) == TOUS
+
+
+def test_tableau_met_a_jour_un_forfait_sans_le_dupliquer(page, tmp_path):
+    chemin = ecrire_tableau(tmp_path / "maj.csv", ["ex-f1-3s;Nouvelle désignation;800,00;960,00;F1;;;;"])
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
+    d.get_by_role("button", name="Importer", exact=True).click()  # sans supprimer les exemples
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    assert refs(page) == (TOUS - {"EX-F1-3S"}) | {"ex-f1-3s"}  # même forfait, pas un doublon
+    (carte,) = [c for c in cartes(page) if c["ref"] == "ex-f1-3s"]
+    assert espaces(carte["ttc"]) == "960,00 €"
+    assert carte["designation"] == "Nouvelle désignation"
+    assert carte["elements"] == {"Taximètre": "F1"}  # cellule vide : l'imprimante 3S est retirée
+
+    d = ouvrir_tableau(page, chemin)  # même tableau une seconde fois : rien à changer
+    expect(d).to_contain_text("0 nouveau, 0 modifié, 1 inchangé")
+    d.get_by_role("button", name="Annuler").click()
+
+
+def test_tableau_sans_colonne_designation_ne_l_efface_pas(page, tmp_path):
+    """Un tableau réduit à « Référence ; Prix HT ; Prix TTC » ne met à jour que les prix."""
+    chemin = ecrire_tableau(tmp_path / "prix.csv", ["EX-F1-3S;800,00;960,00"], en_tete="Référence;Prix HT;Prix TTC", vides=0)
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    (carte,) = [c for c in cartes(page) if c["ref"] == "EX-F1-3S"]
+    assert espaces(carte["ttc"]) == "960,00 €"
+    assert carte["designation"].startswith("EXEMPLE")  # désignation d'origine gardée
+    assert carte["elements"] == {"Taximètre": "F1", "Imprimante": "3S"}  # familles absentes du tableau : intactes
+    stock = page.evaluate("JSON.parse(localStorage.getItem('forfaits.donnees.v1'))")
+    assert next(f for f in stock["forfaits"] if f["ref"] == "EX-F1-3S")["exemple"] is True  # le repère « exemple » aussi
+
+
 def test_import_d_un_mauvais_fichier_refuse(page, tmp_path):
     cas = {
         "texte.json": "bonjour",

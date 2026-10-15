@@ -8,7 +8,7 @@ import pathlib
 from PIL import Image, ImageDraw
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
-NOIR = (18, 18, 18)
+NOIR = (0, 0, 0)
 ROUGE = (200, 16, 46)
 BLANC = (255, 255, 255)
 GRAND = 1024  # dessin en grand, puis réduit : bords plus nets

@@ -264,10 +264,24 @@ def test_copier_la_reference(navigateur, appareils):
         pytest.skip("Firefox ne laisse pas les tests lire le presse-papiers")
     a = appareils()
     a.contexte.grant_permissions(["clipboard-read", "clipboard-write"])
+    a.page.clock.install()
     chercher(a.page, "EX-F1-3S")
-    a.page.get_by_role("button", name="Copier la référence").click()
+    bouton = a.page.get_by_role("button", name="Copier la référence")
+    bouton.click()
     expect(a.page.locator("#toast")).to_contain_text("EX-F1-3S copiée")
     assert a.page.evaluate("navigator.clipboard.readText()") == "EX-F1-3S"
+    expect(bouton).to_have_text("Copié")
+    # Un second clic relance la confirmation : le premier minuteur ne doit pas la couper.
+    a.page.clock.run_for(1000)
+    a.page.evaluate("navigator.clipboard.writeText('')")
+    bouton.click()
+    for _ in range(100):  # attend la fin de la seconde copie
+        if a.page.evaluate("navigator.clipboard.readText()") == "EX-F1-3S":
+            break
+    a.page.clock.run_for(800)
+    expect(bouton).to_have_text("Copié")
+    a.page.clock.run_for(800)
+    expect(bouton).to_have_text("Copier")
 
 
 # ---------------------------------------------------------------- saisie des forfaits
@@ -681,7 +695,7 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-1-accueil.png")
     # Gros boutons faciles à toucher
     hauteurs = page.eval_on_selector_all(
-        "#filtres .filtre, .carte-actions .btn, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
+        "#filtres .filtre, .btn-copier, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
     )
     assert min(hauteurs) >= 44, hauteurs
 

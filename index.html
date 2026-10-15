@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6h6EL+IRXhzKrb6URWh18jRMOCd5jypna5GPEYuHdrw='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-H3P9qC83wY4zvBi4lbKI0nvbn7fCjxR0SohAaTw3818='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -13,18 +13,24 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <style>
 /* ============ Couleurs et réglages (noir dominant, rouge en accent) ============ */
-:root {
-  --noir: #000000;          /* fond de page, en-tête, barre de recherche */
+/* Palette sombre = défaut. L'en-tête et les titres de fenêtre restent noirs dans les deux thèmes :
+   ils reprennent donc cette palette même quand la page est en clair. */
+:root, .entete, .dlg-tete {
+  --fond: #000000;          /* fond de page, barre de recherche, champs */
+  --noir: #000000;          /* noir de la marque : en-tête, damier (ne change jamais) */
   --surface: #151515;       /* cartes, fenêtres */
   --surface-2: #232323;     /* puces, encadrés, survols */
   --trait: #333333;         /* bordures discrètes */
   --trait-fort: #5c5c5c;    /* bordures des boutons et des champs */
   --texte: #f3f3f3;
+  --texte-fort: #ffffff;    /* titres, survols */
   --texte-doux: #a3a3a3;
   --texte-pale: #7c7c7c;    /* textes d'exemple dans les champs */
-  --blanc: #ffffff;
-  --blanc-2: #dedede;       /* survol des boutons blancs */
-  --encre: #121212;         /* texte sur fond blanc */
+  --blanc: #ffffff;         /* blanc fixe : texte sur rouge, vert et noir */
+  --inverse: #ffffff;       /* bouton et pastille « inversés » (blancs en sombre, noirs en clair) */
+  --inverse-texte: #121212;
+  --inverse-survol: #dedede;
+  --encre: #121212;         /* texte sur la barre de recherche, toujours blanche */
   --encre-douce: #5f5f5f;
   --gris-clair: #ececec;
   --rouge: #c8102e;         /* fonds rouges, texte blanc dessus */
@@ -40,16 +46,37 @@
   --police-titre: Bahnschrift, "DIN Alternate", sans-serif-condensed, system-ui, sans-serif;
   --tactile: 48px; /* hauteur minimale des boutons (doigt) */
 }
+/* Palette claire : choisie dans le Menu (ou suivant l'appareil), posée par le script sur <html>. */
+:root[data-theme="clair"] {
+  color-scheme: light;
+  --fond: #f1f1f1;
+  --surface: #ffffff;
+  --surface-2: #ebebeb;
+  --trait: #d6d6d6;
+  --trait-fort: #858585;
+  --texte: #121212;
+  --texte-fort: #000000;
+  --texte-doux: #525252;
+  --texte-pale: #666666;
+  --inverse: #121212;
+  --inverse-texte: #ffffff;
+  --inverse-survol: #3a3a3a;
+  --rouge-vif: #c8102e;     /* en clair, le rouge de la marque se lit directement */
+  --rouge-voile: rgb(200 16 46 / 0.1);
+  --ambre: #8a5a00;
+  --voile: rgb(0 0 0 / 0.55);
+  --ombre-forte: 0 14px 40px rgb(0 0 0 / 0.25);
+}
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; color-scheme: dark; background: var(--noir); }
+html { -webkit-text-size-adjust: 100%; color-scheme: dark; background: var(--fond); }
 body {
   margin: 0;
   font-family: var(--police);
   font-size: 16px;
   line-height: 1.45;
   color: var(--texte);
-  background: var(--noir);
+  background: var(--fond);
   min-height: 100vh;
   min-height: 100dvh;
 }
@@ -78,10 +105,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:disabled { opacity: .35; cursor: default; transform: none; }
 .btn-rouge { background: var(--rouge); color: var(--blanc); }
 .btn-rouge:hover { background: var(--rouge-fonce); }
-.btn-blanc { background: var(--blanc); color: var(--encre); }
-.btn-blanc:hover { background: var(--blanc-2); }
+/* « blanc » en sombre, noir en clair : le nom est resté, il est partagé avec la branche du serveur. */
+.btn-blanc { background: var(--inverse); color: var(--inverse-texte); }
+.btn-blanc:hover { background: var(--inverse-survol); }
 .btn-bord { background: transparent; color: var(--texte); border-color: var(--trait-fort); }
-.btn-bord:hover { border-color: var(--blanc); }
+.btn-bord:hover { border-color: var(--texte-fort); }
 .btn-danger { background: transparent; color: var(--rouge-vif); border-color: var(--rouge); }
 .btn-danger:hover { background: var(--rouge-voile); }
 .btn-carre { width: var(--tactile); min-width: var(--tactile); padding: 0; }
@@ -90,7 +118,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--rouge-vif); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 14px;
   transition: color .12s ease;
 }
-.btn-lien:hover { color: var(--blanc); }
+.btn-lien:hover { color: var(--texte-fort); }
 .btn-icone {
   width: var(--tactile); height: var(--tactile); flex-shrink: 0;
   display: grid; place-items: center;
@@ -152,12 +180,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ============ Recherche ============ */
 .zone-recherche {
   position: sticky; top: 0; z-index: 20;
-  background: var(--noir);
+  background: var(--fond);
   padding: 14px 16px 12px;
   border-bottom: 1px solid var(--trait);
 }
 .zone-recherche > * { max-width: 1068px; margin-left: auto; margin-right: auto; }
-/* La barre blanche est le seul grand aplat clair de la page : l'œil y va tout de suite. */
+/* La barre reste blanche dans les deux thèmes : en sombre c'est le seul grand aplat clair, l'œil y va tout de suite. */
 .champ-recherche {
   position: relative;
   display: flex; align-items: center;
@@ -195,7 +223,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .etiquette {
   display: inline-flex; align-items: center; gap: 8px;
   min-height: 44px; padding: 6px 8px 6px 14px;
-  background: var(--blanc); color: var(--encre);
+  background: var(--inverse); color: var(--inverse-texte);
   border: 0; border-radius: 999px; font-weight: 600; cursor: pointer;
   transition: transform .12s ease;
 }
@@ -207,7 +235,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface); color: var(--texte); font-weight: 600; cursor: pointer;
   transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
 }
-.filtre:hover { transform: translateY(-1px); border-color: var(--blanc); }
+.filtre:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
 .filtre[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
 
 /* ============ Résultats ============ */
@@ -227,7 +255,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .carte-exemple { border-style: dashed; border-color: var(--trait-fort); }
 .carte-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .carte-titre { min-width: 0; padding-top: 4px; }
-.carte-ref { margin: 0; font-family: var(--police-titre); font-size: 26px; line-height: 1.1; letter-spacing: .02em; color: var(--blanc); overflow-wrap: anywhere; }
+.carte-ref { margin: 0; font-family: var(--police-titre); font-size: 26px; line-height: 1.1; letter-spacing: .02em; color: var(--texte-fort); overflow-wrap: anywhere; }
 .badge-exemple {
   display: inline-block; margin-bottom: 4px; padding: 0 7px; border-radius: 6px;
   border: 1px solid var(--trait-fort); color: var(--texte-doux);
@@ -323,7 +351,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   width: 100%; min-height: var(--tactile);
   padding: 10px 12px;
   border: 2px solid var(--trait-fort); border-radius: 10px;
-  background: var(--noir); color: var(--texte); font-size: 17px;
+  background: var(--fond); color: var(--texte); font-size: 17px;
   transition: border-color .12s ease, box-shadow .12s ease;
 }
 .champ:hover { border-color: var(--texte-doux); }
@@ -346,7 +374,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   background: var(--surface-2); font-weight: 700; font-size: 17px; cursor: pointer;
   transition: transform .12s ease, border-color .12s ease;
 }
-.choix:hover { transform: translateY(-1px); border-color: var(--blanc); }
+.choix:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
 .choix[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
 
 /* Menu */
@@ -354,6 +382,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .menu-liste > .btn { justify-content: flex-start; text-align: left; }
 .menu-mode { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
 .menu-mode p { margin: 2px 0 0; font-size: 14px; color: var(--texte-doux); }
+.groupe-theme { display: flex; flex: 1 1 260px; gap: 8px; }
+.groupe-theme .btn { flex: 1; padding: 8px 10px; }
 .menu-info { margin: 6px 0 0; font-size: 14px; color: var(--texte-doux); }
 
 /* Listes des éléments */
@@ -449,6 +479,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
      ===================================================================== */
   const CLE_DONNEES = 'forfaits.donnees.v1';   // forfaits + listes, sur cet appareil
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
+  const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 1;
   const VERSION_OUTIL = '1.0';
@@ -671,7 +702,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0 };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre' };
     try {
       const lu = JSON.parse(localStorage.getItem(CLE_APPAREIL) || '{}');
       return {
@@ -679,6 +710,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
         dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
+        theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
       };
     } catch {
       return defaut;
@@ -728,6 +760,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   let donnees = charger();
   let appareil = chargerAppareil();
+
+  // Le CSS n'a que deux palettes : « auto » est résolu ici d'après le réglage de l'appareil.
+  const themeSysteme = window.matchMedia('(prefers-color-scheme: light)');
+  function appliquerTheme() {
+    const clair = appareil.theme === 'clair' || (appareil.theme === 'auto' && themeSysteme.matches);
+    document.documentElement.dataset.theme = clair ? 'clair' : 'sombre';
+  }
+  appliquerTheme();
+  themeSysteme.addEventListener('change', appliquerTheme);
 
   /* =====================================================================
      INDEX : vues prêtes à l'emploi, recalculées après chaque changement
@@ -1544,6 +1585,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
             type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-rouge' : 'btn-bord'),
             'aria-pressed': String(appareil.modeModif), onclick: fermerPuis(basculerModeModif),
           }, appareil.modeModif ? 'Activé' : 'Désactivé')),
+        h('div', { class: 'menu-mode' },
+          h('div', {}, h('strong', {}, 'Apparence'), h('p', {}, "« Auto » suit le réglage de l'appareil.")),
+          choixTheme()),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer un fichier'),
@@ -1554,6 +1598,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
           `${pluriel(index.forfaits.length, 'forfait')} · dernier export : ${appareil.dernierExport ? dateCourte(appareil.dernierExport) : 'jamais'}`
           + ` · dernier import : ${appareil.dernierImport ? dateCourte(appareil.dernierImport) : 'jamais'} · version ${VERSION_OUTIL}`)),
     });
+  }
+
+  // Trois boutons ; le choix s'applique tout de suite et la fenêtre reste ouverte pour voir le résultat.
+  function choixTheme() {
+    const boutons = THEMES.map(({ valeur, libelle }) => h('button', {
+      type: 'button', 'data-theme-choix': valeur,
+      onclick: () => { appareil.theme = valeur; sauverAppareil(); appliquerTheme(); marquer(); },
+    }, libelle));
+    const marquer = () => boutons.forEach((b) => {
+      const actif = b.dataset.themeChoix === appareil.theme;
+      b.className = 'btn ' + (actif ? 'btn-rouge' : 'btn-bord');
+      b.setAttribute('aria-pressed', String(actif));
+    });
+    marquer();
+    return h('div', { class: 'groupe-theme', role: 'group', 'aria-label': 'Apparence' }, ...boutons);
   }
 
   async function basculerModeModif() {
@@ -1622,7 +1681,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // Si la page est ouverte dans deux onglets, ils restent d'accord.
   window.addEventListener('storage', (ev) => {
     if (ev.key === CLE_DONNEES) donnees = charger();
-    else if (ev.key === CLE_APPAREIL) appareil = chargerAppareil();
+    else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerTheme(); }
     else return;
     rafraichir();
   });

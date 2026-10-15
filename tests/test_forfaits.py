@@ -715,6 +715,128 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-4-formulaire.png")
 
 
+# ---------------------------------------------------------------- thème clair et sombre
+
+
+def choisir_theme(page, nom):
+    """Ouvre le Menu, touche le thème voulu (la fenêtre reste ouverte), puis la ferme."""
+    page.click("#btn-menu")
+    dialogue(page).get_by_role("button", name=nom, exact=True).click()
+    expect(dialogue(page).get_by_role("button", name=nom, exact=True)).to_have_attribute("aria-pressed", "true")
+    page.keyboard.press("Escape")
+
+
+def fond(page, selecteur):
+    return page.eval_on_selector(selecteur, "e => getComputedStyle(e).backgroundColor")
+
+
+def test_theme_sombre_par_defaut_puis_clair_garde_apres_rechargement(page):
+    html = page.locator("html")
+    # Playwright simule un appareil clair : sans choix, l'outil reste noir et rouge.
+    expect(html).to_have_attribute("data-theme", "sombre")
+    assert fond(page, "body") == "rgb(0, 0, 0)"
+
+    choisir_theme(page, "Clair")
+    expect(html).to_have_attribute("data-theme", "clair")
+    assert fond(page, "body") == "rgb(241, 241, 241)"
+    assert fond(page, ".entete") == "rgb(0, 0, 0)"  # l'en-tête reste noir : c'est l'enseigne
+
+    page.reload()
+    expect(html).to_have_attribute("data-theme", "clair")
+    page.click("#btn-menu")
+    expect(dialogue(page).get_by_role("button", name="Clair", exact=True)).to_have_attribute("aria-pressed", "true")
+    expect(dialogue(page).get_by_role("button", name="Sombre", exact=True)).to_have_attribute("aria-pressed", "false")
+    page.keyboard.press("Escape")
+
+    choisir_theme(page, "Sombre")
+    expect(html).to_have_attribute("data-theme", "sombre")
+
+
+def test_theme_auto_suit_le_reglage_de_l_appareil(appareils):
+    page = appareils(color_scheme="dark").page
+    html = page.locator("html")
+    choisir_theme(page, "Auto")
+    expect(html).to_have_attribute("data-theme", "sombre")
+    page.emulate_media(color_scheme="light")  # l'utilisateur change le réglage de son téléphone
+    expect(html).to_have_attribute("data-theme", "clair")
+    page.reload()
+    expect(html).to_have_attribute("data-theme", "clair")
+    page.emulate_media(color_scheme="dark")
+    expect(html).to_have_attribute("data-theme", "sombre")
+
+
+def test_theme_inconnu_dans_les_reglages_revient_au_sombre(page):
+    page.evaluate("localStorage.setItem('forfaits.appareil.v1', JSON.stringify({ theme: 'violet' }))")
+    page.reload()
+    expect(page.locator("html")).to_have_attribute("data-theme", "sombre")
+
+
+def _luminance(couleur):
+    canaux = [int(couleur[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in canaux)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contraste(a, b):
+    clair, sombre = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (clair + 0.05) / (sombre + 0.05)
+
+
+# (couleur, fond, minimum) : seulement les associations réellement affichées.
+# 4,5 = texte lisible (WCAG AA) ; 3 = bordure ou icône visible.
+PAIRES_PAGE = [
+    ("--texte", "--fond", 4.5), ("--texte", "--surface", 4.5), ("--texte-fort", "--surface", 4.5),
+    ("--texte-doux", "--fond", 4.5), ("--texte-doux", "--surface", 4.5), ("--texte-doux", "--surface-2", 4.5),
+    ("--texte-pale", "--fond", 4.5),  # texte d'exemple dans les champs
+    ("--rouge-vif", "--fond", 4.5), ("--rouge-vif", "--surface", 4.5), ("--rouge-vif", "--surface-2", 4.5),
+    ("--ambre", "--surface-2", 4.5), ("--ambre", "--surface", 4.5),
+    ("--inverse-texte", "--inverse", 4.5),
+    ("--blanc", "--rouge", 4.5), ("--blanc", "--vert", 4.5),
+    ("--trait-fort", "--fond", 3),
+]  # fmt: skip
+PAIRES_BANDEAU_NOIR = [("--blanc", "--noir", 4.5), ("--texte-doux", "--noir", 4.5), ("--trait-fort", "--noir", 3)]
+
+
+@pytest.mark.parametrize("theme", ["sombre", "clair"])
+def test_contraste_des_couleurs_des_deux_themes(page, theme):
+    if theme == "clair":
+        choisir_theme(page, "Clair")
+    expect(page.locator("html")).to_have_attribute("data-theme", theme)
+    lire = "([sel, noms]) => noms.map(n => getComputedStyle(document.querySelector(sel)).getPropertyValue(n).trim())"
+    for selecteur, paires in (("html", PAIRES_PAGE), (".entete", PAIRES_BANDEAU_NOIR)):
+        for premier, second, minimum in paires:
+            a, b = page.evaluate(lire, [selecteur, [premier, second]])
+            assert _contraste(a, b) >= minimum, f"{theme} {selecteur} : {premier} {a} sur {second} {b} = {_contraste(a, b):.2f}"
+
+
+@pytest.mark.parametrize("largeur,hauteur,nom", [(375, 812, "telephone"), (1280, 800, "pc")])
+def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom):
+    options = {"viewport": {"width": largeur, "height": hauteur}, "reduced_motion": "reduce"}
+    if largeur < 600 and navigateur.nom != "firefox":
+        options |= {"is_mobile": True, "has_touch": True, "device_scale_factor": 2}
+    page = appareils(**options).page
+    CAPTURES.mkdir(exist_ok=True)
+    prefixe = CAPTURES / f"{navigateur.nom}-{nom}-clair"
+    page.click("#btn-menu")
+    dialogue(page).get_by_role("button", name="Clair", exact=True).click()
+    page.screenshot(path=f"{prefixe}-1-menu.png")
+    page.keyboard.press("Escape")
+    chercher(page, "3S")
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    page.screenshot(path=f"{prefixe}-2-filtre.png")
+    page.keyboard.press("Escape")
+    page.locator("#recherche").fill("")
+    page.click("#recherche")
+    page.keyboard.type("gam")
+    expect(page.locator("#suggestions")).to_be_visible()
+    page.screenshot(path=f"{prefixe}-3-suggestions.png")
+    page.locator("#suggestions .suggestion", has_text="Gamma 7").click()
+    activer_modif(page)
+    ouvrir_ajout(page)
+    assert page.evaluate("document.documentElement.scrollWidth") <= largeur
+    page.screenshot(path=f"{prefixe}-4-formulaire.png")
+
+
 def test_marche_sans_internet(navigateur):
     if navigateur.nom == "firefox":
         pytest.skip("Le mode hors ligne est testé sur Chromium et Edge (même moteur que Chrome Android)")

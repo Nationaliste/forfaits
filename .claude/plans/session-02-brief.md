@@ -20,3 +20,4 @@
 - Fermer le clavier sur la Surface ou appuyer sur son bouton la met en veille malgré tout : serveur injoignable.
 - Tests : la page doit venir d'un vrai serveur local (Chrome bloque l'appel vers 127.0.0.1 depuis une page modifiée par Playwright) ; les interceptions `page.route` ne tournent que pendant un appel Playwright (attendre avec `page.wait_for_timeout`, pas `time.sleep`).
 - Compiler Rust avec `CARGO_TARGET_DIR` hors de OneDrive (`%LOCALAPPDATA%\forfaits-cargo-target`) ; cargo n'est pas dans le PATH de Git Bash (`$USERPROFILE/.cargo/bin`).
+- Thème noir et rouge fusionné sur main (PR #5) après la pause : `feat/serveur` est en conflit dans `index.html`. À la reprise, fusionner main dans la branche puis remplacer `btn-noir` par `btn-blanc` (bouton « Serveur » du bandeau) et `var(--gris-fonce)` par `var(--texte-doux)` (`.aide-champ`) ; vérifier les captures.

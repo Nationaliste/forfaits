@@ -8,6 +8,7 @@ import base64
 import hashlib
 import json
 import re
+from datetime import datetime
 
 import pytest
 from conftest import CAPTURES, RACINE, demarrer_serveur
@@ -260,28 +261,34 @@ def test_lecture_des_prix_saisis(page):
 
 
 def test_copier_la_reference(navigateur, appareils):
-    if navigateur.nom == "firefox":
-        pytest.skip("Firefox ne laisse pas les tests lire le presse-papiers")
     a = appareils()
-    a.contexte.grant_permissions(["clipboard-read", "clipboard-write"])
-    a.page.clock.install()
+    if navigateur.nom != "firefox":  # Firefox n'a pas cette permission (elle fait échouer le test) : il n'en a pas besoin
+        a.contexte.grant_permissions(["clipboard-write"])
+    a.page.clock.install(time=datetime(2026, 1, 1))
+    a.page.clock.pause_at(
+        datetime(2026, 1, 1, 0, 0, 1)
+    )  # horloge figée : seules les avances voulues comptent, même si la machine est lente
+    # Le presse-papiers contient d'abord autre chose : un reste d'un test précédent ne peut pas faire passer celui-ci.
+    a.page.fill("#recherche", "pas-la-reference")
+    a.page.keyboard.press("ControlOrMeta+A")
+    a.page.keyboard.press("ControlOrMeta+C")
     chercher(a.page, "EX-F1-3S")
     bouton = a.page.get_by_role("button", name="Copier la référence")
     bouton.click()
     expect(a.page.locator("#toast")).to_contain_text("EX-F1-3S copiée")
-    assert a.page.evaluate("navigator.clipboard.readText()") == "EX-F1-3S"
     expect(bouton).to_have_text("Copié")
     # Un second clic relance la confirmation : le premier minuteur ne doit pas la couper.
     a.page.clock.run_for(1000)
-    a.page.evaluate("navigator.clipboard.writeText('')")
     bouton.click()
-    for _ in range(100):  # attend la fin de la seconde copie
-        if a.page.evaluate("navigator.clipboard.readText()") == "EX-F1-3S":
-            break
+    a.page.wait_for_timeout(300)  # temps réel : laisse la copie se terminer (l'horloge de la page est figée)
     a.page.clock.run_for(800)
     expect(bouton).to_have_text("Copié")
     a.page.clock.run_for(800)
     expect(bouton).to_have_text("Copier")
+    # Ce qui a été copié : on le colle dans la recherche (les tests n'ont pas le droit de lire le presse-papiers sous Firefox).
+    a.page.fill("#recherche", "")
+    a.page.keyboard.press("ControlOrMeta+V")
+    expect(a.page.locator("#recherche")).to_have_value("EX-F1-3S")
 
 
 # ---------------------------------------------------------------- saisie des forfaits
@@ -981,8 +988,6 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
 
 
 def test_marche_sans_internet(navigateur):
-    if navigateur.nom == "firefox":
-        pytest.skip("Le mode hors ligne est testé sur Chromium et Edge (même moteur que Chrome Android)")
     url, serveur = demarrer_serveur()  # serveur à part : on le coupe pour de vrai
     contexte = navigateur.new_context(service_workers="allow")
     try:

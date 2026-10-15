@@ -22,6 +22,11 @@ class _Serveur(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_args):  # pas de bruit dans la sortie des tests
         pass
 
+    def end_headers(self):
+        # Sans cela, Firefox recharge la page hors ligne depuis son cache HTTP : le test du service worker ne prouverait rien.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
 
 class _ServeurTcp(socketserver.ThreadingTCPServer):
     daemon_threads = True

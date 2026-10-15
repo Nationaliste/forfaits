@@ -9,3 +9,4 @@
 - Les suppressions sont des marques `supprime: true` (pas de retrait) : indispensable pour que la fusion propage les suppressions.
 - `sw.js` sert la copie gardée puis la met à jour : une nouvelle version s'affiche à la 2e ouverture.
 - Le dossier du projet est dans OneDrive : entre deux PC, passer par git (pull/push), pas par la synchro OneDrive du dossier `.git`.
+- Couleurs : jamais de couleur en dur hors des variables de `:root`. Une nouvelle variable de couleur se déclare dans les deux palettes (`:root` pour le sombre, `:root[data-theme="clair"]` pour le clair) ; l'en-tête et les titres de fenêtre restent noirs dans les deux thèmes (`.entete, .dlg-tete` reprennent la palette sombre). Les tests mesurent le contraste de chaque palette : y ajouter la nouvelle association.

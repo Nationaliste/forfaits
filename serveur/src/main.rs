@@ -100,6 +100,9 @@ fn servir(dossier: &Path) -> Result<(), String> {
         format!("pas de configuration dans {} ({e}). Lance d'abord : forfaits-serveur configurer", dossier.display())
     })?;
     let app = App::avec_config(dossier, &config).map_err(|e| e.to_string())?;
+    if garder_eveille() {
+        app.journal.ecrire("Mise en veille automatique bloquée tant que le serveur tourne");
+    }
     let execution = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     execution.block_on(async move {
         // 127.0.0.1 seulement : le serveur n'est pas visible sur le réseau du magasin.
@@ -118,6 +121,25 @@ fn servir(dossier: &Path) -> Result<(), String> {
         app.journal.ecrire("Arrêt");
         Ok(())
     })
+}
+
+/// Empêche Windows de mettre le PC en veille par inactivité tant que le serveur tourne
+/// (un PC en veille ne répond plus). Fermer le clavier ou appuyer sur le bouton reste possible.
+#[cfg(windows)]
+fn garder_eveille() -> bool {
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn SetThreadExecutionState(drapeaux: u32) -> u32;
+    }
+    const ES_CONTINUOUS: u32 = 0x8000_0000;
+    const ES_SYSTEM_REQUIRED: u32 = 0x0000_0001;
+    // Vaut pour le fil d'exécution appelant : ici le fil principal, qui vit jusqu'à l'arrêt du serveur.
+    unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) != 0 }
+}
+
+#[cfg(not(windows))]
+fn garder_eveille() -> bool {
+    false
 }
 
 fn configurer(options: &Options) -> Result<(), String> {

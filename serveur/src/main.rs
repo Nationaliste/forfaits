@@ -145,6 +145,15 @@ fn garder_eveille() -> bool {
 fn configurer(options: &Options) -> Result<(), String> {
     fs::create_dir_all(&options.dossier).map_err(|e| format!("dossier {} : {e}", options.dossier.display()))?;
     let ancienne = Config::lire(&options.dossier).ok();
+    // Un serveur en marche garderait les anciens mots de passe en mémoire et mélangerait les deux clés.
+    if let Some(port) = ancienne.as_ref().map(|c| c.port)
+        && std::net::TcpListener::bind(("127.0.0.1", port)).is_err()
+    {
+        return Err(format!(
+            "le serveur tourne encore (port {port}). Arrête-le d'abord : taskkill /im forfaits-serveur.exe /f\n\
+             puis relance cette commande. La tâche planifiée le redémarrera ensuite dans les 5 minutes."
+        ));
+    }
     if ancienne.is_some() {
         println!(
             "Une configuration existe déjà. Les données actuelles seront archivées (chiffrées avec l'ancien mot de passe) ;\n\

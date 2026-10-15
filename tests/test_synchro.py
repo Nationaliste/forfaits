@@ -272,6 +272,10 @@ def test_serveur_coupe_puis_relance(appareil, serveur):
 def test_mot_de_passe_change_signale(appareil, serveur):
     page = appareil()
     connecter(page, serveur)
+    # Serveur en marche : refus (il garderait les anciens mots de passe en mémoire).
+    with pytest.raises(subprocess.CalledProcessError) as refus:
+        serveur.configurer("EXEMPLE nouveau mot de passe", "EXEMPLE nouveau code responsable")
+    assert "le serveur tourne encore" in refus.value.stderr
     serveur.arreter()
     serveur.configurer("EXEMPLE nouveau mot de passe", "EXEMPLE nouveau code responsable")
     serveur.demarrer()

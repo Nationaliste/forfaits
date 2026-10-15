@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-IMtakVfLxBZGYOfMqtD47uS2kOjJaE/CYQHlrXKFOyg='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.ts.net; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-JFFKIMO9XRrCCVt3auBz7TCwASR87bnPk4gVZMVaSME='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.ts.net; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#121212">
@@ -951,7 +951,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
-    $('rappel').hidden = n === 0 || Boolean(serveur?.ecriture);
+    // Responsable connecté : le serveur reçoit les modifications ; le rappel ne revient que si le serveur ne répond pas.
+    const serveurRecoit = Boolean(serveur?.ecriture) && !['horsligne', 'erreur', 'refus'].includes(etatSynchro);
+    $('rappel').hidden = n === 0 || serveurRecoit;
     $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
   }
 
@@ -1467,7 +1469,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${Number.isFinite(exporteLe) ? 'exporté le ' + fmtDateHeure.format(new Date(exporteLe)) + ', ' : ''}${pluriel(nbEntrants, 'forfait')}.`,
       liste: [
         `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
-        'Remplacer tout : cet appareil devient une copie exacte du fichier.',
+        serveur ? 'Remplacer tout : cet appareil reprend le fichier, mais les forfaits plus récents du serveur reviendront à la mise à jour suivante.'
+          : 'Remplacer tout : cet appareil devient une copie exacte du fichier.',
         plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,
       ].filter(Boolean),
       boutons: [
@@ -1498,7 +1501,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
-    if (serveur) { serveur.version = null; synchroniser(); } // envoie ce que le fichier apporte, récupère ce qui manque
+    if (serveur) { // envoie ce que le fichier apporte, récupère ce qui manque
+      serveur.version = null;
+      if (serveur.ecriture) serveur.aEnvoyer = true;
+      synchroniser();
+    }
     // Deux responsables ont pu créer la même référence, ou le même élément, chacun de leur côté.
     const vues = new Map();
     const compter = (cle, libelle) => vues.set(cle, { libelle, n: (vues.get(cle)?.n || 0) + 1 });
@@ -1654,13 +1661,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
         // 2. Envoyer nos modifications (responsables seulement).
         if (!s.ecriture || !s.aEnvoyer) break;
-        const blob = await chiffrer({ format: FORMAT, version: VERSION_FORMAT, ...donnees });
-        const p = await appelServeur(s.adresse, '/api/donnees', { methode: 'PUT', jeton: s.ecriture, corps: { version_precedente: s.version, blob } });
+        // Remis à faux AVANT l'envoi : une modification faite pendant l'envoi le remet à vrai, et repartira.
+        s.aEnvoyer = false;
+        let p, reponse;
+        try {
+          const blob = await chiffrer({ format: FORMAT, version: VERSION_FORMAT, ...donnees });
+          p = await appelServeur(s.adresse, '/api/donnees', { methode: 'PUT', jeton: s.ecriture, corps: { version_precedente: s.version, blob } });
+          if (p.ok) reponse = await p.json();
+        } finally {
+          if (!reponse) s.aEnvoyer = true; // pas arrivé : on réessaiera
+        }
         if (p.status === 409) continue; // un autre responsable a envoyé entre-temps : on récupère, on fusionne, on renvoie
         if (p.status === 401) throw Object.assign(new Error('Le serveur refuse le code responsable : il a peut-être changé. Menu → Serveur pour te reconnecter.'), { refus: true });
         if (!p.ok) throw new Error(p.status === 413 ? 'Trop de forfaits pour le serveur.' : `Le serveur a répondu ${p.status}.`);
-        s.version = (await p.json()).version;
-        s.aEnvoyer = false;
+        s.version = reponse.version;
+        if (s.aEnvoyer) continue; // modifié pendant l'envoi : on renvoie tout de suite
         appareil.modifsEnAttente = 0; // le serveur garde maintenant ces modifications
         sauverAppareil();
         break;
@@ -1761,7 +1776,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         try {
           await connecter(champAdresse.value, champEquipe.value, champCode.value);
           dlg.close();
-          toast(serveur?.ecriture ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
+          if (etatSynchro !== 'ok') toast(`Connecté, mais la première mise à jour a échoué : ${erreurSynchro}`, true);
+          else toast(serveur?.ecriture ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
         } catch (err) {
           msgErreur.textContent = err.message;
           bouton.disabled = false;

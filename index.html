@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-+pO1WiaWYzhf2m4hWDWrbdJZ4L/G4KV7ywwoIS0tat4='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6h6EL+IRXhzKrb6URWh18jRMOCd5jypna5GPEYuHdrw='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -274,6 +274,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   box-shadow: var(--ombre-forte);
 }
 .rappel p { margin: 0; flex: 1 1 220px; font-weight: 600; }
+.rappel :focus-visible { outline-color: var(--blanc); } /* le contour rouge disparaîtrait sur le fond rouge */
 .toast {
   position: fixed; left: 50%; bottom: 96px; z-index: 60;
   max-width: calc(100vw - 32px);
@@ -1081,6 +1082,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   /* ---------- Copier la référence ---------- */
+  const minuteursCopie = new WeakMap();
   async function copier(texte, bouton) {
     let ok = false;
     try {
@@ -1100,7 +1102,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const libelle = bouton.querySelector('.btn-copier-texte');
       bouton.classList.add('copie');
       libelle.textContent = 'Copié';
-      setTimeout(() => { bouton.classList.remove('copie'); libelle.textContent = 'Copier'; }, 1500);
+      // Un second clic repart pour 1,5 s au lieu d'hériter du premier minuteur.
+      clearTimeout(minuteursCopie.get(bouton));
+      minuteursCopie.set(bouton, setTimeout(() => { bouton.classList.remove('copie'); libelle.textContent = 'Copier'; }, 1500));
     }
   }
 

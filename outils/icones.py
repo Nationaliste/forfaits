@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
 NOIR = (0, 0, 0)
-ROUGE = (200, 16, 46)
+ROUGE = (227, 6, 19)  # = --rouge de index.html (#e30613)
 BLANC = (255, 255, 255)
 GRAND = 1024  # dessin en grand, puis réduit : bords plus nets
 

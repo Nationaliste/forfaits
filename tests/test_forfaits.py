@@ -681,7 +681,7 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-1-accueil.png")
     # Gros boutons faciles à toucher
     hauteurs = page.eval_on_selector_all(
-        "#filtres .filtre, .carte-actions .btn, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
+        "#filtres .filtre, .btn-copier, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
     )
     assert min(hauteurs) >= 44, hauteurs
 

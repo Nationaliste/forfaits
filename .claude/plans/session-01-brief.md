@@ -12,4 +12,4 @@
 ## Pièges
 - Toute autre page publiée sur nationaliste.github.io partagerait l'origine et pourrait lire les données (localStorage) : ne pas publier d'autre site Pages sur ce compte sans y penser.
 - Non vérifié sur un vrai téléphone (émulation Chromium seulement), ni l'import depuis OneDrive sur Android.
-- Un serveur de synchro avait été commencé (branche `feat/serveur`) : abandonné, ne pas le fusionner.
+- Serveur de synchro (branche `feat/serveur`) : en pause, pas abandonné. Ne pas le fusionner avant l'essai réel : voir `session-02-brief.md`.

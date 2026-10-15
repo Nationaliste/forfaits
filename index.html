@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-f/TbJ+58Dq4JpTMCTCKitRIEkNEXfMAr3rMsHyBaFLo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-LVCZIk7OWnHDH86Dm3bqKUuqfwe+H6vssoZhpDvx/P0='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#121212">
@@ -433,7 +433,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
   const TAUX_TVA = `${Math.round(TVA * 100)} %`;
   const TOLERANCE_TVA = 2;         // écart toléré (en centimes) entre TTC saisi et HT + TVA
-  const JOURS_RAPPEL_IMPORT = 30;  // au-delà, on conseille de réimporter
+  const JOURS_RAPPEL_IMPORT = 7;   // mise à jour chaque semaine : une semaine après le dernier import, on conseille de réimporter
   const SANS = '__sans__';         // valeur de filtre « sans élément de cette famille »
 
   const tri = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
@@ -860,7 +860,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       ));
     } else if (!appareil.modeModif && appareil.dernierImport) {
       const jours = Math.floor((Date.now() - appareil.dernierImport) / 86400000);
-      if (jours > JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer')));
+      if (jours >= JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer')));
     }
     $('bandeaux').replaceChildren(...liste);
   }
@@ -1594,6 +1594,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
     else return;
     rafraichir();
   });
+
+  // Appli reprise depuis l'arrière-plan, ou onglet laissé ouvert des jours : le rappel d'import se recalcule.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) rendreBandeaux(); });
+  setInterval(rendreBandeaux, 3600000); // toutes les heures
 
   rafraichir();
   if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite

@@ -167,13 +167,18 @@ impl Stockage {
         }
     }
 
-    /// Enregistre la version, la range dans l'historique et élague les plus anciennes.
+    /// Enregistre la version (fichier donnees.json) ; renvoie le contenu écrit.
     pub fn enregistrer(&self, etat: &Etat) -> io::Result<Vec<u8>> {
         let contenu = serde_json::to_vec(etat).map_err(io::Error::other)?;
         ecrire_atomique(&self.chemin(), &contenu)?;
+        Ok(contenu)
+    }
+
+    /// Range la version dans l'historique et élague les plus anciennes.
+    pub fn historiser(&self, version: u64, contenu: &[u8]) -> io::Result<()> {
         let historique = self.historique();
         fs::create_dir_all(&historique)?;
-        fs::write(historique.join(format!("v{:08}.json", etat.version)), &contenu)?;
+        fs::write(historique.join(format!("v{version:08}.json")), contenu)?;
         let mut versions: Vec<PathBuf> = fs::read_dir(&historique)?
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('v') && n.ends_with(".json")))
@@ -183,7 +188,7 @@ impl Stockage {
         for ancienne in &versions[..surplus] {
             fs::remove_file(ancienne)?;
         }
-        Ok(contenu)
+        Ok(())
     }
 
     /// Recopie de secours (ex. dans OneDrive). Une erreur ici ne bloque pas l'enregistrement.
@@ -197,12 +202,15 @@ impl Stockage {
         }
     }
 
-    /// Met de côté les données actuelles (utilisé quand on change les mots de passe).
+    /// Met de côté les données et l'historique actuels (quand on change les mots de passe) :
+    /// chiffrés avec l'ancienne clé, ils ne doivent pas se mélanger aux nouvelles versions.
     pub fn archiver(&self) -> io::Result<()> {
-        if self.chemin().exists() {
-            fs::create_dir_all(self.historique())?;
-            let nom = format!("avant-reconfiguration-{}.json", chrono::Local::now().format("%Y%m%d-%H%M%S"));
-            fs::rename(self.chemin(), self.historique().join(nom))?;
+        let archive = self.dossier.join(format!("archive-{}", chrono::Local::now().format("%Y%m%d-%H%M%S")));
+        for (actuel, nom) in [(self.chemin(), "donnees.json"), (self.historique(), "historique")] {
+            if actuel.exists() {
+                fs::create_dir_all(&archive)?;
+                fs::rename(actuel, archive.join(nom))?;
+            }
         }
         Ok(())
     }
@@ -315,8 +323,10 @@ pub fn routeur(app: Arc<App>) -> Router {
 async fn garde(State(app): State<Arc<App>>, requete: Request, suivant: Next) -> Response {
     let debut = Instant::now();
     let methode = requete.method().clone();
-    let chemin = requete.uri().path().to_owned();
-    let accepte = app.seau.lock().unwrap_or_else(|e| e.into_inner()).prendre();
+    let chemin: String = requete.uri().path().chars().take(100).collect(); // un chemin géant ne remplit pas le journal
+    // Les appareils qui ont un bon jeton ne sont jamais freinés : un inconnu qui inonde le serveur
+    // ne bloque que les autres inconnus.
+    let accepte = jeton_connu(&app, requete.headers()) || app.seau.lock().unwrap_or_else(|e| e.into_inner()).prendre();
     let mut reponse = if accepte {
         suivant.run(requete).await
     } else {
@@ -330,13 +340,19 @@ async fn garde(State(app): State<Arc<App>>, requete: Request, suivant: Next) -> 
     reponse
 }
 
+/// Empreinte du jeton reçu dans l'en-tête « Authorization: Bearer … ».
+fn empreinte_recue(entetes: &HeaderMap) -> Option<[u8; 32]> {
+    let jeton = entetes.get(header::AUTHORIZATION)?.to_str().ok()?.strip_prefix("Bearer ")?;
+    Some(Sha256::digest(jeton.as_bytes()).into())
+}
+
+fn jeton_connu(app: &App, entetes: &HeaderMap) -> bool {
+    empreinte_recue(entetes).is_some_and(|e| bool::from(e.ct_eq(&app.lecture) | e.ct_eq(&app.ecriture)))
+}
+
 /// Compare le jeton reçu à l'empreinte attendue, en temps constant.
 async fn autorise(attendue: &[u8; 32], entetes: &HeaderMap) -> bool {
-    let valide = entetes
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|jeton| bool::from(Sha256::digest(jeton.as_bytes()).as_slice().ct_eq(attendue)));
+    let valide = empreinte_recue(entetes).is_some_and(|e| bool::from(e.ct_eq(attendue)));
     if !valide {
         tokio::time::sleep(PAUSE_REFUS).await;
     }
@@ -392,6 +408,14 @@ async fn ecrire(State(app): State<Arc<App>>, requete: Request) -> Response {
     if !blob_valide(&demande.blob) {
         return (StatusCode::BAD_REQUEST, Json(json!({ "erreur": "donnees chiffrees invalides" }))).into_response();
     }
+    // Tâche à part : même si l'appareil coupe la connexion, l'enregistrement va jusqu'au bout
+    // (sinon le disque et la mémoire du serveur pourraient ne plus être d'accord).
+    tokio::spawn(enregistrer(app, demande))
+        .await
+        .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "erreur": "erreur interne" }))).into_response())
+}
+
+async fn enregistrer(app: Arc<App>, demande: Ecriture) -> Response {
     let mut etat = app.etat.lock().await;
     // Quelqu'un a écrit entre-temps : l'appli doit d'abord récupérer et fusionner.
     if demande.version_precedente != etat.version {
@@ -403,6 +427,10 @@ async fn ecrire(State(app): State<Arc<App>>, requete: Request) -> Response {
     let a_enregistrer = nouveau.clone();
     let resultat = tokio::task::spawn_blocking(move || {
         let contenu = app_disque.stockage.enregistrer(&a_enregistrer)?;
+        // Historique et copie de secours : un échec est noté mais n'annule pas l'enregistrement.
+        if let Err(e) = app_disque.stockage.historiser(a_enregistrer.version, &contenu) {
+            app_disque.journal.ecrire(&format!("Historique impossible : {e}"));
+        }
         if let Err(e) = app_disque.stockage.recopier(&contenu) {
             app_disque.journal.ecrire(&format!("Copie de secours impossible : {e}"));
         }

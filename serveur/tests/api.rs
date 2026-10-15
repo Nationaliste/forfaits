@@ -8,7 +8,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use forfaits_serveur::{App, Config, cle_maitre, deriver, empreinte, hex, jeton, routeur};
+use forfaits_serveur::{App, Config, Etat, Stockage, cle_maitre, deriver, empreinte, hex, jeton, routeur};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -242,6 +242,28 @@ async fn trop_de_requetes() {
         }
     }
     assert!(refus >= 10, "seulement {refus} refus sur 80 appels en rafale");
+    // Un inconnu qui inonde le serveur ne bloque pas les appareils qui ont le bon jeton.
+    assert_eq!(appel(&app, get("/api/sel", None)).await.0, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(appel(&app, get("/api/donnees", Some(&lecture()))).await.0, StatusCode::OK);
+    assert_eq!(appel(&app, put(&ecriture(), 0, &blob(1))).await.0, StatusCode::OK);
+}
+
+#[test]
+fn reconfiguration_met_donnees_et_historique_de_cote() {
+    let dossier = tempfile::tempdir().unwrap();
+    let stockage = Stockage::new(dossier.path(), None);
+    let etat = Etat { version: 1, blob: Some(blob(1)), enregistre_le: None };
+    let contenu = stockage.enregistrer(&etat).unwrap();
+    stockage.historiser(1, &contenu).unwrap();
+    stockage.archiver().unwrap();
+    assert_eq!(stockage.charger().unwrap(), Etat::default(), "le serveur repart de zéro");
+    assert!(!dossier.path().join("historique").exists(), "l'ancien historique ne se mélange pas au nouveau");
+    let archive = std::fs::read_dir(dossier.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .find(|e| e.file_name().to_string_lossy().starts_with("archive-"));
+    let archive = archive.expect("dossier archive-… créé").path();
+    assert!(archive.join("donnees.json").exists() && archive.join("historique/v00000001.json").exists());
 }
 
 #[test]

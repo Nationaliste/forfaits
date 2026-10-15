@@ -17,7 +17,18 @@ import urllib.request
 import pytest
 from conftest import CAPTURES, RACINE, demarrer_serveur
 from playwright.sync_api import expect
-from test_forfaits import activer_modif, cartes, chercher, dialogue, espaces, modifier, ouvrir_ajout, refs, remplir
+from test_forfaits import (
+    activer_modif,
+    cartes,
+    chercher,
+    choisir_theme,
+    dialogue,
+    espaces,
+    modifier,
+    ouvrir_ajout,
+    refs,
+    remplir,
+)
 
 EQUIPE = "EXEMPLE mot de passe equipe"
 RESPONSABLE = "EXEMPLE code responsable"
@@ -293,3 +304,31 @@ def test_mot_de_passe_change_signale(appareil, serveur):
     expect(page.locator("#btn-importer")).to_be_visible()
     connecter(page, serveur, equipe="EXEMPLE nouveau mot de passe")
     expect(page.locator("#bandeaux")).not_to_contain_text("refuse")
+
+
+def test_fenetre_du_serveur_en_theme_clair(appareil, serveur, navigateur):
+    """Les écrans du serveur (connexion, connecté, accès refusé) restent lisibles en clair : captures à regarder."""
+    page = appareil(viewport={"width": 375, "height": 812}, reduced_motion="reduce")
+    choisir_theme(page, "Clair")
+    CAPTURES.mkdir(exist_ok=True)
+    prefixe = CAPTURES / f"{navigateur.nom}-serveur-clair"
+
+    ouvrir_connexion(page)
+    page.screenshot(path=f"{prefixe}-1-connexion.png")
+    dialogue(page).get_by_role("button", name="Annuler").click()
+    connecter(page, serveur)
+    expect(page.locator("html")).to_have_attribute("data-theme", "clair")
+    ouvrir_connexion(page)
+    page.screenshot(path=f"{prefixe}-2-connecte.png")
+    dialogue(page).get_by_role("button", name="Fermer").click()
+
+    serveur.arreter()
+    serveur.configurer("EXEMPLE nouveau mot de passe", "EXEMPLE nouveau code responsable")
+    serveur.demarrer()
+    ouvrir_connexion(page)
+    dialogue(page).locator("#s-synchro").click()
+    expect(dialogue(page).locator("#s-etat")).to_contain_text("refuse le mot de passe", timeout=20000)
+    dialogue(page).get_by_role("button", name="Fermer").click()
+    expect(page.locator("#bandeaux")).to_contain_text("refuse le mot de passe")
+    page.screenshot(path=f"{prefixe}-3-acces-refuse.png")
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375

@@ -13,11 +13,11 @@
 1. Compte Tailscale avec l'e-mail du travail (essai gratuit), installer Tailscale sur la Surface, l'activer « sans session ouverte ».
 2. `powershell -ExecutionPolicy Bypass -File serveur\installer.ps1` (depuis la branche `feat/serveur`), puis `tailscale funnel --bg 8787`.
 3. Essai réel avec les données EXEMPLE seulement : responsable sur PC, 2 téléphones en 4G, Surface éteinte puis rallumée.
-4. Puis `/review-local` complet, PR, fusion. Une fois l'adresse `*.ts.net` connue, la mettre telle quelle dans la CSP à la place de `https://*.ts.net`.
+4. Puis `/review-local` complet (les relecteurs conformité et câblage n'ont pas tourné ; constats mineurs restants : [roadmap#260](https://github.com/Nationaliste/roadmap/issues/260)), PR, fusion. Une fois l'adresse `*.ts.net` connue, la mettre telle quelle dans la CSP à la place de `https://*.ts.net`.
 
 ## Pièges
 - Tailscale gratuit = usage non commercial seulement. Usage pro : formule Standard, environ 8 $ par mois pour 1 utilisateur (les téléphones n'installent rien).
 - Fermer le clavier sur la Surface ou appuyer sur son bouton la met en veille malgré tout : serveur injoignable.
 - Tests : la page doit venir d'un vrai serveur local (Chrome bloque l'appel vers 127.0.0.1 depuis une page modifiée par Playwright) ; les interceptions `page.route` ne tournent que pendant un appel Playwright (attendre avec `page.wait_for_timeout`, pas `time.sleep`).
 - Compiler Rust avec `CARGO_TARGET_DIR` hors de OneDrive (`%LOCALAPPDATA%\forfaits-cargo-target`) ; cargo n'est pas dans le PATH de Git Bash (`$USERPROFILE/.cargo/bin`).
-- Thème noir et rouge fusionné sur main (PR #5) après la pause : `feat/serveur` est en conflit dans `index.html`. À la reprise, fusionner main dans la branche puis remplacer `btn-noir` par `btn-blanc` (bouton « Serveur » du bandeau) et `var(--gris-fonce)` par `var(--texte-doux)` (`.aide-champ`) ; vérifier les captures.
+- Thème noir et rouge : main fusionné dans `feat/serveur` le 15/10 (commit b6deddc, 121 tests verts, captures du serveur vérifiées). Chaque nouvelle PR sur main sera à refusionner de la même façon avant la PR du serveur.

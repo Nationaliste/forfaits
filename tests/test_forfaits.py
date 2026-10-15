@@ -560,6 +560,43 @@ def test_rappel_d_exporter(page, tmp_path):
     expect(page.locator("#rappel")).to_be_hidden()
 
 
+def test_rappel_d_importer_apres_une_semaine(appareils, tmp_path):
+    a = appareils().page
+    activer_modif(a)
+    a.click("#btn-suppr-exemples")
+    dialogue(a).get_by_role("button", name="Supprimer les exemples").click()
+    ouvrir_ajout(a)
+    remplir(a, "S-1", "100", "120")
+    exporter_json(a, tmp_path / "s.json")
+
+    comptoir = appareils().page
+    importer(comptoir, tmp_path / "s.json", "Remplacer tout")
+    bandeaux = comptoir.locator("#bandeaux")
+
+    def import_vieux_de(jours):
+        comptoir.evaluate(
+            """(jours) => {
+                const reglages = JSON.parse(localStorage.getItem('forfaits.appareil.v1'));
+                reglages.dernierImport = Date.now() - jours * 86400000;
+                localStorage.setItem('forfaits.appareil.v1', JSON.stringify(reglages));
+            }""",
+            jours,
+        )
+        comptoir.reload()
+        expect(comptoir.locator("#resultats .carte")).to_have_count(1)
+
+    import_vieux_de(7)
+    expect(bandeaux).not_to_contain_text("Dernier import")
+    import_vieux_de(8)
+    expect(bandeaux).to_contain_text("Dernier import il y a 8 jours")
+    with comptoir.expect_file_chooser() as choix:  # le bouton du bandeau ouvre le choix du fichier
+        bandeaux.get_by_role("button", name="Importer").click()
+    choix.value.set_files(str(tmp_path / "s.json"))
+    dialogue(comptoir).get_by_role("button", name="Mettre à jour", exact=True).click()
+    expect(comptoir.locator("#toast")).to_have_text("Mise à jour terminée")
+    expect(bandeaux).not_to_contain_text("Dernier import")
+
+
 def test_boutons_vider_et_tout_effacer(page):
     chercher(page, "zzz")
     page.click("#btn-vider")

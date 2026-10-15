@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-LVCZIk7OWnHDH86Dm3bqKUuqfwe+H6vssoZhpDvx/P0='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-IMtakVfLxBZGYOfMqtD47uS2kOjJaE/CYQHlrXKFOyg='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.ts.net; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#121212">
@@ -313,6 +313,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .msg-champ.erreur, .msg-erreur { color: var(--rouge); }
 .msg-champ.attention { color: var(--orange); }
 .msg-erreur { margin: 0 0 10px; font-weight: 700; }
+.aide-champ { font-weight: 400; color: var(--gris-fonce); }
 .note-exemple { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--orange-pale); color: var(--orange); font-weight: 600; }
 
 /* Choix d'un filtre */
@@ -429,7 +430,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 1;
-  const VERSION_OUTIL = '1.0';
+  const VERSION_OUTIL = '1.1';
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
   const TAUX_TVA = `${Math.round(TVA * 100)} %`;
   const TOLERANCE_TVA = 2;         // écart toléré (en centimes) entre TTC saisi et HT + TVA
@@ -670,6 +671,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     appareil.modifsEnAttente += 1;
     sauverAppareil();
     demanderStockageDurable();
+    planifierEnvoi();
   }
 
   // Demande au navigateur de ne pas effacer les données de lui-même. Firefox pose alors une
@@ -838,8 +840,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreEntete() {
     const derniere = derniereModif(donnees);
-    $('etat-donnees').textContent = derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple";
+    $('etat-donnees').replaceChildren(derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple", h('span', { id: 'etat-synchro' }, texteSynchro()));
     $('barre-modif').hidden = !appareil.modeModif;
+    $('btn-importer').hidden = Boolean(serveur); // avec le serveur, l'import à la main ne sert plus (il reste dans le Menu)
   }
 
   function bandeau(texte, bouton, erreur) {
@@ -856,9 +859,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
         'Les forfaits marqués EXEMPLE sont faux (références et prix inventés).',
         appareil.modeModif
           ? h('button', { type: 'button', class: 'btn btn-noir', id: 'btn-suppr-exemples', onclick: supprimerExemples }, 'Supprimer les exemples')
+          : serveur ? null // connecté : les vrais forfaits arriveront quand un responsable les aura saisis
           : h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer le vrai fichier'),
       ));
-    } else if (!appareil.modeModif && appareil.dernierImport) {
+    }
+    if (serveur && etatSynchro === 'refus') {
+      liste.push(bandeau(erreurSynchro, h('button', { type: 'button', class: 'btn btn-noir', onclick: ouvrirServeur }, 'Serveur'), true));
+    } else if (serveur) {
+      const jours = Math.floor((Date.now() - serveur.derniereSynchro) / 86400000);
+      if (serveur.derniereSynchro && jours >= JOURS_ALERTE_SYNCHRO) liste.push(bandeau(`Pas de mise à jour depuis ${jours} jours : le serveur ne répond pas. Préviens le responsable.`, null, true));
+    } else if (!exemples && !appareil.modeModif && appareil.dernierImport) {
       const jours = Math.floor((Date.now() - appareil.dernierImport) / 86400000);
       if (jours >= JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-noir', onclick: lancerImport }, 'Importer')));
     }
@@ -941,7 +951,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
-    $('rappel').hidden = n === 0;
+    $('rappel').hidden = n === 0 || Boolean(serveur?.ecriture);
     $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
   }
 
@@ -1178,7 +1188,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const ok = await demander({
       titre: 'Supprimer ce forfait ?',
       message: [h('strong', {}, f.ref), f.designation ? ' — ' + f.designation : ''],
-      liste: ["La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export."],
+      liste: [serveur?.ecriture ? 'La suppression passera aussi sur les autres appareils à leur prochaine mise à jour.' : 'La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export.'],
       boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
     });
     if (!ok) return;
@@ -1488,6 +1498,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
+    if (serveur) { serveur.version = null; synchroniser(); } // envoie ce que le fichier apporte, récupère ce qui manque
     // Deux responsables ont pu créer la même référence, ou le même élément, chacun de leur côté.
     const vues = new Map();
     const compter = (cle, libelle) => vues.set(cle, { libelle, n: (vues.get(cle)?.n || 0) + 1 });
@@ -1495,6 +1506,321 @@ textarea.champ { resize: vertical; min-height: 90px; }
     for (const e of index.elsActifs) compter(`elt|${e.familleId}|${norm(e.nom)}`, `${index.famParId.get(e.familleId).nom} : ${e.nom}`);
     const doublons = [...vues.values()].filter((v) => v.n > 1).map((v) => `${v.libelle} (${v.n} fois)`);
     if (doublons.length) await informer('Doublons à corriger', 'Après la mise à jour, ces références ou éléments existent plusieurs fois. Un responsable doit corriger :', doublons);
+  }
+
+  /* =====================================================================
+     SERVEUR DE MISE À JOUR (facultatif)
+     Les forfaits sont chiffrés ICI, avant l'envoi, avec une clé tirée du mot de passe
+     d'équipe : le serveur (et internet) ne voient que des données illisibles.
+     Mot de passe d'équipe → lire et déchiffrer. Code responsable → envoyer.
+     ===================================================================== */
+  const CLE_SERVEUR = 'forfaits.serveur.v1';
+  const INTERVALLE_SYNCHRO = 5 * 60 * 1000; // vérification toutes les 5 min quand la page est affichée
+  const DELAI_ENVOI = 2000;                  // envoi 2 s après la dernière modification
+  const JOURS_ALERTE_SYNCHRO = 3;
+  const TOURS_MIN = 600000;                  // refuse un serveur qui affaiblirait le mot de passe
+  const fmtHeure = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const utf8 = new TextEncoder();
+  const DONNEES_CHIFFREES = utf8.encode(FORMAT); // lie le chiffré à cet outil
+  const enHex = (octets) => Array.from(new Uint8Array(octets), (o) => o.toString(16).padStart(2, '0')).join('');
+  const depuisHex = (hex) => Uint8Array.from(hex.match(/../g), (x) => parseInt(x, 16));
+  const depuisBase64 = (texte) => Uint8Array.from(atob(texte), (c) => c.charCodeAt(0));
+  function enBase64(octets) {
+    let texte = '';
+    for (let i = 0; i < octets.length; i += 0x8000) texte += String.fromCharCode(...octets.subarray(i, i + 0x8000));
+    return btoa(texte);
+  }
+
+  // Réglages du serveur sur cet appareil : adresse et clés dérivées (jamais le mot de passe lui-même).
+  function chargerServeur() {
+    try {
+      const s = JSON.parse(localStorage.getItem(CLE_SERVEUR) || 'null');
+      const cle = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
+      if (!s || typeof s.adresse !== 'string' || !cle(s.lecture) || !cle(s.chiffrement) || (s.ecriture !== null && !cle(s.ecriture))) return null;
+      return {
+        adresse: s.adresse, lecture: s.lecture, chiffrement: s.chiffrement, ecriture: s.ecriture,
+        version: Number.isInteger(s.version) ? s.version : null,       // dernière version reçue du serveur
+        derniereSynchro: Number.isFinite(s.derniereSynchro) ? s.derniereSynchro : 0,
+        aEnvoyer: s.aEnvoyer === true,                                  // modifications pas encore envoyées
+      };
+    } catch {
+      return null;
+    }
+  }
+  function sauverServeur() {
+    try {
+      if (serveur) localStorage.setItem(CLE_SERVEUR, JSON.stringify(serveur));
+      else localStorage.removeItem(CLE_SERVEUR);
+    } catch {
+      stockageOk = false;
+    }
+  }
+
+  let serveur = chargerServeur();
+  let etatSynchro = '';     // '', 'encours', 'ok', 'horsligne', 'refus', 'erreur'
+  let erreurSynchro = '';   // explication du dernier échec
+  let synchroEnCours = null;
+  let synchroARefaire = false;
+  let minuteurEnvoi = 0;
+
+  // Même calcul que le serveur (Rust) : PBKDF2-SHA256 puis HKDF-SHA256, une clé par usage.
+  async function deriverCles(secret, sel, iterations, usages) {
+    const base = await crypto.subtle.importKey('raw', utf8.encode(secret.normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+    const maitre = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: sel, iterations }, base, 256);
+    const hkdf = await crypto.subtle.importKey('raw', maitre, 'HKDF', false, ['deriveBits']);
+    const cles = {};
+    for (const usage of usages) {
+      const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8.encode('forfaits:' + usage) }, hkdf, 256);
+      cles[usage] = enHex(bits);
+    }
+    return cles;
+  }
+
+  // AES-256-GCM : 12 octets aléatoires (IV) + données chiffrées et scellées (toute retouche est détectée).
+  async function cleAes(usage) {
+    return crypto.subtle.importKey('raw', depuisHex(serveur.chiffrement), 'AES-GCM', false, [usage]);
+  }
+  async function chiffrer(objet) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const chiffre = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: DONNEES_CHIFFREES }, await cleAes('encrypt'), utf8.encode(JSON.stringify(objet)));
+    const tout = new Uint8Array(12 + chiffre.byteLength);
+    tout.set(iv);
+    tout.set(new Uint8Array(chiffre), 12);
+    return enBase64(tout);
+  }
+  async function dechiffrer(blob) {
+    const octets = depuisBase64(blob);
+    const clair = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: octets.subarray(0, 12), additionalData: DONNEES_CHIFFREES }, await cleAes('decrypt'), octets.subarray(12));
+    return JSON.parse(new TextDecoder().decode(clair));
+  }
+
+  function appelServeur(adresse, chemin, { methode = 'GET', jeton, corps, version } = {}) {
+    const entetes = {};
+    if (jeton) entetes.Authorization = 'Bearer ' + jeton;
+    if (corps) entetes['Content-Type'] = 'application/json';
+    if (version !== undefined && version !== null) entetes['If-None-Match'] = `"${version}"`; // « rien de neuf ? »
+    return fetch(adresse + chemin, {
+      method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined,
+      cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(20000),
+    });
+  }
+
+  // Vrai si « a » contient quelque chose de plus récent que « b » (ou d'absent de b).
+  // Les données d'exemple jamais touchées (maj 0) ne comptent pas : tous les appareils les ont.
+  function apporte(a, b) {
+    return ['familles', 'elements', 'forfaits'].some((cle) => {
+      const dansB = new Map(b[cle].map((x) => [x.id, x]));
+      return a[cle].some((x) => (dansB.has(x.id) ? x.maj > dansB.get(x.id).maj : x.maj > 0));
+    });
+  }
+
+  // Une seule synchronisation à la fois ; une demande pendant qu'elle tourne la fait refaire ensuite.
+  function synchroniser() {
+    if (!serveur) return Promise.resolve();
+    if (synchroEnCours) { synchroARefaire = true; return synchroEnCours; }
+    synchroEnCours = (async () => {
+      do { synchroARefaire = false; await uneSynchro(); } while (synchroARefaire && serveur);
+    })().finally(() => { synchroEnCours = null; });
+    return synchroEnCours;
+  }
+
+  async function uneSynchro() {
+    const s = serveur;
+    etatSynchro = 'encours';
+    rendreEntete();
+    try {
+      for (let essai = 0; essai < 3; essai++) {
+        // 1. Récupérer la version du serveur, seulement si elle a changé.
+        const r = await appelServeur(s.adresse, '/api/donnees', { jeton: s.lecture, version: s.version });
+        if (r.status === 401) throw Object.assign(new Error("Le serveur refuse le mot de passe d'équipe : il a peut-être changé. Menu → Serveur pour te reconnecter."), { refus: true });
+        if (r.status === 200) {
+          const etat = await r.json();
+          const distant = etat.blob ? valider(await dechiffrer(etat.blob)) : { familles: [], elements: [], forfaits: [] };
+          if (serveur !== s) return; // déconnecté pendant l'échange
+          if (apporte(distant, donnees)) {
+            const bilan = bilanFusion(distant);
+            donnees = fusionner(donnees, distant);
+            donneesIllisibles = false;
+            sauver();
+            rafraichir();
+            const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
+            toast(changes ? `Forfaits mis à jour : ${pluriel(changes, 'changement')}` : 'Listes mises à jour');
+          }
+          if (s.ecriture && apporte(donnees, distant)) s.aEnvoyer = true;
+          s.version = etat.version;
+        } else if (r.status !== 304) {
+          throw new Error(`Le serveur a répondu ${r.status}.`);
+        }
+
+        // 2. Envoyer nos modifications (responsables seulement).
+        if (!s.ecriture || !s.aEnvoyer) break;
+        const blob = await chiffrer({ format: FORMAT, version: VERSION_FORMAT, ...donnees });
+        const p = await appelServeur(s.adresse, '/api/donnees', { methode: 'PUT', jeton: s.ecriture, corps: { version_precedente: s.version, blob } });
+        if (p.status === 409) continue; // un autre responsable a envoyé entre-temps : on récupère, on fusionne, on renvoie
+        if (p.status === 401) throw Object.assign(new Error('Le serveur refuse le code responsable : il a peut-être changé. Menu → Serveur pour te reconnecter.'), { refus: true });
+        if (!p.ok) throw new Error(p.status === 413 ? 'Trop de forfaits pour le serveur.' : `Le serveur a répondu ${p.status}.`);
+        s.version = (await p.json()).version;
+        s.aEnvoyer = false;
+        appareil.modifsEnAttente = 0; // le serveur garde maintenant ces modifications
+        sauverAppareil();
+        break;
+      }
+      s.derniereSynchro = Date.now();
+      etatSynchro = 'ok';
+      erreurSynchro = '';
+    } catch (err) {
+      const reseau = err instanceof TypeError || err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      etatSynchro = err?.refus ? 'refus' : reseau ? 'horsligne' : 'erreur';
+      erreurSynchro = reseau ? 'Serveur injoignable (pas de réseau, ou PC du serveur éteint).'
+        : err?.name === 'OperationError' ? 'Données du serveur illisibles avec ce mot de passe.'
+        : err?.message || String(err);
+    } finally {
+      if (serveur === s) sauverServeur();
+      rendreEntete();
+      rendreBandeaux();
+      rendreRappel();
+    }
+  }
+
+  // Appelée après chaque modification : envoi automatique, regroupé si on enchaîne les changements.
+  function planifierEnvoi() {
+    if (!serveur?.ecriture) return;
+    serveur.aEnvoyer = true;
+    sauverServeur();
+    rendreEntete();
+    clearTimeout(minuteurEnvoi);
+    minuteurEnvoi = setTimeout(synchroniser, DELAI_ENVOI);
+  }
+
+  function adresseValide(saisie) {
+    let url;
+    try { url = new URL(saisie.trim()); } catch { return null; }
+    const local = url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname); // essais sur le PC du serveur
+    if ((url.protocol !== 'https:' && !local) || url.username || url.password || url.search || url.hash) return null;
+    return url.origin;
+  }
+
+  async function connecter(saisieAdresse, equipe, code) {
+    const adresse = adresseValide(saisieAdresse);
+    if (!adresse) throw new Error("Adresse invalide : elle commence par https:// (exemple : https://nom-du-pc.exemple.ts.net).");
+    if (equipe.length < 12) throw new Error("Mot de passe d'équipe trop court (12 caractères minimum).");
+    let infos;
+    try {
+      const r = await appelServeur(adresse, '/api/sel');
+      if (!r.ok) throw new Error();
+      infos = await r.json();
+    } catch {
+      throw new Error("Serveur injoignable : vérifie l'adresse, et que le PC du serveur est allumé.");
+    }
+    const sel = typeof infos?.sel === 'string' ? depuisBase64(infos.sel) : null;
+    if (!sel || sel.length < 16 || !Number.isInteger(infos.iterations) || infos.iterations < TOURS_MIN || infos.iterations > 10 * TOURS_MIN) {
+      throw new Error("Cette adresse n'est pas un serveur de forfaits.");
+    }
+    const cles = await deriverCles(equipe, sel, infos.iterations, ['lecture', 'chiffrement']);
+    const lecture = await appelServeur(adresse, '/api/donnees', { jeton: cles.lecture });
+    if (lecture.status === 401) throw new Error("Mot de passe d'équipe incorrect.");
+    if (!lecture.ok) throw new Error(`Le serveur a répondu ${lecture.status}.`);
+    let ecriture = null;
+    if (code) {
+      ecriture = (await deriverCles(code, sel, infos.iterations, ['ecriture'])).ecriture;
+      const r = await appelServeur(adresse, '/api/acces-ecriture', { jeton: ecriture });
+      if (r.status === 401) throw new Error('Code responsable incorrect.');
+      if (!r.ok) throw new Error(`Le serveur a répondu ${r.status}.`);
+    }
+    serveur = { adresse, lecture: cles.lecture, chiffrement: cles.chiffrement, ecriture, version: null, derniereSynchro: 0, aEnvoyer: false };
+    sauverServeur();
+    await synchroniser();
+  }
+
+  function texteSynchro() {
+    if (!serveur) return '';
+    if (etatSynchro === 'encours') return ' · synchro…';
+    if (etatSynchro === 'refus') return ' · accès refusé';
+    if (serveur.ecriture && serveur.aEnvoyer) return ' · envoi en attente';
+    if (etatSynchro === 'horsligne' || etatSynchro === 'erreur') return ' · serveur injoignable';
+    if (!serveur.derniereSynchro) return '';
+    const d = new Date(serveur.derniereSynchro);
+    return ` · à jour ${d.toDateString() === new Date().toDateString() ? fmtHeure.format(d) : dateCourte(d)}`;
+  }
+
+  function ouvrirServeur() {
+    if (serveur) { ouvrirEtatServeur(); return; }
+    const champ = (id, attributs) => h('input', { id, class: 'champ', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', ...attributs });
+    const champAdresse = champ('s-adresse', { type: 'url', inputmode: 'url', placeholder: 'https://nom-du-pc.exemple.ts.net' });
+    const champEquipe = champ('s-equipe', { type: 'password' });
+    const champCode = champ('s-code', { type: 'password' });
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+    const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 's-connecter' }, 'Se connecter');
+    const groupe = (label, c, aide) => h('div', { class: 'champ-groupe' }, h('label', { for: c.id }, label), c, aide ? h('p', { class: 'msg-champ aide-champ' }, aide) : null);
+    const dlg = ouvrirDialogue({
+      titre: 'Serveur de mise à jour',
+      surEnvoi: async () => {
+        msgErreur.textContent = '';
+        bouton.disabled = true;
+        bouton.textContent = 'Connexion…';
+        try {
+          await connecter(champAdresse.value, champEquipe.value, champCode.value);
+          dlg.close();
+          toast(serveur?.ecriture ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
+        } catch (err) {
+          msgErreur.textContent = err.message;
+          bouton.disabled = false;
+          bouton.textContent = 'Se connecter';
+        }
+      },
+      corps: [
+        h('p', { class: 'dlg-message' }, "Les forfaits arrivent tout seuls depuis le PC serveur du magasin. Ils sont chiffrés sur cet appareil : sans le mot de passe d'équipe, personne ne peut les lire, pas même le serveur."),
+        location.origin === 'null' ? h('p', { class: 'note-exemple' }, "Page ouverte depuis un fichier : la connexion au serveur ne marche que depuis l'adresse du site.") : null,
+        groupe('Adresse du serveur', champAdresse),
+        groupe("Mot de passe d'équipe", champEquipe),
+        groupe('Code responsable (facultatif)', champCode, 'Seulement pour les 1 ou 2 responsables : permet d’envoyer les modifications.'),
+        msgErreur,
+      ],
+      pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler')],
+    });
+    champAdresse.focus();
+  }
+
+  function ouvrirEtatServeur() {
+    const etat = h('p', { class: 'dlg-message', id: 's-etat' });
+    const majEtat = () => {
+      etat.textContent = etatSynchro === 'encours' ? 'Synchronisation en cours…'
+        : erreurSynchro ? erreurSynchro
+        : serveur?.derniereSynchro ? `À jour : dernière vérification le ${fmtDateHeure.format(new Date(serveur.derniereSynchro))}.`
+        : '';
+    };
+    majEtat();
+    const dlg = ouvrirDialogue({
+      titre: 'Serveur de mise à jour',
+      corps: [
+        h('ul', { class: 'dlg-liste' },
+          h('li', {}, 'Adresse : ', h('strong', {}, serveur.adresse)),
+          h('li', {}, serveur.ecriture ? 'Responsable : tes modifications partent toutes seules sur le serveur.' : 'Consultation : les mises à jour arrivent toutes seules.')),
+        etat,
+      ],
+      pied: [
+        h('button', {
+          type: 'button', class: 'btn btn-rouge', id: 's-synchro',
+          onclick: async () => { etat.textContent = 'Synchronisation en cours…'; await synchroniser(); majEtat(); },
+        }, 'Synchroniser maintenant'),
+        h('button', {
+          type: 'button', class: 'btn btn-bord', id: 's-deconnecter',
+          onclick: async () => {
+            const ok = await demander({
+              titre: 'Se déconnecter du serveur ?',
+              message: serveur?.aEnvoyer ? 'Des modifications ne sont pas encore envoyées : elles resteront seulement sur cet appareil.' : 'Les forfaits restent sur cet appareil, mais ne se mettront plus à jour tout seuls.',
+              boutons: [{ texte: 'Se déconnecter', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+            });
+            if (!ok) return;
+            serveur = null;
+            etatSynchro = erreurSynchro = '';
+            sauverServeur();
+            dlg.close();
+            rafraichir();
+          },
+        }, 'Se déconnecter'),
+      ],
+    });
   }
 
   /* =====================================================================
@@ -1514,6 +1840,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
           }, appareil.modeModif ? 'Activé' : 'Désactivé')),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-serveur', onclick: fermerPuis(ouvrirServeur) }, serveur ? 'Serveur de mise à jour (connecté)' : 'Serveur de mise à jour'),
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer un fichier'),
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
         appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
@@ -1529,10 +1856,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ok = await demander({
         titre: 'Activer le mode modification ?',
         message: 'Réservé aux 1 ou 2 responsables des forfaits.',
-        liste: [
+        liste: serveur?.ecriture ? ['Tes modifications partiront toutes seules sur le serveur.'] : [
           'Avant de modifier : importe le dernier fichier du dossier OneDrive.',
           'Après avoir modifié : Exporter, puis range le fichier dans OneDrive.',
-        ],
+          serveur ? 'Sans code responsable, tes modifications restent sur cet appareil (Menu → Serveur).' : null,
+        ].filter(Boolean),
         boutons: [{ texte: 'Activer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
       });
       if (!ok) return;
@@ -1549,7 +1877,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: h('ol', { class: 'etapes' },
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3S », « M1 STD »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
-        h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
+        h('li', {}, h('strong', {}, 'Être à jour : '), 'avec le serveur (Menu → Serveur de mise à jour), tout se fait seul. Sinon : bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
         h('li', {}, h('strong', {}, 'Sauvegarde : '), "le fichier dans OneDrive est la vraie sauvegarde. Le navigateur peut être vidé : ne compte pas sur lui.")),
     });
@@ -1591,6 +1919,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   window.addEventListener('storage', (ev) => {
     if (ev.key === CLE_DONNEES) donnees = charger();
     else if (ev.key === CLE_APPAREIL) appareil = chargerAppareil();
+    else if (ev.key === CLE_SERVEUR) serveur = chargerServeur();
     else return;
     rafraichir();
   });
@@ -1601,6 +1930,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   rafraichir();
   if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
+
+  // Serveur : vérifie à l'ouverture, au retour sur la page, au retour du réseau, puis toutes les 5 min.
+  synchroniser();
+  setInterval(() => { if (document.visibilityState === 'visible') synchroniser(); }, INTERVALLE_SYNCHRO);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && serveur && Date.now() - serveur.derniereSynchro > 60000) synchroniser();
+  });
+  window.addEventListener('online', () => synchroniser());
 
   // Mode hors ligne (seulement quand la page vient d'une adresse web).
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});

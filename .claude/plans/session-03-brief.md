@@ -14,7 +14,7 @@
 - L'utilisateur : importer le tableau sur UN seul appareil (« Importer et supprimer les exemples »), exporter le `.json` dans OneDrive ; les autres appareils importent ce `.json`.
 - « Supprime les anciens éléments de test » : l'utilisateur a répondu « tu peux tout virer » (16/10). Fait : tous les éléments de départ sont marqués exemples dans `donneesInitiales()` ; « Supprimer les exemples » (et « Importer et supprimer les exemples ») les retire avec les forfaits d'exemple, sauf ceux qu'un vrai forfait utilise ou que l'utilisateur a renommés (maj > 0) ; sur un appareil d'avant, les éléments de départ jamais modifiés (maj 0) partent aussi. Les listes du modèle Excel sont vides. Un appareil qui a déjà supprimé ses exemples garde ses éléments de départ : les retirer avec le ✕ de l'écran des éléments.
 - Décider l'adresse avec le patron AVANT de saisir les vrais forfaits : les données de chaque appareil sont liées à l'adresse (un export `.json` permet de tout reprendre si elle change).
-- Décision du patron sur le serveur ; fermer à la main roadmap#258 (V2 Microsoft 365, plus prévue).
+- Décision du patron sur le serveur. (roadmap#258, V2 Microsoft 365 : fermée le 16/10, plus prévue.)
 - `feat/serveur` a besoin des PR #10, #12, #13, #15 et #17 avant sa propre PR.
 
 ## Pièges

@@ -399,8 +399,57 @@ def test_supprimer_les_exemples(page):
     page.locator("#filtres .filtre", has_text="Lumineux").click()  # l'élément d'exemple a disparu
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans lumineux"])
     dialogue(page).get_by_role("button", name="Tous").click()
-    page.locator("#filtres .filtre", has_text="Taximètre").click()  # les vrais éléments restent
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "F1", "M1 STD", "Sans taximètre"])
+    page.locator("#filtres .filtre", has_text="Taximètre").click()  # les éléments de départ, inutilisés, sont partis aussi
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
+
+
+def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appareils(page, tmp_path):
+    """Un appareil d'avant n'avait pas marqué ses éléments de départ comme exemples : jamais modifiés, ils partent aussi."""
+    ancien = exporter_json(page, tmp_path / "ancien.json")
+    for e in ancien["elements"]:
+        e.pop("exemple", None)  # comme dans le stockage d'un appareil d'avant
+    assert any(f.get("exemple") for f in ancien["forfaits"])  # les forfaits d'exemple, eux, étaient déjà marqués
+    page.evaluate("(d) => localStorage.setItem('forfaits.donnees.v1', JSON.stringify(d))", ancien)
+    page.reload()
+    activer_modif(page)
+    page.click("#btn-suppr-exemples")
+    dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
+    expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
+    dialogue(page).get_by_role("button", name="Tous").click()
+    page.locator("#filtres .filtre", has_text="Boîtier").click()
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans boîtier"])
+
+
+def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
+    """Un élément de départ que l'utilisateur a retouché (maj > 0) est à lui : il reste."""
+    ancien = exporter_json(page, tmp_path / "ancien.json")
+    for e in ancien["elements"]:
+        e.pop("exemple", None)
+        if e["nom"] == "F1":
+            e["nom"], e["maj"] = "F1 Plus", 1_700_000_000_000
+    page.evaluate("(d) => localStorage.setItem('forfaits.donnees.v1', JSON.stringify(d))", ancien)
+    page.reload()
+    activer_modif(page)
+    page.click("#btn-suppr-exemples")
+    dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "F1 Plus", "Sans taximètre"])
+
+
+def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
+    """Renommer un élément de départ dans l'écran des listes le rend à l'utilisateur, même s'il garde sa marque d'exemple."""
+    activer_modif(page)
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    dialogue(page).get_by_label("Nom de l'élément F1").fill("F1 Plus")
+    dialogue(page).get_by_role("button", name="Terminé").click()
+    page.click("#btn-suppr-exemples")
+    dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
+    expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "F1 Plus", "Sans taximètre"])
 
 
 # ---------------------------------------------------------------- listes modifiables sans code
@@ -593,6 +642,15 @@ def test_importer_un_tableau_excel_et_supprimer_les_exemples(appareils, tmp_path
     fichier = exporter_json(page, tmp_path / "apres.json")
     assert [e["familleId"] for e in fichier["elements"] if e["nom"] == "Gamma 9"] == ["fam-boitier"]  # créé une seule fois
     assert not [f for f in fichier["forfaits"] if f.get("exemple") and not f.get("supprime")]
+    gardes = {e["nom"] for e in fichier["elements"] if not e.get("supprime")}
+    assert {"M1 STD", "F1", "Gamma 7", "3S", "4S", "Gamma 9"} <= gardes  # ceux que les 4 forfaits utilisent
+    assert not gardes & {
+        "Starplast X",
+        "Gammatech X",
+        "Starplast universelle",
+        "Lumineux EXEMPLE",
+        "Pose EXEMPLE",
+    }  # les autres partent
 
 
 def test_tableau_refuse_avec_les_numeros_de_ligne(page, tmp_path):

@@ -1,6 +1,9 @@
 """Fabrique le modèle Excel à remplir avec les forfaits.
 
     python outils/modele_excel.py            ->  prive/Forfaits-a-remplir.xlsx   (ignoré par git)
+    python outils/modele_excel.py autre.xlsx ->  autre.xlsx
+
+Refuse d'écraser un fichier qui existe déjà : celui de `prive/` est celui qu'on remplit à la main.
 
 Le tableau se remplit dans Excel, s'enregistre en « CSV UTF-8 », puis s'importe dans l'outil
 (Menu -> Importer). Les titres de colonnes sont ceux de l'export CSV de l'outil : ne pas les changer
@@ -184,6 +187,8 @@ def fabriquer() -> Workbook:
 
 def main() -> None:
     sortie = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else SORTIE
+    if sortie.exists():  # le fichier est souvent déjà rempli à la main : jamais d'écrasement
+        sys.exit(f"Refusé : {sortie} existe déjà (peut-être déjà rempli). Donne un autre chemin, ou supprime-le toi-même.")
     sortie.parent.mkdir(parents=True, exist_ok=True)
     fabriquer().save(sortie)
     print(f"Modèle écrit : {sortie}")

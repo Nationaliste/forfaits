@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8QYJd7ekLK9SJUTQHfFFb0DRia8PU0ft0Zcl9wUT2T8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-55pJYCGZjhhCk827cgW0yq4X5CDikqZJftMxN7yN4q0='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1515,12 +1515,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
   /* ---------- Tableau Excel (.csv) : remplir ou mettre à jour les forfaits depuis Excel ---------- */
 
   // Titres de colonnes reconnus (comparés « à plat », voir norm) ; null = colonne ignorée.
-  // Les autres titres doivent être des noms de familles (Taximètre, Boîtier…).
+  // Tout autre titre est une famille (Taximètre, Boîtier…) : celles qui existent sont reconnues,
+  // les autres sont créées à l'import (et annoncées avant, pour repérer une faute de frappe).
   const COLONNES_TABLEAU = new Map([
     ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
     ['exemple', 'exemple'], ['modifiele', null],
   ]);
   const LIGNES_TABLEAU_MAX = 5000;
+  const FAMILLES_TABLEAU_MAX = 10; // nouvelles familles par import : au-delà, c'est sans doute un mauvais fichier
 
   // Texte d'un fichier : UTF-8 (« CSV UTF-8 » d'Excel), sinon Windows-1252 (ancien « CSV » d'Excel).
   async function lireTexte(fichier) {
@@ -1576,25 +1578,34 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (lignes.length > LIGNES_TABLEAU_MAX + 1) return { erreurs: [`Trop de lignes : ${LIGNES_TABLEAU_MAX} forfaits au maximum.`] };
     const colonnes = new Map(); // 'ref', 'ht'… ou 'fam:<id>' → numéro de colonne
     const famParNom = new Map(index.fams.map((f) => [norm(f.nom), f]));
-    const inconnues = [];
+    const nouvelles = new Map(); // titres inconnus : clé « à plat » → [titre, numéro de colonne]
     (lignes[0] || []).forEach((titre, i) => {
       const cle = norm(titre);
       if (!cle) return;
       const champ = COLONNES_TABLEAU.has(cle) ? COLONNES_TABLEAU.get(cle) : famParNom.has(cle) ? 'fam:' + famParNom.get(cle).id : undefined;
-      if (champ === undefined) inconnues.push(String(titre).trim());
+      if (champ === undefined) { if (!nouvelles.has(cle)) nouvelles.set(cle, [String(titre).trim(), i]); }
       else if (champ && !colonnes.has(champ)) colonnes.set(champ, i);
     });
+    // Les titres obligatoires d'abord : s'il en manque un, les autres titres sont sans doute le même fichier mal lu, pas des familles.
     const manquantes = [['ref', 'Référence'], ['ht', 'Prix HT'], ['ttc', 'Prix TTC']].filter(([champ]) => !colonnes.has(champ)).map(([, nom]) => nom);
-    if (manquantes.length || inconnues.length) {
-      return {
-        erreurs: [
-          ...manquantes.map((nom) => `Colonne « ${nom} » introuvable : la première ligne doit contenir les titres du modèle.`),
-          ...inconnues.map((nom) => `Colonne « ${nom} » inconnue. Pour une nouvelle famille, crée-la d'abord (Menu → Listes des éléments), ou enlève la colonne.`),
-        ],
-      };
+    if (manquantes.length) {
+      return { erreurs: manquantes.map((nom) => `Colonne « ${nom} » introuvable : la première ligne doit contenir les titres du modèle.`) };
     }
+    const problemesFamilles = [
+      ...(nouvelles.size > FAMILLES_TABLEAU_MAX ? [`${nouvelles.size} colonnes inconnues : ${FAMILLES_TABLEAU_MAX} nouvelles familles au maximum par tableau. Vérifie les titres de la première ligne.`] : []),
+      ...[...nouvelles.values()].filter(([titre]) => titre.length > 60).map(([titre]) => `Colonne « ${titre.slice(0, 30)}… » : nom de famille trop long (60 caractères au maximum).`),
+    ];
+    if (problemesFamilles.length) return { erreurs: problemesFamilles };
 
+    // Une colonne inconnue est une nouvelle famille : créée à l'import, après confirmation.
     const maintenant = Date.now();
+    let ordre = Math.max(0, ...donnees.familles.map((f) => f.ordre));
+    const famillesCreees = [...nouvelles.values()].map(([titre, i]) => {
+      const fam = { id: nouvelId('fam'), nom: titre, ordre: ++ordre, maj: maintenant };
+      colonnes.set('fam:' + fam.id, i);
+      return fam;
+    });
+    const toutesFamilles = [...index.fams, ...famillesCreees];
     const erreurs = [];
     const avertissements = [];
     const nouveauxElements = [];
@@ -1629,7 +1640,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => memeRef(f.ref, ref));
       // Une famille absente du tableau n'est pas touchée ; une cellule vide retire l'élément.
       const elements = { ...(existant?.elements ?? {}) };
-      for (const fam of index.fams) {
+      for (const fam of toutesFamilles) {
         const cle = 'fam:' + fam.id;
         if (!colonnes.has(cle)) continue;
         const nom = lire(cle);
@@ -1661,8 +1672,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (erreurs.length) return { erreurs };
     try {
       // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
-      const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: donnees.familles, elements: [...donnees.elements, ...elementsCrees], forfaits });
-      return { entrant, nbForfaits: forfaits.length, nouveauxElements, avertissements, avecExemples };
+      const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: [...donnees.familles, ...famillesCreees], elements: [...donnees.elements, ...elementsCrees], forfaits });
+      return { entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples };
     } catch (err) {
       return { erreurs: [err.message] };
     }
@@ -1676,7 +1687,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
       return;
     }
-    const { entrant, nbForfaits, nouveauxElements, avertissements, avecExemples } = analyse;
+    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
     const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
@@ -1687,6 +1698,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}.`,
       liste: [
         `${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${inchanges} inchangé${inchanges > 1 ? 's' : ''}. Les autres forfaits de cet appareil ne bougent pas.`,
+        resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
       ].filter(Boolean),
@@ -1700,7 +1712,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     donnees = fusionner(donnees, entrant);
     if (choix === 'sans-exemples') marquerExemplesSupprimes();
     sauver();
-    if (bilan.nouveaux || bilan.modifies || nouveauxElements.length || choix === 'sans-exemples') noterModif();
+    if (bilan.nouveaux || bilan.modifies || nouvellesFamilles.length || nouveauxElements.length || choix === 'sans-exemples') noterModif();
     rafraichir();
     toast('Tableau importé');
   }
@@ -1839,7 +1851,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3S », « M1 STD »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
-        h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv.'),
+        h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
         h('li', {}, h('strong', {}, 'Sauvegarde : '), "le fichier dans OneDrive est la vraie sauvegarde. Le navigateur peut être vidé : ne compte pas sur lui.")),
     });

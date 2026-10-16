@@ -618,13 +618,60 @@ def test_tableau_refuse_avec_les_numeros_de_ligne(page, tmp_path):
     assert refs(page) == TOUS  # rien n'a bougé : même la ligne « A-1 », correcte, n'est pas importée
 
 
-def test_tableau_colonnes_inconnues_ou_absentes(page, tmp_path):
+def noms_familles(page, chemin):
+    """Familles actives de l'appareil, dans l'ordre (lues dans un export)."""
+    return [f["nom"] for f in exporter_json(page, chemin)["familles"] if not f.get("supprime")]
+
+
+def test_tableau_sans_les_titres_obligatoires_refuse(page, tmp_path):
+    chemin = ecrire_tableau(tmp_path / "titres.csv", [], en_tete="Code;Prix", vides=0)
+    page.set_input_files("#fichier-import", str(chemin))
+    d = dialogue(page)
+    expect(d).to_contain_text("Import impossible")
+    assert "Colonne « Référence » introuvable" in d.text_content()
+    d.get_by_role("button", name="Compris").click()
+    assert refs(page) == TOUS
+    assert "Code" not in noms_familles(
+        page, tmp_path / "apres.json"
+    )  # des titres inconnus + un titre obligatoire manquant : pas de familles créées
+
+
+def test_tableau_une_colonne_nouvelle_cree_la_famille(page, tmp_path):
+    """Une colonne inconnue est une nouvelle famille : annoncée avant, créée une seule fois, reconnue ensuite."""
+    chemin = ecrire_tableau(
+        tmp_path / "dash.csv",
+        ["DC-1;Dash cam avant;100,00;120,00;;;;;;Dash X1", "DC-2;Dash cam avant et arrière;150,00;180,00;;;;;;Dash X2"],
+        en_tete=f"{EN_TETE_TABLEAU};Dash cam",
+    )
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("Familles (colonnes) qui n'existent pas encore")
+    expect(d).to_contain_text("Dash cam")
+    d.get_by_role("button", name="Annuler").click()
+    familles_de_depart = ["Taximètre", "Boîtier", "Imprimante", "Lumineux", "Installation"]
+    assert noms_familles(page, tmp_path / "annule.json") == familles_de_depart  # annuler ne crée rien
+
+    d = ouvrir_tableau(page, chemin)
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    par_ref = {c["ref"]: c for c in cartes(page)}
+    assert par_ref["DC-1"]["elements"] == {"Dash cam": "Dash X1"}
+    assert par_ref["DC-2"]["elements"] == {"Dash cam": "Dash X2"}
+    assert noms_familles(page, tmp_path / "apres.json") == [*familles_de_depart, "Dash cam"]  # à la suite des autres
+
+    # Le même tableau une seconde fois : la famille et ses éléments sont reconnus, rien n'est créé de nouveau.
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("0 nouveau, 0 modifié, 2 inchangés")
+    expect(d).not_to_contain_text("n'existent pas encore")
+    d.get_by_role("button", name="Annuler").click()
+
+
+def test_tableau_trop_de_colonnes_nouvelles_ou_nom_trop_long_refuse(page, tmp_path):
     cas = {
-        "couleur.csv": (f"{EN_TETE_TABLEAU};Couleur", "Colonne « Couleur » inconnue"),
-        "titres.csv": ("Code;Prix", "Colonne « Référence » introuvable"),
+        "trop.csv": (";".join(f"Colonne {i}" for i in range(11)), "10 nouvelles familles au maximum"),
+        "long.csv": ("x" * 61, "nom de famille trop long"),
     }
-    for nom, (en_tete, attendu) in cas.items():
-        chemin = ecrire_tableau(tmp_path / nom, [], en_tete=en_tete, vides=0)
+    for nom, (colonnes, attendu) in cas.items():
+        chemin = ecrire_tableau(tmp_path / nom, [], en_tete=f"{EN_TETE_TABLEAU};{colonnes}", vides=0)
         page.set_input_files("#fichier-import", str(chemin))
         d = dialogue(page)
         expect(d).to_contain_text("Import impossible")
@@ -699,6 +746,26 @@ def test_tableau_la_barre_oblique_veut_dire_pas_de_donnees(page, tmp_path):
     assert (
         page.evaluate("JSON.parse(localStorage.getItem('forfaits.donnees.v1')).elements.filter(e => e.nom === '/').length") == 0
     )
+
+
+def test_tableau_dans_l_ordre_du_modele_et_forfait_sans_aucun_element(page, tmp_path):
+    """Le modèle Excel met Boîtier et Installation à droite : l'import lit les colonnes par leur titre, pas par leur place.
+    Un forfait sans taximètre (dash cam…) n'a que sa référence, sa désignation et ses prix."""
+    chemin = ecrire_tableau(
+        tmp_path / "ordre-du-modele.csv",
+        ["MO-1;Taximètre avec boîtier;1000,00;1200,00;F1;4S;/;Gamma 7;/", "MO-DASH;Dash cam seule;150,00;180,00;/;/;/;/;/"],
+        en_tete="Référence;Désignation;Prix HT;Prix TTC;Taximètre;Imprimante;Lumineux;Boîtier;Installation",
+    )
+    d = ouvrir_tableau(page, chemin)
+    expect(d).to_contain_text("2 nouveaux, 0 modifié, 0 inchangé")
+    expect(d).not_to_contain_text("n'existent pas encore")  # Gamma 7 est reconnu dans la famille Boîtier
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    par_ref = {c["ref"]: c for c in cartes(page)}
+    assert par_ref["MO-1"]["elements"] == {"Taximètre": "F1", "Imprimante": "4S", "Boîtier": "Gamma 7"}
+    assert par_ref["MO-DASH"]["elements"] == {}
+    page.fill("#recherche", "dash cam")
+    assert refs(page) == {"MO-DASH"}  # un forfait sans élément se retrouve par sa désignation
 
 
 def test_import_d_un_mauvais_fichier_refuse(page, tmp_path):

@@ -29,14 +29,14 @@ DERNIERE_COLONNE = 26  # colonne Z : jusqu'où une ligne compte comme « remplie
 TVA = 1.2
 TOLERANCE_TVA = 0.02  # même tolérance que l'outil : 2 centimes
 
-# Familles et éléments de départ : ceux de l'outil (à compléter dans l'onglet Listes).
-# L'import retrouve les colonnes par leur titre : l'ordre ici est libre. Les familles qui servent
-# rarement sont à droite, pour que celles du quotidien se suivent.
-FAMILLES = {
-    "Taximètre": ["M1 STD", "F1"],
-    "Imprimante": ["3S", "4S"],
+# Familles de départ : celles de l'outil, listes vides (les éléments de départ de l'outil sont des exemples :
+# les vrais se tapent dans l'onglet Listes). L'import retrouve les colonnes par leur titre : l'ordre ici est libre.
+# Les familles qui servent rarement sont à droite, pour que celles du quotidien se suivent.
+FAMILLES: dict[str, list[str]] = {
+    "Taximètre": [],
+    "Imprimante": [],
     "Lumineux": [],
-    "Boîtier": ["Gamma 7", "Starplast X", "Gammatech X", "Starplast universelle"],
+    "Boîtier": [],
     "Installation": [],
 }
 COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC"]

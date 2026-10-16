@@ -22,15 +22,18 @@ SORTIE = RACINE / "prive" / "Forfaits-a-remplir.xlsx"
 
 DERNIERE_LIGNE = 1000  # nombre de forfaits que le modèle sait contrôler
 DERNIERE_LIGNE_LISTE = 100  # éléments par famille dans l'onglet Listes
+DERNIERE_COLONNE = 26  # colonne Z : jusqu'où une ligne compte comme « remplie » (familles ajoutées à droite comprises)
 TVA = 1.2
 TOLERANCE_TVA = 0.02  # même tolérance que l'outil : 2 centimes
 
 # Familles et éléments de départ : ceux de l'outil (à compléter dans l'onglet Listes).
+# L'import retrouve les colonnes par leur titre : l'ordre ici est libre. Les familles qui servent
+# rarement sont à droite, pour que celles du quotidien se suivent.
 FAMILLES = {
     "Taximètre": ["M1 STD", "F1"],
-    "Boîtier": ["Gamma 7", "Starplast X", "Gammatech X", "Starplast universelle"],
     "Imprimante": ["3S", "4S"],
     "Lumineux": [],
+    "Boîtier": ["Gamma 7", "Starplast X", "Gammatech X", "Starplast universelle"],
     "Installation": [],
 }
 COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC"]
@@ -48,7 +51,9 @@ MODE_D_EMPLOI = [
     (
         "2. Une ligne par forfait",
         "Onglet « Forfaits » : référence, désignation (le contenu), prix HT et prix TTC tels qu'écrits sur le tarif. "
-        "Puis choisis chaque élément dans la liste déroulante. Si le forfait n'en a pas : « / » (pas de données) ou case vide, c'est pareil.",
+        "Puis choisis chaque élément dans la liste déroulante. Si le forfait n'en a pas : « / » (pas de données) ou case vide, c'est pareil. "
+        "Un forfait sans taximètre (dash cam, lumineux…) n'a besoin que de la référence, de la désignation et des prix. "
+        "Boîtier et Installation sont à droite parce qu'ils servent rarement.",
     ),
     (
         "3. Les couleurs aident",
@@ -69,6 +74,12 @@ MODE_D_EMPLOI = [
         "6. Partage",
         "Ensuite, dans l'outil : Menu > Exporter > Fichier de sauvegarde (.json), à ranger dans le dossier OneDrive des forfaits. "
         "Les autres appareils font Importer > Mettre à jour.",
+    ),
+    (
+        "Un élément ou une famille en plus",
+        "Élément nouveau : tape-le directement dans la case (Excel prévient qu'il n'est pas dans la liste : garde-le). "
+        "Famille nouvelle (dash cam, TPE…) : écris son titre dans la première case libre à droite de la ligne 1, puis remplis la colonne. "
+        "À l'import, l'outil crée la famille et les éléments, et te les montre avant de valider : vérifie l'orthographe à ce moment-là.",
     ),
     (
         "Pour modifier plus tard",
@@ -131,8 +142,9 @@ def fabriquer() -> Workbook:
             formula1="=" + formule,
             allow_blank=True,
             showErrorMessage=True,
-            errorTitle="Élément inconnu",
-            error="Choisis dans la liste. Pour un nouvel élément, ajoute-le d'abord dans l'onglet « Listes ».",
+            errorStyle="warning",  # avertit mais laisse passer : un élément nouveau se tape, l'outil le crée à l'import
+            errorTitle="Élément pas dans la liste",
+            error="Cet élément n'est pas dans l'onglet « Listes ». L'outil le créera à l'import. Garder cette valeur ?",
         )
         lettre = get_column_letter(premiere_famille + decalage)
         validation.add(f"{lettre}2:{lettre}{DERNIERE_LIGNE}")
@@ -141,7 +153,7 @@ def fabriquer() -> Workbook:
     # Contrôles en couleur
     rouge = PatternFill("solid", start_color="F8B4BA", end_color="F8B4BA")
     orange = PatternFill("solid", start_color="FFD8A8", end_color="FFD8A8")
-    ligne_remplie = f"COUNTA($A2:${get_column_letter(len(titres))}2)>0"
+    ligne_remplie = f"COUNTA($A2:${get_column_letter(DERNIERE_COLONNE)}2)>0"  # compte aussi les colonnes ajoutées à droite
     for plage, cellule in (("A", "A2"), ("C", "C2"), ("D", "D2")):
         forfaits.conditional_formatting.add(
             f"{plage}2:{plage}{DERNIERE_LIGNE}", FormulaRule(formula=[f'AND({ligne_remplie},{cellule}="")'], fill=rouge)

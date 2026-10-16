@@ -1,7 +1,7 @@
 # Session 03 (16/10/2026) : saisie des forfaits par Excel, sécurité d'accès
 
 ## État
-- `main` : V1 en ligne, PR #1 à #18 fusionnées. `feat/serveur` reste en pause (voir `session-02-brief.md`).
+- `main` : V1 en ligne, PR #1 à #21 fusionnées. `feat/serveur` reste en pause (voir `session-02-brief.md`).
 - Saisie par tableau : `python outils/modele_excel.py` fabrique le modèle dans `prive/` (ignoré par git) ; Menu → « Importer (sauvegarde ou tableau Excel) » lit un « CSV UTF-8 ».
   - Les colonnes sont lues par leur titre (ordre libre) ; « / » ou case vide = pas de données ; un forfait peut n'avoir aucun élément (dash cam…).
   - Colonne inconnue = nouvelle famille (10 au maximum) ; élément inconnu = créé ; tout est annoncé dans la fenêtre avant validation, rien n'est créé si on annule.

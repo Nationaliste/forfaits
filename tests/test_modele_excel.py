@@ -2,6 +2,7 @@
 
 import importlib.util
 import re
+import sys
 
 import pytest
 from conftest import RACINE
@@ -12,13 +13,32 @@ HTML = (RACINE / "index.html").read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
-def modele(tmp_path_factory):
+def module_modele():
     spec = importlib.util.spec_from_file_location("modele_excel", RACINE / "outils" / "modele_excel.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def modele(module_modele, tmp_path_factory):
     chemin = tmp_path_factory.mktemp("modele") / "modele.xlsx"
-    module.fabriquer().save(chemin)
+    module_modele.fabriquer().save(chemin)
     return openpyxl.load_workbook(chemin)
+
+
+def test_outil_n_ecrase_jamais_un_fichier_existant(module_modele, tmp_path, monkeypatch):
+    rempli = tmp_path / "rempli.xlsx"
+    rempli.write_bytes(b"saisie de l'utilisateur")
+    monkeypatch.setattr(sys, "argv", ["modele_excel.py", str(rempli)])
+    with pytest.raises(SystemExit) as refus:
+        module_modele.main()
+    assert "existe déjà" in str(refus.value)
+    assert rempli.read_bytes() == b"saisie de l'utilisateur"  # intact
+    neuf = tmp_path / "dossier" / "neuf.xlsx"
+    monkeypatch.setattr(sys, "argv", ["modele_excel.py", str(neuf)])
+    module_modele.main()  # un chemin libre marche toujours
+    assert neuf.is_file()
 
 
 def familles_de_l_outil():

@@ -67,7 +67,8 @@ def test_modele_a_les_listes_de_depart_de_l_outil(modele):
     for colonne, nom in enumerate(titres_forfaits, start=1):
         assert listes.cell(row=1, column=colonne).value == nom  # même ordre que les colonnes de l'onglet Forfaits
         valeurs = [c.value for c in listes[openpyxl.utils.get_column_letter(colonne)][1:] if c.value]
-        assert valeurs == ["/", *attendu_par_nom[nom]], nom  # « / » (pas de données) en tête, puis les éléments de départ
+        # « / » (pas de données) en tête, puis les éléments de départ qui ne sont pas des exemples : aucun aujourd'hui
+        assert valeurs == ["/", *attendu_par_nom[nom]], nom
 
 
 def test_modele_est_vide_et_controle_les_saisies(modele):

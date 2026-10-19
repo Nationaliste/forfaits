@@ -72,6 +72,11 @@ class Appareil:
     def __init__(self, navigateur, url, **options):
         self.contexte = navigateur.new_context(locale="fr-FR", accept_downloads=True, service_workers="block", **options)
         self.erreurs = []
+        # Le choix du dossier d'export (Edge, Chrome) ouvrirait une fenêtre : les tests prennent le téléchargement,
+        # et test_export_dans_le_dossier_choisi remplace ce choix par un faux.
+        self.contexte.add_init_script(
+            "Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, writable: true, configurable: true })"
+        )
         self.page = self.contexte.new_page()
         self.page.on("pageerror", lambda e: self.erreurs.append(f"pageerror: {e}"))
         self.page.on("console", lambda m: self.erreurs.append(f"console: {m.text}") if m.type == "error" else None)

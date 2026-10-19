@@ -242,6 +242,31 @@ def test_carte_complete_et_prix_au_format_francais(page):
     expect(page.locator(".badge-exemple").first).to_have_text("EXEMPLE")
 
 
+def test_trier_par_prix(page):
+    def ttc_affiches():
+        return [
+            page.evaluate("s => window.Forfaits.lirePrix(s)", espaces(m))
+            for m in page.locator("#resultats .prix-ttc .prix-montant").all_text_contents()
+        ]
+
+    def refs_affichees():
+        return page.locator("#resultats .carte-ref").all_text_contents()
+
+    assert refs_affichees() == sorted(TOUS)  # par défaut : ordre des références
+    page.select_option("#tri", label="prix croissant")
+    assert ttc_affiches() == sorted(ttc_affiches()) and len(ttc_affiches()) == len(TOUS)
+    assert set(refs_affichees()) == TOUS
+    page.select_option("#tri", label="prix décroissant")
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True)
+    chercher(page, "3S")  # le tri s'applique aussi aux résultats d'une recherche
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and set(refs_affichees()) == AVEC_3S
+    chercher(page, "EX-F1-3S")  # une référence tapée en entier reste en tête
+    assert refs_affichees()[0] == "EX-F1-3S"
+    page.select_option("#tri", label="par référence")
+    chercher(page, "")
+    assert refs_affichees() == sorted(TOUS)
+
+
 def test_lecture_des_prix_saisis(page):
     cas = {
         "1 234,50": 123450,
@@ -332,6 +357,15 @@ def test_ajouter_modifier_supprimer(page):
     expect(page.locator("#resultats .carte")).to_have_count(0)
     chercher(page, "")
     assert refs(page) == TOUS
+
+
+def test_date_de_modification_sur_la_carte(page):
+    expect(page.locator(".carte-maj")).to_have_count(0)  # exemples jamais touchés : pas de date
+    activer_modif(page)
+    modifier(page, "EX-F1-3S")
+    remplir(page, ht="800", ttc="960")
+    chercher(page, "EX-F1-3S")
+    expect(page.locator(".carte-maj")).to_have_text(f"Modifié le {datetime.now():%d/%m/%Y}")
 
 
 def test_doublon_de_reference_bloque(page):
@@ -555,6 +589,25 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
     assert refs(comptoir) == (TOUS - {"EX-LUM-POSE"}) | {"B-NOUVEAU"}
 
 
+def test_import_annonce_les_prix_qui_changent(appareils, tmp_path):
+    a = appareils().page
+    activer_modif(a)
+    modifier(a, "EX-F1-3S")
+    remplir(a, ht="800", ttc="960")
+    modifier(a, "EX-F1-G7-3S")
+    remplir(a, designation="Seule la désignation change")
+    exporter_json(a, tmp_path / "a.json")
+
+    b = appareils().page
+    b.set_input_files("#fichier-import", str(tmp_path / "a.json"))
+    d = dialogue(b)
+    expect(d).to_contain_text("2 modifiés")
+    texte = espaces(d.inner_text())
+    assert "Prix qui changent : EX-F1-3S : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in texte
+    assert "EX-F1-G7-3S :" not in texte  # modifié, mais pas son prix
+    d.get_by_role("button", name="Annuler").click()
+
+
 def test_import_d_un_fichier_plus_ancien_garde_les_versions_recentes(appareils, tmp_path):
     a = appareils().page
     activer_modif(a)
@@ -758,6 +811,7 @@ def test_tableau_met_a_jour_un_forfait_sans_le_dupliquer(page, tmp_path):
     chemin = ecrire_tableau(tmp_path / "maj.csv", ["ex-f1-3s;Nouvelle désignation;800,00;960,00;F1;;;;"])
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
+    assert "Prix qui changent : ex-f1-3s : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in espaces(d.inner_text())
     d.get_by_role("button", name="Importer", exact=True).click()  # sans supprimer les exemples
     expect(page.locator("#toast")).to_have_text("Tableau importé")
     assert refs(page) == (TOUS - {"EX-F1-3S"}) | {"ex-f1-3s"}  # même forfait, pas un doublon
@@ -867,6 +921,42 @@ def test_rappel_d_exporter(page, tmp_path):
     dialogue(page).get_by_role("button", name="Fermer").click()
     exporter_json(page, tmp_path / "r.json")
     expect(page.locator("#rappel")).to_be_hidden()
+
+
+def test_export_dans_le_dossier_choisi(page):
+    """Edge et Chrome sur PC : le fichier va dans le dossier choisi (OneDrive), sans passer par Téléchargements."""
+    page.evaluate("""() => {
+        window.showSaveFilePicker = async (options) => {
+            window.choix = options;
+            if (window.annuler) throw new DOMException('annulé', 'AbortError');
+            return { createWritable: async () => ({ write: async (c) => { window.ecrit = c; }, close: async () => {} }) };
+        };
+    }""")
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "D-1", "100", "120")
+    expect(page.locator("#rappel")).to_be_visible()
+    telechargements = []
+    page.on("download", lambda t: telechargements.append(t))
+
+    page.evaluate("window.annuler = true")
+    page.click("#btn-menu")
+    page.click("#btn-menu-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("dialog[open]")).to_have_count(0)
+    page.wait_for_function("window.choix")
+    expect(page.locator("#rappel")).to_be_visible()  # annulé : rien n'est exporté
+
+    page.evaluate("window.annuler = false")
+    page.click("#btn-rappel-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("#toast")).to_have_text("Fichier de sauvegarde enregistré")
+    expect(page.locator("#rappel")).to_be_hidden()
+    choix = page.evaluate("window.choix")
+    assert choix["id"] == "forfaits" and re.fullmatch(r"forfaits-\d{4}-\d\d-\d\d-\d\dh\d\d\.json", choix["suggestedName"])
+    fichier = json.loads(page.evaluate("window.ecrit"))
+    assert "D-1" in {f["ref"] for f in fichier["forfaits"]}
+    assert telechargements == []
 
 
 def test_rappel_d_importer_apres_une_semaine(appareils, tmp_path):

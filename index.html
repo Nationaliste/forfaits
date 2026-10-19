@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-on1ZqzyUaJlmj3eWxv9lAz7K6oN9HDPwqC3isuOWHGM='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6JIAa4eMUj6DN+XkijMddIns4byfPOsSoVO2BKg/Rx4='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -243,6 +243,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
 #compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
+.tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
+.tri .champ { width: auto; padding: 6px 10px; font-size: 15px; }
 .resultats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
@@ -288,6 +290,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .el-famille { font-size: 13px; color: var(--texte-doux); }
 .el-nom { font-weight: 700; }
 .carte-designation { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte-doux); }
+.carte-maj { margin: 0; font-size: 13px; color: var(--texte-doux); }
 .carte-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 2px; }
 .carte-actions .btn { flex: 1 1 auto; }
 
@@ -458,6 +461,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     <div class="barre-resultats-gauche">
       <p id="compte" aria-live="polite"></p>
       <button type="button" class="btn-lien" id="btn-tout-effacer" hidden>Effacer la recherche</button>
+      <label class="tri" id="zone-tri" hidden>Trier
+        <select id="tri" class="champ">
+          <option value="ref">par référence</option>
+          <option value="prix-croissant">prix croissant</option>
+          <option value="prix-decroissant">prix décroissant</option>
+        </select>
+      </label>
     </div>
     <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+ Ajouter un forfait</button>
   </div>
@@ -957,13 +967,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const total = index.forfaits.length;
     const resultats = index.forfaits.filter((f) => correspond(f, analyse.contraintes));
     const tape = analyse.mots.join('');
-    // Une référence tapée en entier passe en premier, puis ordre alphabétique des références.
-    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || tri.compare(a.ref, b.ref));
+    // Une référence tapée en entier passe en premier, puis l'ordre choisi (références dans l'ordre alphabétique par défaut).
+    const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[$('tri').value] || 0;
+    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape)
+      || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || tri.compare(a.ref, b.ref));
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
 
     $('compte').textContent = total === 0 ? '' : resultats.length === 0 ? 'Aucun forfait ne correspond'
       : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
     $('btn-tout-effacer').hidden = !actif;
+    $('zone-tri').hidden = total < 2;
     $('btn-ajouter').hidden = !appareil.modeModif;
     $('btn-vider').hidden = texte === '';
 
@@ -999,6 +1012,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
         h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
       f.designation ? h('p', { class: 'carte-designation' }, f.designation) : null,
+      f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null, // 0 : exemple jamais touché
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
         h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);
@@ -1449,13 +1463,32 @@ textarea.champ { resize: vertical; min-height: 90px; }
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  function exporterJson() {
+  // Edge et Chrome sur PC proposent de choisir le dossier, et rouvrent ensuite le même (celui de OneDrive) :
+  // plus besoin de déplacer le fichier depuis Téléchargements. Ailleurs (Firefox, Android), téléchargement classique.
+  // Renvoie 'choisi', 'telecharge', ou null si la personne a annulé.
+  async function exporterJson() {
+    const nom = `forfaits-${horodatage()}.json`;
     const contenu = JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, exporteLe: new Date().toISOString(), ...donnees }, null, 1);
-    telecharger(`forfaits-${horodatage()}.json`, contenu, 'application/json');
+    let resultat = 'telecharge';
+    try {
+      if (!window.showSaveFilePicker) throw new Error('indisponible');
+      const fichier = await window.showSaveFilePicker({
+        id: 'forfaits', suggestedName: nom,
+        types: [{ description: 'Fichier de forfaits', accept: { 'application/json': ['.json'] } }],
+      });
+      const flux = await fichier.createWritable();
+      await flux.write(contenu);
+      await flux.close();
+      resultat = 'choisi';
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      telecharger(nom, contenu, 'application/json'); // refusé (page ouverte en fichier, règle de l'entreprise…)
+    }
     appareil.modifsEnAttente = 0;
     appareil.dernierExport = Date.now();
     sauverAppareil();
     rendreRappel();
+    return resultat;
   }
 
   // Tableau lisible dans Excel (séparateur « ; » et accents corrects).
@@ -1486,7 +1519,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('div', { class: 'menu-liste' },
           h('button', {
             type: 'button', class: 'btn btn-rouge', id: 'btn-export-json',
-            onclick: () => { exporterJson(); dlg.close(); toast('Fichier enregistré dans Téléchargements : range-le dans OneDrive'); },
+            onclick: async () => {
+              const enCours = exporterJson(); // d'abord : le choix du dossier doit suivre le clic
+              dlg.close();
+              const resultat = await enCours;
+              if (resultat) toast(resultat === 'choisi' ? 'Fichier de sauvegarde enregistré' : 'Fichier enregistré dans Téléchargements : range-le dans OneDrive');
+            },
           }, 'Fichier de sauvegarde (.json)'),
           h('button', {
             type: 'button', class: 'btn btn-bord', id: 'btn-export-csv',
@@ -1502,20 +1540,30 @@ textarea.champ { resize: vertical; min-height: 90px; }
     champ.click();
   }
 
-  // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire.
+  // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire,
+  // et nomme les forfaits dont le prix change (le reste d'une modification compte moins au comptoir).
   function bilanFusion(entrant) {
     const locaux = new Map(donnees.forfaits.map((f) => [f.id, f]));
-    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0 };
+    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0, prix: [] };
     for (const f of entrant.forfaits) {
       const l = locaux.get(f.id);
       if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
       if (f.maj <= l.maj) continue;
       if (f.supprime && !l.supprime) bilan.supprimes++;
       else if (!f.supprime && l.supprime) bilan.nouveaux++;
-      else if (!f.supprime) bilan.modifies++;
+      else if (!f.supprime) {
+        bilan.modifies++;
+        if (f.ht !== l.ht || f.ttc !== l.ttc) {
+          bilan.prix.push(`${f.ref} : ${formatPrix(l.ht)} → ${formatPrix(f.ht)} HT, ${formatPrix(l.ttc)} → ${formatPrix(f.ttc)} TTC`);
+        }
+      }
     }
+    bilan.prix.sort(tri.compare);
     return bilan;
   }
+
+  // « Titre : a ; b ; c … (+5) » : une liste longue reste lisible dans une fenêtre de confirmation.
+  const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
 
   /* ---------- Tableau Excel (.csv) : remplir ou mettre à jour les forfaits depuis Excel ---------- */
 
@@ -1695,7 +1743,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
-    const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
     const exemplesRestants = !avecExemples && donnees.forfaits.some((f) => f.exemple && !f.supprime);
     const choix = await demander({
@@ -1703,6 +1750,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}.`,
       liste: [
         `${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${inchanges} inchangé${inchanges > 1 ? 's' : ''}. Les autres forfaits de cet appareil ne bougent pas.`,
+        resume('Prix qui changent', bilan.prix),
         resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
@@ -1745,6 +1793,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${Number.isFinite(exporteLe) ? 'exporté le ' + fmtDateHeure.format(new Date(exporteLe)) + ', ' : ''}${pluriel(nbEntrants, 'forfait')}.`,
       liste: [
         `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
+        resume('Prix qui changent', bilan.prix),
         'Remplacer tout : cet appareil devient une copie exacte du fichier.',
         plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,
       ].filter(Boolean),
@@ -1888,6 +1937,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   });
   $('btn-vider').addEventListener('click', () => { champ.value = ''; champ.focus(); rendreResultats(); majSuggestions(); });
   $('btn-tout-effacer').addEventListener('click', toutEffacer);
+  $('tri').addEventListener('change', rendreResultats);
   $('btn-ajouter').addEventListener('click', () => ouvrirFormulaire(null));
   $('btn-importer').addEventListener('click', lancerImport);
   $('btn-menu').addEventListener('click', ouvrirMenu);

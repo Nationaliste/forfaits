@@ -923,6 +923,42 @@ def test_rappel_d_exporter(page, tmp_path):
     expect(page.locator("#rappel")).to_be_hidden()
 
 
+def test_export_dans_le_dossier_choisi(page):
+    """Edge et Chrome sur PC : le fichier va dans le dossier choisi (OneDrive), sans passer par Téléchargements."""
+    page.evaluate("""() => {
+        window.showSaveFilePicker = async (options) => {
+            window.choix = options;
+            if (window.annuler) throw new DOMException('annulé', 'AbortError');
+            return { createWritable: async () => ({ write: async (c) => { window.ecrit = c; }, close: async () => {} }) };
+        };
+    }""")
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "D-1", "100", "120")
+    expect(page.locator("#rappel")).to_be_visible()
+    telechargements = []
+    page.on("download", lambda t: telechargements.append(t))
+
+    page.evaluate("window.annuler = true")
+    page.click("#btn-menu")
+    page.click("#btn-menu-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("dialog[open]")).to_have_count(0)
+    page.wait_for_function("window.choix")
+    expect(page.locator("#rappel")).to_be_visible()  # annulé : rien n'est exporté
+
+    page.evaluate("window.annuler = false")
+    page.click("#btn-rappel-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("#toast")).to_have_text("Fichier de sauvegarde enregistré")
+    expect(page.locator("#rappel")).to_be_hidden()
+    choix = page.evaluate("window.choix")
+    assert choix["id"] == "forfaits" and re.fullmatch(r"forfaits-\d{4}-\d\d-\d\d-\d\dh\d\d\.json", choix["suggestedName"])
+    fichier = json.loads(page.evaluate("window.ecrit"))
+    assert "D-1" in {f["ref"] for f in fichier["forfaits"]}
+    assert telechargements == []
+
+
 def test_rappel_d_importer_apres_une_semaine(appareils, tmp_path):
     a = appareils().page
     activer_modif(a)

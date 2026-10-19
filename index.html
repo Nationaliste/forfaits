@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fLJ8Do4GiXbhPHyEveWm/qJcCS0TdDV/yGDnWFy/PXo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-E40WDFZDZJbb7jwjYqsAD5g27EIruaS3C07xS2ktsFo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -290,6 +290,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .el-famille { font-size: 13px; color: var(--texte-doux); }
 .el-nom { font-weight: 700; }
 .carte-designation { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte-doux); }
+.carte-maj { margin: 0; font-size: 13px; color: var(--texte-doux); }
 .carte-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 2px; }
 .carte-actions .btn { flex: 1 1 auto; }
 
@@ -1011,6 +1012,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
         h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
       f.designation ? h('p', { class: 'carte-designation' }, f.designation) : null,
+      f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null, // 0 : exemple jamais touché
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
         h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);

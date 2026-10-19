@@ -359,6 +359,15 @@ def test_ajouter_modifier_supprimer(page):
     assert refs(page) == TOUS
 
 
+def test_date_de_modification_sur_la_carte(page):
+    expect(page.locator(".carte-maj")).to_have_count(0)  # exemples jamais touchés : pas de date
+    activer_modif(page)
+    modifier(page, "EX-F1-3S")
+    remplir(page, ht="800", ttc="960")
+    chercher(page, "EX-F1-3S")
+    expect(page.locator(".carte-maj")).to_have_text(f"Modifié le {datetime.now():%d/%m/%Y}")
+
+
 def test_doublon_de_reference_bloque(page):
     activer_modif(page)
     for ref in ("EX-F1-3S", "ex-f1-3s"):

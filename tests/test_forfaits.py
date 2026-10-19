@@ -242,6 +242,31 @@ def test_carte_complete_et_prix_au_format_francais(page):
     expect(page.locator(".badge-exemple").first).to_have_text("EXEMPLE")
 
 
+def test_trier_par_prix(page):
+    def ttc_affiches():
+        return [
+            page.evaluate("s => window.Forfaits.lirePrix(s)", espaces(m))
+            for m in page.locator("#resultats .prix-ttc .prix-montant").all_text_contents()
+        ]
+
+    def refs_affichees():
+        return page.locator("#resultats .carte-ref").all_text_contents()
+
+    assert refs_affichees() == sorted(TOUS)  # par défaut : ordre des références
+    page.select_option("#tri", label="prix croissant")
+    assert ttc_affiches() == sorted(ttc_affiches()) and len(ttc_affiches()) == len(TOUS)
+    assert set(refs_affichees()) == TOUS
+    page.select_option("#tri", label="prix décroissant")
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True)
+    chercher(page, "3S")  # le tri s'applique aussi aux résultats d'une recherche
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and set(refs_affichees()) == AVEC_3S
+    chercher(page, "EX-F1-3S")  # une référence tapée en entier reste en tête
+    assert refs_affichees()[0] == "EX-F1-3S"
+    page.select_option("#tri", label="par référence")
+    chercher(page, "")
+    assert refs_affichees() == sorted(TOUS)
+
+
 def test_lecture_des_prix_saisis(page):
     cas = {
         "1 234,50": 123450,

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-TxlvLyd7opaZjdZhfUBE1kZ3IDupUPU1rRHbtQciU8c='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fLJ8Do4GiXbhPHyEveWm/qJcCS0TdDV/yGDnWFy/PXo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1514,20 +1514,30 @@ textarea.champ { resize: vertical; min-height: 90px; }
     champ.click();
   }
 
-  // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire.
+  // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire,
+  // et nomme les forfaits dont le prix change (le reste d'une modification compte moins au comptoir).
   function bilanFusion(entrant) {
     const locaux = new Map(donnees.forfaits.map((f) => [f.id, f]));
-    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0 };
+    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0, prix: [] };
     for (const f of entrant.forfaits) {
       const l = locaux.get(f.id);
       if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
       if (f.maj <= l.maj) continue;
       if (f.supprime && !l.supprime) bilan.supprimes++;
       else if (!f.supprime && l.supprime) bilan.nouveaux++;
-      else if (!f.supprime) bilan.modifies++;
+      else if (!f.supprime) {
+        bilan.modifies++;
+        if (f.ht !== l.ht || f.ttc !== l.ttc) {
+          bilan.prix.push(`${f.ref} : ${formatPrix(l.ht)} → ${formatPrix(f.ht)} HT, ${formatPrix(l.ttc)} → ${formatPrix(f.ttc)} TTC`);
+        }
+      }
     }
+    bilan.prix.sort(tri.compare);
     return bilan;
   }
+
+  // « Titre : a ; b ; c … (+5) » : une liste longue reste lisible dans une fenêtre de confirmation.
+  const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
 
   /* ---------- Tableau Excel (.csv) : remplir ou mettre à jour les forfaits depuis Excel ---------- */
 
@@ -1707,7 +1717,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
-    const resume = (titre, liste) => (liste.length ? `${titre} : ${liste.slice(0, 10).join(' ; ')}${liste.length > 10 ? ` … (+${liste.length - 10})` : ''}` : null);
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
     const exemplesRestants = !avecExemples && donnees.forfaits.some((f) => f.exemple && !f.supprime);
     const choix = await demander({
@@ -1715,6 +1724,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}.`,
       liste: [
         `${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${inchanges} inchangé${inchanges > 1 ? 's' : ''}. Les autres forfaits de cet appareil ne bougent pas.`,
+        resume('Prix qui changent', bilan.prix),
         resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
@@ -1757,6 +1767,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       message: `${fichier.name} — ${Number.isFinite(exporteLe) ? 'exporté le ' + fmtDateHeure.format(new Date(exporteLe)) + ', ' : ''}${pluriel(nbEntrants, 'forfait')}.`,
       liste: [
         `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
+        resume('Prix qui changent', bilan.prix),
         'Remplacer tout : cet appareil devient une copie exacte du fichier.',
         plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,
       ].filter(Boolean),

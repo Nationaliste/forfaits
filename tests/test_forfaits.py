@@ -580,6 +580,25 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
     assert refs(comptoir) == (TOUS - {"EX-LUM-POSE"}) | {"B-NOUVEAU"}
 
 
+def test_import_annonce_les_prix_qui_changent(appareils, tmp_path):
+    a = appareils().page
+    activer_modif(a)
+    modifier(a, "EX-F1-3S")
+    remplir(a, ht="800", ttc="960")
+    modifier(a, "EX-F1-G7-3S")
+    remplir(a, designation="Seule la désignation change")
+    exporter_json(a, tmp_path / "a.json")
+
+    b = appareils().page
+    b.set_input_files("#fichier-import", str(tmp_path / "a.json"))
+    d = dialogue(b)
+    expect(d).to_contain_text("2 modifiés")
+    texte = espaces(d.inner_text())
+    assert "Prix qui changent : EX-F1-3S : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in texte
+    assert "EX-F1-G7-3S :" not in texte  # modifié, mais pas son prix
+    d.get_by_role("button", name="Annuler").click()
+
+
 def test_import_d_un_fichier_plus_ancien_garde_les_versions_recentes(appareils, tmp_path):
     a = appareils().page
     activer_modif(a)
@@ -783,6 +802,7 @@ def test_tableau_met_a_jour_un_forfait_sans_le_dupliquer(page, tmp_path):
     chemin = ecrire_tableau(tmp_path / "maj.csv", ["ex-f1-3s;Nouvelle désignation;800,00;960,00;F1;;;;"])
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
+    assert "Prix qui changent : ex-f1-3s : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in espaces(d.inner_text())
     d.get_by_role("button", name="Importer", exact=True).click()  # sans supprimer les exemples
     expect(page.locator("#toast")).to_have_text("Tableau importé")
     assert refs(page) == (TOUS - {"EX-F1-3S"}) | {"ex-f1-3s"}  # même forfait, pas un doublon

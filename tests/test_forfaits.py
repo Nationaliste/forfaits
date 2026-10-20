@@ -621,6 +621,20 @@ def test_import_d_un_fichier_plus_ancien_garde_les_versions_recentes(appareils, 
     assert espaces(cartes(a)[0]["ttc"]) == "960,00 €"
 
 
+def test_remplacer_tout_annonce_les_anciens_prix(appareils, tmp_path):
+    """Un fichier plus ancien : « Mettre à jour » ne change aucun prix, « Remplacer tout » remet l'ancien, et le dit avant."""
+    a = appareils().page
+    activer_modif(a)
+    exporter_json(a, tmp_path / "ancien.json")
+    modifier(a, "EX-F1-3S")
+    remplir(a, ht="800", ttc="960")
+    a.set_input_files("#fichier-import", str(tmp_path / "ancien.json"))
+    texte = espaces(dialogue(a).inner_text())
+    assert "Prix qui changent : " not in texte
+    assert "Prix qui changent avec « Remplacer tout » : EX-F1-3S : 800,00 € → 700,00 € HT, 960,00 € → 840,00 € TTC" in texte
+    dialogue(a).get_by_role("button", name="Annuler").click()
+
+
 def test_export_csv_lisible_dans_excel(page, tmp_path):
     page.click("#btn-menu")
     page.click("#btn-menu-exporter")

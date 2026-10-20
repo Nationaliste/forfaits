@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6JIAa4eMUj6DN+XkijMddIns4byfPOsSoVO2BKg/Rx4='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-AF1KyR5l/nBOoR2tB6ybIx/+v1+0JTn6NoA1wM6teAY='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1542,23 +1542,26 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire,
   // et nomme les forfaits dont le prix change (le reste d'une modification compte moins au comptoir).
+  // prixRemplacer : la même liste pour « Remplacer tout », qui prend aussi les versions plus anciennes du fichier.
   function bilanFusion(entrant) {
     const locaux = new Map(donnees.forfaits.map((f) => [f.id, f]));
-    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0, prix: [] };
+    const bilan = { nouveaux: 0, modifies: 0, supprimes: 0, prix: [], prixRemplacer: [] };
+    const ligne = (l, f) => `${f.ref} : ${formatPrix(l.ht)} → ${formatPrix(f.ht)} HT, ${formatPrix(l.ttc)} → ${formatPrix(f.ttc)} TTC`;
     for (const f of entrant.forfaits) {
       const l = locaux.get(f.id);
       if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
+      const prixChange = !f.supprime && !l.supprime && (f.ht !== l.ht || f.ttc !== l.ttc);
+      if (prixChange) bilan.prixRemplacer.push(ligne(l, f));
       if (f.maj <= l.maj) continue;
       if (f.supprime && !l.supprime) bilan.supprimes++;
       else if (!f.supprime && l.supprime) bilan.nouveaux++;
       else if (!f.supprime) {
         bilan.modifies++;
-        if (f.ht !== l.ht || f.ttc !== l.ttc) {
-          bilan.prix.push(`${f.ref} : ${formatPrix(l.ht)} → ${formatPrix(f.ht)} HT, ${formatPrix(l.ttc)} → ${formatPrix(f.ttc)} TTC`);
-        }
+        if (prixChange) bilan.prix.push(ligne(l, f));
       }
     }
     bilan.prix.sort(tri.compare);
+    bilan.prixRemplacer.sort(tri.compare);
     return bilan;
   }
 
@@ -1795,6 +1798,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
         resume('Prix qui changent', bilan.prix),
         'Remplacer tout : cet appareil devient une copie exacte du fichier.',
+        // Fichier plus ancien : « Remplacer tout » remettrait d'anciens prix, à dire avant.
+        bilan.prixRemplacer.join() === bilan.prix.join() ? null : resume('Prix qui changent avec « Remplacer tout »', bilan.prixRemplacer),
         plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,
       ].filter(Boolean),
       boutons: [

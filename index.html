@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-AF1KyR5l/nBOoR2tB6ybIx/+v1+0JTn6NoA1wM6teAY='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-LBFeFiLcpzAZGZIRppZMhsMvxE2LMIvw/3s1mjGX3xc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
 <title>Forfaits</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 /* ============ Couleurs et réglages (noir dominant, rouge en accent) ============ */
 /* Palette sombre = défaut. L'en-tête et les titres de fenêtre restent noirs dans les deux thèmes :
@@ -244,7 +245,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
 #compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
 .tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
-.tri .champ { width: auto; padding: 6px 10px; font-size: 15px; }
+.tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
 .resultats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
@@ -330,7 +331,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .dlg[open] { display: flex; flex-direction: column; animation: monte .18s ease-out; }
 .dlg::backdrop { background: var(--voile); }
 .dlg-large { width: min(820px, calc(100vw - 24px)); }
-.dlg-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.dlg-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .dlg-tete {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 10px 10px 20px;
@@ -340,7 +341,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .dlg-tete h2 { margin: 0; font-family: var(--police-titre); font-size: 22px; overflow-wrap: anywhere; }
 .dlg-tete .btn-icone { color: var(--blanc); }
 .dlg-tete .btn-icone:hover { background: var(--surface-2); }
-.dlg-corps { padding: 16px 20px; overflow: auto; flex: 1; }
+/* flex: 1 seul vaut « base 0 » : Safari écrase alors le corps à sa marge dans une fenêtre sans hauteur fixée. */
+.dlg-corps { padding: 16px 20px; overflow: auto; flex: 1 1 auto; min-height: 0; }
 .dlg-pied { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--trait); }
 .dlg-pied .btn { flex: 1 1 150px; }
 .dlg-message { margin: 0 0 10px; }
@@ -367,6 +369,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .msg-champ.erreur, .msg-erreur { color: var(--rouge-vif); }
 .msg-champ.attention { color: var(--ambre); }
 .msg-erreur { margin: 0 0 10px; font-weight: 700; }
+/* Place gardée : si le message disparaît pendant un clic, la liste ne remonte pas (Safari perdrait le clic). */
+.msg-reserve { min-height: 1.5em; }
 .note-exemple { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); border-left: 4px solid var(--ambre); font-weight: 600; }
 
 /* Choix d'un filtre */
@@ -448,7 +452,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   <div class="champ-recherche">
     <svg class="loupe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
     <label for="recherche" class="sr">Rechercher un forfait</label>
-    <input id="recherche" type="search" placeholder="Référence, 3S, M1 STD, Gamma…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
+    <input id="recherche" type="search" placeholder="Référence, 3Q, T1 DEMO, Zorba…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
     <button type="button" class="btn-icone" id="btn-vider" aria-label="Effacer la recherche" hidden>✕</button>
     <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
   </div>
@@ -534,7 +538,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   // Texte « à plat » pour comparer : minuscules, sans accents, sans espaces ni tirets.
-  // « M1-STD », « m1 std » et « M1STD » donnent tous « m1std ».
+  // « T1-DEMO », « t1 demo » et « T1DEMO » donnent tous « t1demo ».
   function norm(texte) {
     return String(texte ?? '')
       .toLowerCase()
@@ -570,15 +574,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}h${p(d.getMinutes())}`;
   }
 
-  // Remplace un enregistrement (même id) ou l'ajoute.
+  // Remplace un enregistrement (même id) ou l'ajoute. Une modification reste toujours plus récente que l'ancienne
+  // version, même datée dans le futur par un appareil à l'horloge en avance : sinon la fusion la ferait perdre.
   function remplacer(liste, nouveau) {
     const i = liste.findIndex((x) => x.id === nouveau.id);
-    if (i >= 0) liste[i] = nouveau; else liste.push(nouveau);
+    if (i >= 0) liste[i] = { ...nouveau, maj: Math.max(nouveau.maj, liste[i].maj + 1) }; else liste.push(nouveau);
   }
 
   /* =====================================================================
      DONNÉES
-     Trois listes : familles (Taximètre…), éléments (M1 STD…) et forfaits.
+     Trois listes : familles (Taximètre…), éléments (T1 DEMO…) et forfaits.
      Chaque enregistrement porte « maj » (date de dernière modification).
      Une suppression ne retire pas l'enregistrement : elle le marque « supprime »,
      pour que la suppression se propage aux autres appareils à l'import.
@@ -596,14 +601,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
     // Un élément sans le 4e argument serait un vrai élément de départ : le modèle Excel (outils/modele_excel.py) devrait le reprendre.
     const el = (id, familleId, nom, exemple) => ({ id, familleId, nom, maj: 0, ...(exemple ? { exemple: true } : {}) });
     const elements = [
-      el('elt-m1std', 'fam-taximetre', 'M1 STD', true),
-      el('elt-f1', 'fam-taximetre', 'F1', true),
-      el('elt-gamma7', 'fam-boitier', 'Gamma 7', true),
-      el('elt-starplastx', 'fam-boitier', 'Starplast X', true),
-      el('elt-gammatechx', 'fam-boitier', 'Gammatech X', true),
-      el('elt-starplastu', 'fam-boitier', 'Starplast universelle', true),
-      el('elt-3s', 'fam-imprimante', '3S', true),
-      el('elt-4s', 'fam-imprimante', '4S', true),
+      el('elt-t1demo', 'fam-taximetre', 'T1 DEMO', true),
+      el('elt-t2', 'fam-taximetre', 'T2', true),
+      el('elt-zorba5', 'fam-boitier', 'Zorba 5', true),
+      el('elt-kalpox', 'fam-boitier', 'Kalpo X', true),
+      el('elt-zorbatechx', 'fam-boitier', 'Zorbatech X', true),
+      el('elt-kalpou', 'fam-boitier', 'Kalpo universelle', true),
+      el('elt-3q', 'fam-imprimante', '3Q', true),
+      el('elt-4q', 'fam-imprimante', '4Q', true),
       el('elt-ex-lumineux', 'fam-lumineux', 'Lumineux EXEMPLE', true),
       el('elt-ex-pose', 'fam-installation', 'Pose EXEMPLE', true),
     ];
@@ -614,17 +619,17 @@ textarea.champ { resize: vertical; min-height: 90px; }
       return { id: 'fft-' + norm(ref), ref, designation: 'EXEMPLE — ' + texte, ht, ttc, elements: elementsDuForfait, exemple: true, maj: 0 };
     };
     const forfaits = [
-      f('EX-M1-G7-3S', 123450, 148140, ['elt-m1std', 'elt-gamma7', 'elt-3s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S'),
-      f('EX-M1-G7-4S', 110000, 132000, ['elt-m1std', 'elt-gamma7', 'elt-4s'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 4S'),
-      f('EX-M1-SPX-3S', 95000, 114000, ['elt-m1std', 'elt-starplastx', 'elt-3s'], 'Taximètre M1 STD + boîtier Starplast X + imprimante 3S'),
-      f('EX-M1-GTX-4S', 120000, 144000, ['elt-m1std', 'elt-gammatechx', 'elt-4s'], 'Taximètre M1 STD + boîtier Gammatech X + imprimante 4S'),
-      f('EX-F1-G7-3S', 98000, 117600, ['elt-f1', 'elt-gamma7', 'elt-3s'], 'Taximètre F1 + boîtier Gamma 7 + imprimante 3S'),
-      f('EX-F1-SPX-4S', 105000, 126000, ['elt-f1', 'elt-starplastx', 'elt-4s'], 'Taximètre F1 + boîtier Starplast X + imprimante 4S'),
-      f('EX-F1-GTX-3S', 99000, 118800, ['elt-f1', 'elt-gammatechx', 'elt-3s'], 'Taximètre F1 + boîtier Gammatech X + imprimante 3S'),
-      f('EX-F1-SPU-4S', 90000, 108000, ['elt-f1', 'elt-starplastu', 'elt-4s'], 'Taximètre F1 + boîtier Starplast universelle + imprimante 4S'),
-      f('EX-F1-3S', 70000, 84000, ['elt-f1', 'elt-3s'], 'Taximètre F1 + imprimante 3S, sans boîtier'),
+      f('EX-T1-Z5-3Q', 123450, 148140, ['elt-t1demo', 'elt-zorba5', 'elt-3q'], 'Taximètre T1 DEMO + boîtier Zorba 5 + imprimante 3Q'),
+      f('EX-T1-Z5-4Q', 110000, 132000, ['elt-t1demo', 'elt-zorba5', 'elt-4q'], 'Taximètre T1 DEMO + boîtier Zorba 5 + imprimante 4Q'),
+      f('EX-T1-KPX-3Q', 95000, 114000, ['elt-t1demo', 'elt-kalpox', 'elt-3q'], 'Taximètre T1 DEMO + boîtier Kalpo X + imprimante 3Q'),
+      f('EX-T1-ZTX-4Q', 120000, 144000, ['elt-t1demo', 'elt-zorbatechx', 'elt-4q'], 'Taximètre T1 DEMO + boîtier Zorbatech X + imprimante 4Q'),
+      f('EX-T2-Z5-3Q', 98000, 117600, ['elt-t2', 'elt-zorba5', 'elt-3q'], 'Taximètre T2 + boîtier Zorba 5 + imprimante 3Q'),
+      f('EX-T2-KPX-4Q', 105000, 126000, ['elt-t2', 'elt-kalpox', 'elt-4q'], 'Taximètre T2 + boîtier Kalpo X + imprimante 4Q'),
+      f('EX-T2-ZTX-3Q', 99000, 118800, ['elt-t2', 'elt-zorbatechx', 'elt-3q'], 'Taximètre T2 + boîtier Zorbatech X + imprimante 3Q'),
+      f('EX-T2-KPU-4Q', 90000, 108000, ['elt-t2', 'elt-kalpou', 'elt-4q'], 'Taximètre T2 + boîtier Kalpo universelle + imprimante 4Q'),
+      f('EX-T2-3Q', 70000, 84000, ['elt-t2', 'elt-3q'], 'Taximètre T2 + imprimante 3Q, sans boîtier'),
       f('EX-LUM-POSE', 45000, 54000, ['elt-ex-lumineux', 'elt-ex-pose'], 'Lumineux + pose, sans taximètre'),
-      f('EX-M1-G7-3S-P', 115000, 138000, ['elt-m1std', 'elt-gamma7', 'elt-3s', 'elt-ex-pose'], 'Taximètre M1 STD + boîtier Gamma 7 + imprimante 3S, avec pose'),
+      f('EX-T1-Z5-3Q-P', 115000, 138000, ['elt-t1demo', 'elt-zorba5', 'elt-3q', 'elt-ex-pose'], 'Taximètre T1 DEMO + boîtier Zorba 5 + imprimante 3Q, avec pose'),
     ];
     return { familles, elements, forfaits };
   }
@@ -794,7 +799,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const elsActifs = donnees.elements.filter((e) => !e.supprime && famParId.has(e.familleId))
       .sort((a, b) => famParId.get(a.familleId).ordre - famParId.get(b.familleId).ordre || tri.compare(a.nom, b.nom));
     const elParId = new Map(elsActifs.map((e) => [e.id, e]));
-    // Nom « à plat » → éléments (pour reconnaître « 3S » ou « M1 STD » tapés en entier).
+    // Nom « à plat » → éléments (pour reconnaître « 3Q » ou « T1 DEMO » tapés en entier).
     const parNom = new Map();
     for (const e of elsActifs) {
       const cle = norm(e.nom);
@@ -835,8 +840,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   const decouper = (texte) => texte.split(/[\s,;+]+/).filter((m) => norm(m) !== '');
 
-  // Découpe la recherche en contraintes. Un nom d'élément tapé en entier (« 3S », « M1 STD »,
-  // « m1std ») devient un filtre exact sur cet élément ; tout le reste cherche un morceau de
+  // Découpe la recherche en contraintes. Un nom d'élément tapé en entier (« 3Q », « T1 DEMO »,
+  // « t1demo ») devient un filtre exact sur cet élément ; tout le reste cherche un morceau de
   // texte dans la référence, la désignation et les éléments. Chaque contrainte réduit la liste.
   function analyserRecherche(texte) {
     const mots = decouper(texte).map(norm);
@@ -872,8 +877,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   // Suggestions d'éléments pendant la frappe, d'après les derniers mots tapés
-  // (« gam » → Gamma 7, Gammatech X ; « starplast u » → Starplast universelle).
-  // Un nom déjà tapé en entier (« 3S ») filtre déjà : pas de liste qui cacherait l'écran.
+  // (« gam » → Zorba 5, Zorbatech X ; « kalpo u » → Kalpo universelle).
+  // Un nom déjà tapé en entier (« 3Q ») filtre déjà : pas de liste qui cacherait l'écran.
   function calculerSuggestions(texte) {
     const mots = decouper(texte).map(norm);
     for (let k = Math.min(3, mots.length); k >= 1; k--) {
@@ -1279,14 +1284,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   // Marque supprimés les forfaits EXEMPLE, puis les éléments d'exemple devenus inutiles et jamais retouchés (maj 0). Les appareils
-  // d'avant n'avaient pas marqué leurs éléments de départ : reconnus par leur identifiant.
+  // d'avant n'avaient pas marqué leurs éléments de départ : maj 0 suffit (un élément créé ou importé a toujours une date).
   function marquerExemplesSupprimes() {
     const maintenant = Date.now();
     for (const f of donnees.forfaits.filter((x) => x.exemple && !x.supprime)) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
     const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
-    const depart = new Set(donneesInitiales().elements.map((e) => e.id));
     for (const e of donnees.elements) {
-      const exemple = (e.exemple || depart.has(e.id)) && e.maj === 0;  // retouché (renommé…) : il est à l'utilisateur
+      const exemple = e.maj === 0;  // retouché (renommé…) : il est à l'utilisateur
       if (exemple && !e.supprime && !utilises.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
     }
   }
@@ -1310,7 +1314,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
      LISTES DES ÉLÉMENTS (familles et éléments, modifiables sans toucher au code)
      ===================================================================== */
   function ouvrirListes() {
-    const message = h('p', { class: 'msg-erreur', role: 'alert' });
+    const message = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const conteneur = h('div', {});
     const signaler = (texte) => { message.textContent = texte; };
     // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
@@ -1465,12 +1469,24 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Edge et Chrome sur PC proposent de choisir le dossier, et rouvrent ensuite le même (celui de OneDrive) :
   // plus besoin de déplacer le fichier depuis Téléchargements. Ailleurs (Firefox, Android), téléchargement classique.
-  // Renvoie 'choisi', 'telecharge', ou null si la personne a annulé.
+  // iPhone et iPad : un téléchargement peut ne rien enregistrer (appli d'écran d'accueil), donc menu Partager,
+  // qui propose « Enregistrer dans Fichiers » et OneDrive.
+  // Renvoie 'choisi', 'partage', 'telecharge', ou null si la personne a annulé.
   async function exporterJson() {
     const nom = `forfaits-${horodatage()}.json`;
     const contenu = JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, exporteLe: new Date().toISOString(), ...donnees }, null, 1);
     let resultat = 'telecharge';
-    try {
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const fichierPartage = apple && navigator.canShare ? new File([contenu], nom, { type: 'application/json' }) : null;
+    if (fichierPartage && navigator.canShare({ files: [fichierPartage] })) {
+      try {
+        await navigator.share({ files: [fichierPartage] });
+        resultat = 'partage';
+      } catch (err) {
+        if (err.name === 'AbortError') return null;
+        telecharger(nom, contenu, 'application/json');
+      }
+    } else try {
       if (!window.showSaveFilePicker) throw new Error('indisponible');
       const fichier = await window.showSaveFilePicker({
         id: 'forfaits', suggestedName: nom,
@@ -1523,7 +1539,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
               const enCours = exporterJson(); // d'abord : le choix du dossier doit suivre le clic
               dlg.close();
               const resultat = await enCours;
-              if (resultat) toast(resultat === 'choisi' ? 'Fichier de sauvegarde enregistré' : 'Fichier enregistré dans Téléchargements : range-le dans OneDrive');
+              if (resultat) toast(resultat === 'telecharge' ? 'Fichier enregistré dans Téléchargements : range-le dans OneDrive' : 'Fichier de sauvegarde enregistré');
             },
           }, 'Fichier de sauvegarde (.json)'),
           h('button', {
@@ -1721,7 +1737,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         && existant.ht === ht && existant.ttc === ttc && !existant.exemple === !exemple
         && JSON.stringify(Object.entries(existant.elements).sort()) === JSON.stringify(Object.entries(elements).sort());
       forfaits.push(inchange ? existant : {
-        id: existant?.id ?? nouvelId('fft'), ref, designation, ht, ttc, elements, maj: maintenant, ...(exemple ? { exemple: true } : {}),
+        id: existant?.id ?? nouvelId('fft'), ref, designation, ht, ttc, elements,
+        maj: Math.max(maintenant, (existant?.maj ?? 0) + 1), ...(exemple ? { exemple: true } : {}),
       });
     }
     if (!erreurs.length && !forfaits.length) erreurs.push('Le tableau ne contient aucun forfait.');
@@ -1735,8 +1752,18 @@ textarea.champ { resize: vertical; min-height: 90px; }
     }
   }
 
+  // Fichier OneDrive « en ligne seulement », retiré pendant le choix… : le navigateur ne peut pas le lire.
+  const FICHIER_ILLISIBLE = "Le fichier n'a pas pu être lu. S'il est dans OneDrive, ouvre-le une fois dans OneDrive pour qu'il soit sur l'appareil, puis réessaie.";
+
   async function importerTableau(fichier) {
-    const analyse = analyserTableau(await lireTexte(fichier));
+    let texte;
+    try {
+      texte = await lireTexte(fichier);
+    } catch {
+      await informer('Import impossible', FICHIER_ILLISIBLE);
+      return;
+    }
+    const analyse = analyserTableau(texte);
     if (analyse.erreurs) {
       const max = 12;
       await informer('Import impossible', "Le tableau n'a pas été importé : rien n'a changé. Corrige-le, enregistre-le de nouveau, puis réessaie.",
@@ -1777,9 +1804,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (!fichier) return;
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
     if (/\.csv$/i.test(fichier.name)) { await importerTableau(fichier); return; }
-    let entrant, exporteLe;
+    let entrant, exporteLe, texte;
     try {
-      const obj = JSON.parse(await fichier.text());
+      texte = await fichier.text();
+    } catch {
+      await informer('Import impossible', FICHIER_ILLISIBLE);
+      return;
+    }
+    try {
+      const obj = JSON.parse(texte);
       entrant = valider(obj);
       exporteLe = Date.parse(obj.exporteLe);
     } catch (err) {
@@ -1907,8 +1940,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     ouvrirDialogue({
       titre: "Mode d'emploi",
       corps: h('ol', { class: 'etapes' },
-        h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Elle marche ensuite sans internet."),
-        h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3S », « M1 STD »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
+        h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
+        h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),

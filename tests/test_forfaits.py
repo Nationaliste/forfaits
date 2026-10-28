@@ -657,6 +657,36 @@ def test_remplacer_tout_annonce_les_anciens_prix(appareils, tmp_path):
     dialogue(a).get_by_role("button", name="Annuler").click()
 
 
+def test_import_qui_efface_les_vrais_forfaits_previent(appareils, tmp_path):
+    """Un fichier piégé ou abîmé qui supprime les vrais forfaits : la fenêtre le dit en clair ; les exemples ne comptent pas."""
+    a = appareils().page
+    activer_modif(a)
+    for ref in ("VRAI-1", "VRAI-2", "VRAI-3"):
+        ouvrir_ajout(a)
+        remplir(a, ref, "100", "120")
+        expect(a.locator("#toast")).to_contain_text(f"{ref} ajouté")
+    fichier = exporter_json(a, tmp_path / "a.json")
+
+    b = appareils().page  # appareil neuf : le fichier retire ses exemples, rien d'alarmant
+    b.set_input_files("#fichier-import", str(tmp_path / "a.json"))
+    texte = espaces(dialogue(b).inner_text())
+    assert "Attention" not in texte and "disparaîtr" not in texte
+    dialogue(b).get_by_role("button", name="Annuler").click()
+
+    plus_tard = int(datetime.now().timestamp() * 1000)
+    for f in fichier["forfaits"]:
+        if not f.get("exemple"):
+            f.update(supprime=True, maj=plus_tard)
+    (tmp_path / "piege.json").write_text(json.dumps(fichier), encoding="utf-8")
+    a.set_input_files("#fichier-import", str(tmp_path / "piege.json"))
+    texte = espaces(dialogue(a).inner_text())
+    assert "Attention : « Mettre à jour » supprimerait 3 des 3 forfaits de cet appareil" in texte
+    assert "3 forfaits de cet appareil disparaîtraient (absents du fichier)" in texte
+    dialogue(a).get_by_role("button", name="Annuler").click()
+    chercher(a, "VRAI")
+    assert refs(a) == {"VRAI-1", "VRAI-2", "VRAI-3"}
+
+
 def test_export_csv_lisible_dans_excel(page, tmp_path):
     page.click("#btn-menu")
     page.click("#btn-menu-exporter")

@@ -474,6 +474,8 @@ def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_pa
     importer(neuf, tmp_path / "equipe.json")
     expect(neuf.locator("#resultats")).to_contain_text("VRAI-1")
     expect(neuf.locator("#resultats")).not_to_contain_text("EXEMPLE")
+    neuf.locator("#filtres .filtre", has_text="Taximètre").click()  # les éléments d'exemple sont partis aussi
+    expect(dialogue(neuf).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
 
 
 def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
@@ -1125,6 +1127,7 @@ def test_export_iphone_par_le_menu_partager(appareils):
         navigator.canShare = (d) => !!d.files;
         navigator.share = async (d) => {
             if (window.annuler) throw new DOMException('annulé', 'AbortError');
+            if (window.refuser) throw new DOMException('refusé', 'NotAllowedError');
             window.partage = { nom: d.files[0].name, texte: await d.files[0].text() };
         };
     }""")
@@ -1140,7 +1143,15 @@ def test_export_iphone_par_le_menu_partager(appareils):
     expect(page.locator("dialog[open]")).to_have_count(0)
     expect(page.locator("#rappel")).to_be_visible()  # annulé : le rappel reste
 
-    page.evaluate("window.annuler = false")
+    page.evaluate("window.annuler = false; window.refuser = true")
+    page.click("#btn-rappel-exporter")
+    with page.expect_download():
+        page.click("#btn-export-json")
+    expect(page.locator("#toast")).to_contain_text("Téléchargements")
+    expect(page.locator("#rappel")).to_be_visible()  # partage refusé : téléchargé, sans preuve, le rappel reste
+    telechargements.clear()
+
+    page.evaluate("window.refuser = false")
     page.click("#btn-rappel-exporter")
     page.click("#btn-export-json")
     expect(page.locator("#toast")).to_have_text("Fichier de sauvegarde enregistré")

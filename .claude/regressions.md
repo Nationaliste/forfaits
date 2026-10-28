@@ -27,11 +27,11 @@
 ## 2026-10-28 — iPhone : export compté réussi sans fichier
 - Où : `index.html`, `exporterJson`.
 - Bug : sur iPhone, le téléchargement peut ne rien enregistrer, mais le rappel d'export était remis à zéro.
-- À garder : sur iPhone/iPad, `navigator.share` avec le fichier ; annulé = rappel gardé.
+- À garder : sur iPhone/iPad, `navigator.share` avec le fichier ; annulé ou partage refusé (repli sur le téléchargement) = rappel gardé.
 - Test : `test_export_iphone_par_le_menu_partager`.
 
 ## 2026-10-28 — Exemples d'une autre version jamais retirés par le fichier de l'équipe
 - Où : `index.html`, `importerFichier` (choix « Mettre à jour »).
 - Bug : les exemples ont changé d'identifiants (renommage) ; la fusion propage les suppressions par identifiant, donc un appareil neuf qui importait le fichier de l'équipe gardait ses exemples.
-- À garder : après la fusion, un fichier qui a des exemples supprimés et aucun exemple actif lance `marquerExemplesSupprimes()`.
+- À garder : après la fusion, un fichier qui a des exemples supprimés et aucun exemple actif lance `marquerExemplesSupprimes(true)` (éléments marqués exemple seulement : un élément d’un fichier sans date a aussi maj 0).
 - Test : `test_fichier_sans_exemples_retire_ceux_d_une_autre_version`.

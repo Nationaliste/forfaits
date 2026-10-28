@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-epWcJYsLzB3AtpyJ5AH81EQEEcxhu/VEiRA9mBBvuGI='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-t9aw1w00p0OwhVR4RjA0GydAtHpLZ+tspnmovD50kzA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1285,12 +1285,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Marque supprimés les forfaits EXEMPLE, puis les éléments d'exemple devenus inutiles et jamais retouchés (maj 0). Les appareils
   // d'avant n'avaient pas marqué leurs éléments de départ : maj 0 suffit (un élément créé ou importé a toujours une date).
-  function marquerExemplesSupprimes() {
+  // seulementMarques : retrait automatique, sans le choix de l'utilisateur (un élément d'un fichier sans date a aussi maj 0).
+  function marquerExemplesSupprimes(seulementMarques = false) {
     const maintenant = Date.now();
     for (const f of donnees.forfaits.filter((x) => x.exemple && !x.supprime)) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
     const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
     for (const e of donnees.elements) {
-      const exemple = e.maj === 0;  // retouché (renommé…) : il est à l'utilisateur
+      const exemple = e.maj === 0 && (e.exemple || !seulementMarques);  // retouché (renommé…) : il est à l'utilisateur
       if (exemple && !e.supprime && !utilises.has(e.id)) remplacer(donnees.elements, { ...e, supprime: true, maj: maintenant });
     }
   }
@@ -1856,7 +1857,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       donnees = fusionner(donnees, entrant);
       // Le fichier a retiré ses exemples : ceux de cet appareil partent aussi, même s'ils n'ont pas les mêmes identifiants
       // (exemples d'une autre version de l'outil).
-      if (entrant.forfaits.some((f) => f.exemple && f.supprime) && !entrant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes();
+      if (entrant.forfaits.some((f) => f.exemple && f.supprime) && !entrant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes(true);
     } else {
       donnees = entrant;
       appareil.modifsEnAttente = 0;

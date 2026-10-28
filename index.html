@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-LBFeFiLcpzAZGZIRppZMhsMvxE2LMIvw/3s1mjGX3xc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-epWcJYsLzB3AtpyJ5AH81EQEEcxhu/VEiRA9mBBvuGI='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -877,7 +877,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   // Suggestions d'éléments pendant la frappe, d'après les derniers mots tapés
-  // (« gam » → Zorba 5, Zorbatech X ; « kalpo u » → Kalpo universelle).
+  // (« zor » → Zorba 5, Zorbatech X ; « kalpo u » → Kalpo universelle).
   // Un nom déjà tapé en entier (« 3Q ») filtre déjà : pas de liste qui cacherait l'écran.
   function calculerSuggestions(texte) {
     const mots = decouper(texte).map(norm);
@@ -1484,7 +1484,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
         resultat = 'partage';
       } catch (err) {
         if (err.name === 'AbortError') return null;
+        // Partage refusé : téléchargement sans preuve qu'il enregistre quelque chose, le rappel reste.
         telecharger(nom, contenu, 'application/json');
+        return 'telecharge';
       }
     } else try {
       if (!window.showSaveFilePicker) throw new Error('indisponible');
@@ -1852,6 +1854,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     }
     if (choix === 'fusion') {
       donnees = fusionner(donnees, entrant);
+      // Le fichier a retiré ses exemples : ceux de cet appareil partent aussi, même s'ils n'ont pas les mêmes identifiants
+      // (exemples d'une autre version de l'outil).
+      if (entrant.forfaits.some((f) => f.exemple && f.supprime) && !entrant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes();
     } else {
       donnees = entrant;
       appareil.modifsEnAttente = 0;

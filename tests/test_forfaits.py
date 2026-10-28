@@ -456,6 +456,26 @@ def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appare
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans boîtier"])
 
 
+def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_path):
+    """Les exemples ont changé d'identifiants : le fichier de l'équipe, qui a supprimé les anciens, retire aussi les nouveaux."""
+    equipe = appareils().page
+    activer_modif(equipe)
+    ouvrir_ajout(equipe)
+    remplir(equipe, "VRAI-1", "100", "120")
+    equipe.click("#btn-suppr-exemples")
+    dialogue(equipe).get_by_role("button", name="Supprimer les exemples").click()
+    fichier = exporter_json(equipe, tmp_path / "equipe.json")
+    for f in fichier["forfaits"]:
+        if f.get("exemple"):
+            f["id"] += "-ancien"  # comme les identifiants des exemples d'avant le renommage
+    (tmp_path / "equipe.json").write_text(json.dumps(fichier), encoding="utf-8")
+
+    neuf = appareils().page
+    importer(neuf, tmp_path / "equipe.json")
+    expect(neuf.locator("#resultats")).to_contain_text("VRAI-1")
+    expect(neuf.locator("#resultats")).not_to_contain_text("EXEMPLE")
+
+
 def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
     """Un élément de départ que l'utilisateur a retouché (maj > 0) est à lui : il reste."""
     ancien = exporter_json(page, tmp_path / "ancien.json")

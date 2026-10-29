@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-t9aw1w00p0OwhVR4RjA0GydAtHpLZ+tspnmovD50kzA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-pO0nU3FOUqdlb6sHdEqzQ1rp6L/WMSF5otbFwRPcOfM='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1827,13 +1827,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const bilan = bilanFusion(entrant);
     const nbEntrants = entrant.forfaits.filter((f) => !f.supprime).length;
     const plusAncien = derniereModif(entrant) < derniereModif(donnees);
+    // Un fichier piégé ou abîmé peut effacer les vrais forfaits (les exemples partent normalement) : à dire en clair.
+    const vrais = donnees.forfaits.filter((f) => !f.supprime && !f.exemple);
+    const entrantParId = new Map(entrant.forfaits.map((f) => [f.id, f]));
+    const effaces = vrais.filter((l) => entrantParId.get(l.id)?.supprime && entrantParId.get(l.id).maj > l.maj).length;
+    const absents = vrais.filter((l) => !entrantParId.has(l.id) || entrantParId.get(l.id).supprime).length;
     const choix = await demander({
       titre: 'Importer ce fichier ?',
       message: `${fichier.name} — ${Number.isFinite(exporteLe) ? 'exporté le ' + fmtDateHeure.format(new Date(exporteLe)) + ', ' : ''}${pluriel(nbEntrants, 'forfait')}.`,
       liste: [
         `Mettre à jour (conseillé) : ${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${pluriel(bilan.supprimes, 'supprimé')}. Garde la version la plus récente de chaque forfait.`,
+        effaces >= 3 && effaces * 5 >= vrais.length
+          ? `Attention : « Mettre à jour » supprimerait ${effaces} des ${vrais.length} forfaits de cet appareil. Si ce fichier ne vient pas d'un responsable, annule.` : null,
         resume('Prix qui changent', bilan.prix),
-        'Remplacer tout : cet appareil devient une copie exacte du fichier.',
+        'Remplacer tout : cet appareil devient une copie exacte du fichier.'
+          + (absents ? ` ${pluriel(absents, 'forfait')} de cet appareil ${absents > 1 ? 'disparaîtraient' : 'disparaîtrait'} (absent${absents > 1 ? 's' : ''} du fichier).` : ''),
         // Fichier plus ancien : « Remplacer tout » remettrait d'anciens prix, à dire avant.
         bilan.prixRemplacer.join() === bilan.prix.join() ? null : resume('Prix qui changent avec « Remplacer tout »', bilan.prixRemplacer),
         plusAncien ? 'Attention : ce fichier est plus ancien que tes données. « Mettre à jour » gardera tes versions plus récentes.' : null,

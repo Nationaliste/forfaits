@@ -1634,3 +1634,46 @@ def test_element_renomme_en_son_surnom_et_surnom_pris_refuse_au_formulaire(page)
     page.locator("#f-surnoms").fill("pack nuit, la 4")
     remplir(page)
     expect(dialogue(page).locator(".msg-erreur")).to_contain_text("« la 4 » est déjà le surnom de la petite")
+
+
+def test_trois_surnoms_au_maximum_partout_avec_un_message(page, tmp_path):
+    d = surnom_perso_appareil(page, "3Q", "aa, bb, cc, dd")  # perso : rien n'est ajouté en silence
+    expect(d.locator(".msg-erreur")).to_contain_text("3 surnoms au maximum")
+    expect(d.locator(".surnom-mien")).to_have_count(0)
+    d.get_by_role("button", name="Terminé").click()
+
+    activer_modif(page)
+    modifier(page, "EX-T2-3Q")
+    page.locator("#f-surnoms").fill("aa, bb, cc, dd")
+    remplir(page)
+    expect(dialogue(page).locator(".msg-erreur")).to_contain_text("3 surnoms au maximum")
+    page.locator("#f-surnoms").fill("aa, bb, cc")
+    remplir(page)
+    expect(page.locator("dialog[open]")).to_have_count(0)
+
+    chemin = ecrire_tableau(
+        tmp_path / "t.csv", ["T-1;Pack un;100,00;120,00;T1 DEMO;;3Q;;;ee, ff, gg, hh"], en_tete=EN_TETE_TABLEAU + ";Surnoms"
+    )
+    page.set_input_files("#fichier-import", str(chemin))
+    d = dialogue(page)
+    expect(d).to_contain_text("Import impossible")
+    assert "Ligne 2 (T-1) : 3 surnoms au maximum." in espaces(d.text_content())
+
+
+def test_meme_surnom_sur_deux_forfaits_designe_le_meme_partout(appareils, tmp_path):
+    fichier = exporter_json(appareils().page, tmp_path / "a.json")
+    deux = [f for f in fichier["forfaits"] if f["ref"] in ("EX-T2-3Q", "EX-T1-Z5-3Q")]
+    for f in deux:
+        f["surnoms"] = ["le doublon"]
+    garde = min(deux, key=lambda f: f["id"])["ref"]  # le plus petit identifiant, quel que soit l'ordre du fichier
+    for nom, ordre in (("ab.json", fichier["forfaits"]), ("ba.json", fichier["forfaits"][::-1])):
+        (tmp_path / nom).write_text(json.dumps({**fichier, "forfaits": ordre}), encoding="utf-8")
+        page = appareils().page
+        page.set_input_files("#fichier-import", str(tmp_path / nom))
+        dialogue(page).get_by_role("button", name="Remplacer tout", exact=True).click()  # garde l'ordre du fichier
+        d = dialogue(page)
+        expect(d).to_contain_text("Doublons à corriger")
+        assert f"déjà pris par forfait {garde}" in espaces(d.text_content()), nom
+        d.get_by_role("button", name="Compris").click()
+        chercher(page, "le doublon")
+        assert refs(page) == {garde}, nom

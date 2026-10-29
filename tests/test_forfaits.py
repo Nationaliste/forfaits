@@ -202,6 +202,46 @@ def test_suggestions_zor_puis_etiquette(page):
     assert refs(page) == AVEC_3Q
 
 
+def test_element_souvent_choisi_remonte_dans_les_suggestions(page):
+    for _ in range(2):
+        chercher(page, "zor")
+        page.locator("#suggestions .suggestion", has_text="Zorbatech X").click()
+        page.click("#btn-tout-effacer")
+    page.reload()  # gardé sur l'appareil
+    page.click("#recherche")
+    chercher(page, "zor")
+    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Zorbatech X", "Zorba 5"])
+
+
+def ordre_affiche(page):
+    return page.locator("#resultats .carte-ref").all_text_contents()
+
+
+def test_favori_en_tete_de_liste_puis_retire(page):
+    dernier = sorted(TOUS)[-1]
+    etoile = page.get_by_role("button", name=f"Favori : {dernier}", exact=True)
+    etoile.click()
+    expect(page.locator("#toast")).to_contain_text(f"{dernier} en favori")
+    assert ordre_affiche(page)[0] == dernier
+    page.reload()  # gardé sur l'appareil
+    assert ordre_affiche(page)[0] == dernier
+    expect(etoile).to_have_attribute("aria-pressed", "true")
+    page.select_option("#tri", label="prix croissant")
+    assert ordre_affiche(page)[0] == dernier  # le favori passe avant le tri par prix
+    page.select_option("#tri", index=0)
+    etoile.click()
+    expect(etoile).to_have_attribute("aria-pressed", "false")
+    assert ordre_affiche(page) == sorted(TOUS)
+
+
+def test_reference_souvent_copiee_remonte_sans_bouger_tout_de_suite(page):
+    dernier = sorted(TOUS)[-1]
+    page.get_by_role("button", name=f"Copier la référence {dernier}", exact=True).click()
+    assert ordre_affiche(page) == sorted(TOUS)  # la carte ne bouge pas sous le doigt
+    page.reload()
+    assert ordre_affiche(page)[0] == dernier
+
+
 def test_suggestion_au_clavier(page):
     page.click("#recherche")
     page.keyboard.type("kalpo u")

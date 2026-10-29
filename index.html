@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-pO0nU3FOUqdlb6sHdEqzQ1rp6L/WMSF5otbFwRPcOfM='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-biDAUEoAAFRiFf5JVA8r2J3MuP1W3wO4RlwDd23nCkQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -265,6 +265,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   font-size: 12px; font-weight: 700; letter-spacing: .08em;
 }
 /* Copier : l'action la plus fréquente, collée à la référence qu'elle copie. */
+.carte-boutons { display: flex; gap: 8px; flex-shrink: 0; }
+.btn-favori { padding: 6px 12px; font-size: 22px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait); }
+.btn-favori:hover { border-color: var(--ambre); }
+.btn-favori[aria-pressed="true"] { color: var(--ambre); }
 .btn-copier { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
 .btn-copier:hover { border-color: var(--rouge); }
 .btn-copier.copie { background: var(--vert); border-color: var(--vert); color: var(--blanc); }
@@ -494,6 +498,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_DONNEES = 'forfaits.donnees.v1';   // forfaits + listes, sur cet appareil
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
+  const USAGE_MAX = 300;           // favoris et compteurs d'usage gardés par appareil
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 1;
   const VERSION_OUTIL = '1.0';
@@ -719,10 +724,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre' };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {} };
+    const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
+    const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
     try {
       const lu = JSON.parse(localStorage.getItem(CLE_APPAREIL) || '{}');
       return {
+        favoris: Array.isArray(lu.favoris) ? [...new Set(lu.favoris.filter(estId))].slice(0, USAGE_MAX) : [],
+        usageElements: compteurs(lu.usageElements),
+        usageForfaits: compteurs(lu.usageForfaits),
         modeModif: lu.modeModif === true,
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
@@ -735,6 +746,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
   function sauverAppareil() {
     try { localStorage.setItem(CLE_APPAREIL, JSON.stringify(appareil)); } catch { stockageOk = false; }
+  }
+  // Ce qu'on choisit ou copie souvent remonte en tête (sur cet appareil seulement, jamais exporté).
+  function noterUsage(cle, id) {
+    const compteurs = appareil[cle];
+    compteurs[id] = (compteurs[id] || 0) + 1;
+    const autres = Object.keys(compteurs).filter((x) => x !== id);
+    if (autres.length >= USAGE_MAX) delete compteurs[autres.reduce((a, b) => (compteurs[b] < compteurs[a] ? b : a))]; // oublie le moins utilisé
+    sauverAppareil();
   }
   // À appeler après chaque changement fait sur cet appareil (sert au rappel d'export).
   function noterModif() {
@@ -887,7 +906,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const liste = index.elsActifs.filter((e) => norm(e.nom).includes(morceau) && etatUi.filtres.get(e.familleId) !== e.id);
       if (liste.length) {
         const debut = (e) => Number(norm(e.nom).startsWith(morceau));
-        liste.sort((a, b) => debut(b) - debut(a)); // tri stable : l'ordre des familles est conservé
+        const usage = (e) => appareil.usageElements[e.id] || 0;
+        liste.sort((a, b) => debut(b) - debut(a) || usage(b) - usage(a)); // tri stable : l'ordre des familles est conservé
         return { liste: liste.slice(0, 8), nbMots: k };
       }
     }
@@ -972,10 +992,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const total = index.forfaits.length;
     const resultats = index.forfaits.filter((f) => correspond(f, analyse.contraintes));
     const tape = analyse.mots.join('');
-    // Une référence tapée en entier passe en premier, puis l'ordre choisi (références dans l'ordre alphabétique par défaut).
+    // Une référence tapée en entier passe en premier, puis les favoris, l'ordre choisi, les plus copiés
+    // (références dans l'ordre alphabétique par défaut).
     const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[$('tri').value] || 0;
-    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape)
-      || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || tri.compare(a.ref, b.ref));
+    const favori = (f) => Number(appareil.favoris.includes(f.id));
+    const usage = (f) => appareil.usageForfaits[f.id] || 0;
+    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
+      || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || usage(b) - usage(a) || tri.compare(a.ref, b.ref));
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
 
     $('compte').textContent = total === 0 ? '' : resultats.length === 0 ? 'Aucun forfait ne correspond'
@@ -1009,8 +1032,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('div', { class: 'carte-titre' },
           f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
           h('h2', { class: 'carte-ref' }, f.ref)),
-        h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => copier(f.ref, ev.currentTarget) },
-          h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier'))),
+        h('div', { class: 'carte-boutons' },
+          h('button', {
+            type: 'button', class: 'btn btn-favori', 'aria-pressed': String(appareil.favoris.includes(f.id)),
+            'aria-label': `Favori : ${f.ref}`, title: 'Favori : en tête de liste sur cet appareil', onclick: () => basculerFavori(f),
+          }, appareil.favoris.includes(f.id) ? '★' : '☆'),
+          // Pas de nouveau classement tout de suite : la carte ne doit pas bouger sous le doigt.
+          h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); copier(f.ref, ev.currentTarget); } },
+            h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier')))),
       h('div', { class: 'carte-prix' },
         h('div', { class: 'prix prix-ht' }, h('span', { class: 'prix-montant' }, formatPrix(f.ht)), h('span', { class: 'prix-type' }, 'HT')),
         h('div', { class: 'prix prix-ttc' }, h('span', { class: 'prix-montant' }, formatPrix(f.ttc)), h('span', { class: 'prix-type' }, 'TTC'))),
@@ -1021,6 +1050,17 @@ textarea.champ { resize: vertical; min-height: 90px; }
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
         h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);
+  }
+
+  function basculerFavori(f) {
+    const i = appareil.favoris.indexOf(f.id);
+    if (i < 0 && appareil.favoris.length >= USAGE_MAX) { toast(`${USAGE_MAX} favoris au maximum : retires-en un d'abord`, true); return; }
+    if (i < 0) appareil.favoris.push(f.id); else appareil.favoris.splice(i, 1);
+    sauverAppareil();
+    rendreResultats();
+    // La carte a changé de place : le clavier reste sur son étoile.
+    $('resultats').querySelector(`[data-id="${CSS.escape(f.id)}"] .btn-favori`)?.focus();
+    toast(i < 0 ? `${f.ref} en favori : en tête de liste` : `${f.ref} retiré des favoris`);
   }
 
   function rendreRappel() {
@@ -1059,6 +1099,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const e = etatUi.suggestions[i];
     if (!e) return;
     etatUi.filtres.set(e.familleId, e.id);
+    noterUsage('usageElements', e.id);
     const champ = $('recherche');
     const mots = decouper(champ.value);
     const reste = mots.slice(0, mots.length - etatUi.nbMotsSuggestion).join(' ');
@@ -1136,6 +1177,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         type: 'button', class: 'choix', 'aria-pressed': String(c.valeur === actuel),
         onclick: () => {
           if (c.valeur === undefined) etatUi.filtres.delete(fam.id); else etatUi.filtres.set(fam.id, c.valeur);
+          if (c.valeur !== undefined && c.valeur !== SANS) noterUsage('usageElements', c.valeur);
           dlg.close();
           rendreRecherche();
         },
@@ -1956,6 +1998,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: h('ol', { class: 'etapes' },
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
+        h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),

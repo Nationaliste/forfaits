@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8gFV1iNJi1vWU72EItnTxjUJiWyMC++K9Orq/8w1SVc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YSK97x+cj7SYLVZnSfERtdRrybZDHBAOPlNZAncgR8E='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1972,9 +1972,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
       if (exemple) avecExemples = true;
       // Surnoms : la case remplace ceux de l'équipe (vide = aucun) ; sans la colonne, on garde. Contrôlés après la lecture de tout le tableau.
       const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms'), Infinity) : null;
-      // Comme au formulaire : seul un ajout est refusé (un tableau réexporté avec des surnoms d'avant la limite repasse).
-      const trop = surnomsLus && nouveaux(surnomsLus, existant?.surnoms).length && tropDeSurnoms(surnomsLus);
-      if (trop) { erreurs.push(`${lieu} : ${trop}`); continue; }
       brouillons.push({ existant, ref, designation, ht, ttc, elements, exemple, surnomsLus });
     }
 
@@ -1988,9 +1985,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const surnomsRefuses = [];
     for (const b of brouillons) {
       // Sans la colonne, un forfait actif garde ses surnoms ; un forfait supprimé qui revient repasse le contrôle.
+      // Au-delà de 3, les suivants sont annoncés et laissés de côté : le même tableau donne le même résultat sur tous
+      // les appareils, quels que soient les surnoms qu'ils avaient déjà.
+      let gardes = 0;
       const surnoms = !b.surnomsLus && !b.existant.supprime ? b.existant.surnoms || [] : (b.surnomsLus ?? b.existant.surnoms ?? []).filter((s) => {
         const deja = pris.get(norm(s));
         if (deja) { surnomsRefuses.push(`${b.ref} : « ${s} » (déjà pris par ${deja})`); return false; }
+        if (gardes === SURNOMS_MAX) { surnomsRefuses.push(`${b.ref} : « ${s} » (${SURNOMS_MAX} surnoms au maximum)`); return false; }
+        gardes += 1;
         pris.set(norm(s), `forfait ${b.ref}`);
         return true;
       });
@@ -2047,7 +2049,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
-        resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose)", surnomsRefuses),
+        resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose, 3 au maximum)", surnomsRefuses),
       ].filter(Boolean),
       boutons: [
         { texte: 'Importer', valeur: 'fusion', classe: exemplesRestants ? 'btn-bord' : 'btn-rouge' },

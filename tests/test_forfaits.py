@@ -1654,10 +1654,14 @@ def test_trois_surnoms_au_maximum_partout_avec_un_message(page, tmp_path):
     chemin = ecrire_tableau(
         tmp_path / "t.csv", ["T-1;Pack un;100,00;120,00;T1 DEMO;;3Q;;;ee, ff, gg, hh"], en_tete=EN_TETE_TABLEAU + ";Surnoms"
     )
-    page.set_input_files("#fichier-import", str(chemin))
-    d = dialogue(page)
-    expect(d).to_contain_text("Import impossible")
-    assert "Ligne 2 (T-1) : 3 surnoms au maximum." in espaces(d.text_content())
+    d = ouvrir_tableau(page, chemin)  # tableau : les 3 premiers sont gardés, le reste est annoncé
+    assert "T-1 : « hh » (3 surnoms au maximum)" in espaces(d.text_content())
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    chercher(page, "gg")
+    assert refs(page) == {"T-1"}
+    chercher(page, "hh")
+    assert refs(page) == set()
 
 
 def test_meme_surnom_sur_deux_forfaits_designe_le_meme_partout(appareils, tmp_path):
@@ -1716,3 +1720,17 @@ def test_plus_de_trois_surnoms_d_avant_la_limite_ne_bloquent_rien(page, tmp_path
     champ.fill("qa, qb, qc, qd")
     champ.press("Tab")
     expect(champ).to_have_value("qa, qb, qc, qd")
+
+    # Le tableau garde 3 surnoms, même sur l'appareil qui en avait déjà 5 : même résultat partout.
+    dialogue(page).get_by_role("button", name="Terminé").click()
+    chemin = ecrire_tableau(
+        tmp_path / "t.csv",
+        ["EX-T2-3Q;Changée;100,00;120,00;fa, fb, fc, fd"],
+        en_tete="Référence;Désignation;Prix HT;Prix TTC;Surnoms",
+    )
+    d = ouvrir_tableau(page, chemin)
+    assert "EX-T2-3Q : « fd » (3 surnoms au maximum)" in espaces(d.text_content())
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    chercher(page, "fd")
+    assert refs(page) == set()

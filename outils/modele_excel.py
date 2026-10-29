@@ -39,7 +39,7 @@ FAMILLES: dict[str, list[str]] = {
     "Boîtier": [],
     "Installation": [],
 }
-COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC"]
+COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC", "Surnoms"]
 PAS_DE_DONNEES = "/"  # en tête de chaque liste : l'outil le lit comme une case vide
 
 ROUGE = "E30613"
@@ -56,7 +56,9 @@ MODE_D_EMPLOI = [
         "Onglet « Forfaits » : référence, désignation (le contenu), prix HT et prix TTC tels qu'écrits sur le tarif. "
         "Puis choisis chaque élément dans la liste déroulante. Si le forfait n'en a pas : « / » (pas de données) ou case vide, c'est pareil. "
         "Un forfait sans taximètre (dash cam, lumineux…) n'a besoin que de la référence, de la désignation et des prix. "
-        "Boîtier et Installation sont à droite parce qu'ils servent rarement.",
+        "Boîtier et Installation sont à droite parce qu'ils servent rarement. "
+        "Surnoms (facultatif) : les noms que les techniciens donnent au forfait, séparés par des virgules (« le gros pack, pack nuit ») ; "
+        "la recherche les reconnaît sur tous les postes. Un surnom ne désigne qu'une seule chose : un surnom déjà pris est ignoré (annoncé à l'import).",
     ),
     (
         "3. Les couleurs aident",
@@ -124,7 +126,7 @@ def fabriquer() -> Workbook:
         "Mode d'emploi : onglet « Mode d'emploi ». Ne change pas les titres de cette ligne.", "Forfaits"
     )
     forfaits.freeze_panes = "A2"
-    largeurs = {"A": 22, "B": 46, "C": 13, "D": 13}
+    largeurs = {"A": 22, "B": 46, "C": 13, "D": 13, "E": 30}
     for col in range(1, len(titres) + 1):
         lettre = get_column_letter(col)
         forfaits.column_dimensions[lettre].width = largeurs.get(lettre, 24)

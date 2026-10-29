@@ -51,9 +51,9 @@ def test_modele_a_les_titres_de_l_export_csv_de_l_outil(modele):
     assert modele.sheetnames == ["Forfaits", "Listes", "Mode d'emploi"]
     assert modele.active.title == "Forfaits"  # Excel n'enregistre en CSV que l'onglet actif
     titres = [c.value for c in modele["Forfaits"][1]]
-    assert titres[:4] == ["Référence", "Désignation", "Prix HT", "Prix TTC"]
+    assert titres[:5] == ["Référence", "Désignation", "Prix HT", "Prix TTC", "Surnoms"]
     # Mêmes familles que l'outil ; l'ordre est libre (l'import lit les colonnes par leur titre).
-    assert sorted(titres[4:]) == sorted(nom for _, nom in familles_de_l_outil())
+    assert sorted(titres[5:]) == sorted(nom for _, nom in familles_de_l_outil())
     assert titres[-2:] == ["Boîtier", "Installation"]  # les deux qui servent rarement, à droite
 
 
@@ -63,7 +63,7 @@ def test_modele_a_les_listes_de_depart_de_l_outil(modele):
         attendu[famille].append(nom)
     attendu_par_nom = {nom: attendu[identifiant] for identifiant, nom in familles_de_l_outil()}
     listes = modele["Listes"]
-    titres_forfaits = [c.value for c in modele["Forfaits"][1]][4:]
+    titres_forfaits = [c.value for c in modele["Forfaits"][1]][5:]
     for colonne, nom in enumerate(titres_forfaits, start=1):
         assert listes.cell(row=1, column=colonne).value == nom  # même ordre que les colonnes de l'onglet Forfaits
         valeurs = [c.value for c in listes[openpyxl.utils.get_column_letter(colonne)][1:] if c.value]
@@ -78,6 +78,6 @@ def test_modele_est_vide_et_controle_les_saisies(modele):
     assert len(validations) == len(familles_de_l_outil())
     assert all(v.type == "list" and "Listes!" in v.formula1 and v.showErrorMessage for v in validations)
     assert {v.errorStyle for v in validations} == {"warning"}  # un élément nouveau se tape : l'outil le crée à l'import
-    assert {str(v.sqref).split(":")[0] for v in validations} == {"E2", "F2", "G2", "H2", "I2"}
+    assert {str(v.sqref).split(":")[0] for v in validations} == {"F2", "G2", "H2", "I2", "J2"}
     regles = sum(len(plage.rules) for plage in forfaits.conditional_formatting)
     assert regles == 5  # cases vides (référence, HT, TTC), référence en double, TTC différent de HT + 20 %

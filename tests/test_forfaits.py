@@ -739,11 +739,11 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
     lignes = brut.decode("utf-8-sig").split("\r\n")
     assert (
         lignes[0]
-        == "Référence;Désignation;Prix HT;Prix TTC;Taximètre;Boîtier;Imprimante;Lumineux;Installation;Exemple;Modifié le"
+        == "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Boîtier;Imprimante;Lumineux;Installation;Exemple;Modifié le"
     )
     assert len(lignes) == 12
     ligne = next(x for x in lignes if x.startswith("EX-T1-Z5-3Q;"))
-    assert ";1234,50;1481,40;T1 DEMO;Zorba 5;3Q;;;oui;" in ligne
+    assert ";1234,50;1481,40;;T1 DEMO;Zorba 5;3Q;;;oui;" in ligne
 
 
 # ---------------------------------------------------------------- tableau Excel (.csv)
@@ -1473,3 +1473,164 @@ def test_aucune_vraie_donnee_dans_le_depot():
     """Le dépôt est public : les exports (vrais prix) sont exclus de git."""
     regles = (RACINE / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert {"forfaits-*.json", "*.csv", "prive/"} <= set(regles)
+
+
+# ---------------------------------------------------------------- surnoms
+
+
+def surnom_perso_appareil(page, appareil, surnom):
+    page.click("#btn-menu")
+    page.click("#btn-mes-surnoms")
+    d = dialogue(page)
+    d.locator("#surnoms-element").select_option(label=appareil)
+    d.get_by_label(f"Nouveau surnom pour {appareil}").fill(surnom)
+    d.get_by_role("button", name="Ajouter", exact=True).click()
+    return d
+
+
+def test_surnom_perso_d_un_appareil_retrouve_ses_forfaits(page, tmp_path):
+    d = surnom_perso_appareil(page, "3Q", "la petite")
+    expect(d.locator(".surnom-mien")).to_have_text(["la petite"])
+    d.get_by_role("button", name="Terminé").click()
+    chercher(page, "la petite")  # tapé en entier : filtre comme « 3Q »
+    assert refs(page) == AVEC_3Q
+    page.reload()  # gardé sur l'appareil
+    page.click("#recherche")
+    chercher(page, "la pe")  # début du surnom : filtre comme « zor », et proposé avec le vrai nom
+    assert refs(page) == AVEC_3Q
+    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["3Q"])
+    expect(page.locator("#suggestions .suggestion-surnom")).to_have_text(["« la petite »"])
+    page.locator("#suggestions .suggestion").first.click()
+    expect(page.locator("#etiquettes")).to_contain_text("Imprimante : 3Q")
+    assert "la petite" not in json.dumps(exporter_json(page, tmp_path / "a.json"))  # perso : jamais exporté
+
+
+def test_surnom_deja_pris_est_refuse(page):
+    d = surnom_perso_appareil(page, "3Q", "la petite")
+    d.locator("#surnoms-element").select_option(label="4Q")
+    for surnom, message in (
+        ("La  Petite", "« La Petite » est déjà ton surnom perso de 3Q"),  # majuscules et espaces ignorés
+        ("zorba 5", "« zorba 5 » est déjà le nom de Zorba 5"),
+        ("4q", "« 4q » est déjà son nom"),
+        ("imprimante", "« imprimante » est déjà le nom de la famille Imprimante"),
+        ("x", "au moins 2 lettres ou chiffres"),
+    ):
+        d.get_by_label("Nouveau surnom pour 4Q").fill(surnom)
+        d.get_by_role("button", name="Ajouter", exact=True).click()
+        expect(d.locator(".msg-erreur")).to_contain_text(message)
+    expect(d.locator(".surnom-mien")).to_have_count(0)
+
+
+def test_surnom_perso_d_un_forfait_depuis_sa_carte(page):
+    page.get_by_role("button", name="Surnoms de EX-T2-3Q", exact=True).click()
+    d = dialogue(page)
+    d.get_by_label("Nouveau surnom pour forfait EX-T2-3Q").fill("pack nuit, le basique")
+    d.get_by_role("button", name="Ajouter", exact=True).click()
+    expect(d.locator(".surnom-mien")).to_have_text(["pack nuit", "le basique"])
+    d.get_by_role("button", name="Terminé").click()
+    chercher(page, "basiq")
+    assert refs(page) == {"EX-T2-3Q"}
+    expect(page.locator(".carte .carte-surnoms")).to_have_text("Aussi appelé : pack nuit, le basique")
+
+
+def test_surnoms_d_equipe_partages_et_l_equipe_gagne(appareils, tmp_path):
+    b = appareils().page  # un employé a pris « la petite » pour 3Q, sur son poste
+    surnom_perso_appareil(b, "3Q", "la petite").get_by_role("button", name="Terminé").click()
+
+    a = appareils().page  # le responsable donne « la petite » à 4Q pour toute l'équipe
+    activer_modif(a)
+    a.click("#btn-menu")
+    a.click("#btn-listes")
+    champ = dialogue(a).get_by_label("Surnoms de l'élément 4Q")
+    champ.fill("la petite, la 4")
+    champ.press("Tab")
+    dialogue(a).get_by_role("button", name="Terminé").click()
+    modifier(a, "EX-T2-3Q")
+    a.locator("#f-surnoms").fill("pack nuit")
+    remplir(a)
+    fichier = exporter_json(a, tmp_path / "equipe.json")
+    assert fichier["version"] == 2
+    assert next(e for e in fichier["elements"] if e["nom"] == "4Q")["surnoms"] == ["la petite", "la 4"]
+    assert next(f for f in fichier["forfaits"] if f["ref"] == "EX-T2-3Q")["surnoms"] == ["pack nuit"]
+
+    importer(b, tmp_path / "equipe.json")
+    chercher(b, "la petite")
+    assert refs(b) == AVEC_4Q  # l'équipe gagne
+    chercher(b, "pack nuit")
+    assert refs(b) == {"EX-T2-3Q"}
+    b.click("#btn-menu")
+    b.click("#btn-mes-surnoms")
+    dialogue(b).locator("#surnoms-element").select_option(label="3Q")
+    expect(dialogue(b).locator(".surnom-conflit")).to_have_text("déjà pris : ignoré")
+
+
+def test_tableau_excel_avec_surnoms(page, tmp_path):
+    en_tete = EN_TETE_TABLEAU + ";Surnoms"
+    lignes = [
+        "T-1;Pack un;100,00;120,00;T1 DEMO;;3Q;;;pack nuit, le gros",
+        "T-2;Pack deux;200,00;240,00;T2;;4Q;;;le gros, 3Q, la deux",
+    ]
+    d = ouvrir_tableau(page, ecrire_tableau(tmp_path / "t.csv", lignes, en_tete=en_tete))
+    texte = espaces(d.inner_text())
+    assert "T-2 : « le gros » (déjà pris par forfait T-1)" in texte
+    assert "T-2 : « 3Q » (déjà pris par 3Q)" in texte
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    chercher(page, "le gros")
+    assert refs(page) == {"T-1"}
+    chercher(page, "la deux")
+    assert refs(page) == {"T-2"}
+
+    # Case vide : les surnoms d'équipe du forfait sont effacés ; sans la colonne, rien ne change.
+    lignes = ["T-1;Pack un;100,00;120,00;T1 DEMO;;3Q;;;", "T-2;Pack deux;200,00;240,00;T2;;4Q;;;la deux"]
+    ouvrir_tableau(page, ecrire_tableau(tmp_path / "t2.csv", lignes, en_tete=en_tete)).get_by_role(
+        "button", name="Importer", exact=True
+    ).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    chercher(page, "pack nuit")
+    assert refs(page) == set()
+    ouvrir_tableau(page, ecrire_tableau(tmp_path / "t3.csv", ["T-2;Pack deux;200,00;240,00;T2;;4Q;;"])).get_by_role(
+        "button", name="Importer", exact=True
+    ).click()
+    expect(page.locator("#toast")).to_have_text("Tableau importé")
+    chercher(page, "la deux")
+    assert refs(page) == {"T-2"}
+
+
+def test_fichier_ancien_format_sans_surnoms_reste_lisible(page, tmp_path):
+    fichier = exporter_json(page, tmp_path / "a.json")
+    fichier["version"] = 1
+    (tmp_path / "v1.json").write_text(json.dumps(fichier), encoding="utf-8")
+    importer(page, tmp_path / "v1.json")
+    assert refs(page) == TOUS
+
+
+def test_element_renomme_en_son_surnom_et_surnom_pris_refuse_au_formulaire(page):
+    activer_modif(page)
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    d = dialogue(page)
+    champ = d.get_by_label("Surnoms de l'élément 4Q")
+    champ.fill("la petite, la 4")
+    champ.press("Tab")
+    nom = d.get_by_label("Nom de l'élément 4Q")
+    nom.fill("la petite")  # son propre surnom devient son nom
+    nom.press("Tab")
+    d.get_by_role("button", name="Terminé").click()  # la liste ne se redessine pas au renommage : on la rouvre
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    d = dialogue(page)
+    expect(d.get_by_label("Surnoms de l'élément la petite")).to_have_value("la 4")
+    d.get_by_role("button", name="Terminé").click()
+    chercher(page, "la petite")
+    assert refs(page) == AVEC_4Q
+    chercher(page, "")
+
+    # Formulaire : ses surnoms déjà en place passent, un surnom pris par un élément est refusé.
+    modifier(page, "EX-T2-3Q")
+    page.locator("#f-surnoms").fill("pack nuit")
+    remplir(page)
+    modifier(page, "EX-T2-3Q")
+    page.locator("#f-surnoms").fill("pack nuit, la 4")
+    remplir(page)
+    expect(dialogue(page).locator(".msg-erreur")).to_contain_text("« la 4 » est déjà le surnom de la petite")

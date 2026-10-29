@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-biDAUEoAAFRiFf5JVA8r2J3MuP1W3wO4RlwDd23nCkQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-ANR5AwvyCLbKtq92WGqf+8x2ounm00iexfyquPcdbdU='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -296,6 +296,13 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .el-nom { font-weight: 700; }
 .carte-designation { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte-doux); }
 .carte-maj { margin: 0; font-size: 13px; color: var(--texte-doux); }
+.carte-surnoms { margin: 8px 0 0; font-size: 14px; color: var(--texte-doux); font-style: italic; overflow-wrap: anywhere; }
+.carte-pied { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.suggestion-surnom { margin-left: 8px; color: var(--texte-doux); font-style: italic; }
+.surnom-mien { flex: 1; overflow-wrap: anywhere; }
+.surnom-conflit { font-size: 13px; color: var(--ambre); }
+.titre-recap { margin: 18px 0 6px; font-size: 15px; }
+.recap-surnoms { margin: 0; padding-left: 18px; color: var(--texte-doux); }
 .carte-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 2px; }
 .carte-actions .btn { flex: 1 1 auto; }
 
@@ -402,7 +409,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .famille-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .famille-tete .champ { flex: 1 1 160px; width: auto; font-weight: 700; }
 .liste-elements { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.liste-elements li { display: flex; gap: 8px; }
+.liste-elements li { display: flex; gap: 8px; align-items: center; }
+.element-ligne { flex-wrap: wrap; }
+.element-ligne > .champ:first-child { flex: 1; width: auto; min-width: 0; }
+.element-ligne .champ-surnoms { order: 3; flex-basis: 100%; font-size: 16px; } /* sous le nom ; 16 px : pas de zoom sur iPhone */
 .ajout-ligne { display: flex; gap: 8px; }
 .ajout-ligne .champ { flex: 1; width: auto; min-width: 0; }
 .aide-texte { margin: 0 0 14px; color: var(--texte-doux); }
@@ -500,7 +510,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
   const USAGE_MAX = 300;           // favoris et compteurs d'usage gardés par appareil
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
-  const VERSION_FORMAT = 1;
+  const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
   const VERSION_OUTIL = '1.0';
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
   const TAUX_TVA = `${Math.round(TVA * 100)} %`;
@@ -551,6 +561,18 @@ textarea.champ { resize: vertical; min-height: 90px; }
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]/g, '');
   }
+
+  // Surnoms donnés par les techniciens : « le gros, pack nuit » → ['le gros', 'pack nuit'].
+  // Au moins 2 lettres ou chiffres, 40 caractères, 10 par élément ou forfait, sans doublon.
+  const SURNOMS_MAX = 10;
+  function lireSurnoms(v) {
+    const vus = new Set();
+    return (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [])
+      .filter((s) => typeof s === 'string').map((s) => s.trim().replace(/\s+/g, ' ').slice(0, 40))
+      .filter((s) => { const cle = norm(s); if (cle.length < 2 || vus.has(cle)) return false; vus.add(cle); return true; })
+      .slice(0, SURNOMS_MAX);
+  }
+  const avecSurnoms = (liste) => (liste.length ? { surnoms: liste } : {});
 
   // Deux références identiques (majuscules et espaces autour ignorés).
   function memeRef(a, b) {
@@ -674,7 +696,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
     const elements = obj.elements.map((x) => {
       objet(x);
-      const e = { id: id(x.id), familleId: texte(x.familleId, 80), nom: texte(x.nom, 60), maj: date(x.maj), ...marques(x) };
+      const e = { id: id(x.id), familleId: texte(x.familleId, 80), nom: texte(x.nom, 60), maj: date(x.maj), ...marques(x), ...avecSurnoms(lireSurnoms(x.surnoms)) };
       if (!e.supprime && (!e.nom || !motifId.test(e.familleId))) echec('Fichier abîmé : élément invalide.');
       return e;
     });
@@ -689,7 +711,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= 999999999 ? v : null);
       const f = {
         id: id(x.id), ref: texte(x.ref, 80), designation: texte(x.designation, 2000),
-        ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x),
+        ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x), ...avecSurnoms(lireSurnoms(x.surnoms)),
       };
       if (!f.supprime && (!f.ref || prix(x.ht) === null || prix(x.ttc) === null)) echec(`Fichier abîmé : forfait « ${f.ref || '?'} » invalide.`);
       return f;
@@ -724,7 +746,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {} };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {} };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -734,6 +756,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
         favoris: Array.isArray(lu.favoris) ? [...new Set(lu.favoris.filter(estId))].slice(0, USAGE_MAX) : [],
         usageElements: compteurs(lu.usageElements),
         usageForfaits: compteurs(lu.usageForfaits),
+        // Surnoms perso : identifiant d'élément ou de forfait → surnoms (jamais exportés).
+        surnoms: Object.fromEntries(lu.surnoms && typeof lu.surnoms === 'object' && !Array.isArray(lu.surnoms)
+          ? Object.entries(lu.surnoms).filter(([id]) => estId(id)).map(([id, v]) => [id, lireSurnoms(v)]).filter(([, v]) => v.length).slice(0, USAGE_MAX) : []),
         modeModif: lu.modeModif === true,
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
@@ -827,6 +852,22 @@ textarea.champ { resize: vertical; min-height: 90px; }
       parNom.get(cle).push(e);
     }
     const forfaits = donnees.forfaits.filter((f) => !f.supprime);
+    const forfaitParId = new Map(forfaits.map((f) => [f.id, f]));
+    // Surnoms : ceux de l'équipe d'abord, puis ceux de cet appareil. Un surnom ne désigne qu'une seule chose :
+    // le premier arrivé le garde, un doublon (vrai nom d'un élément, ou déjà pris) est ignoré par la recherche.
+    const surnomPris = new Map(); // surnom « à plat » → { id, equipe }
+    const surnomsDe = new Map();  // identifiant → surnoms retenus, équipe puis perso
+    const retenir = (id, s, equipe) => {
+      const cle = norm(s);
+      if (parNom.has(cle) || surnomPris.has(cle)) return;
+      surnomPris.set(cle, { id, equipe });
+      surnomsDe.set(id, [...(surnomsDe.get(id) || []), s]);
+    };
+    for (const x of [...elsActifs, ...forfaits]) for (const s of x.surnoms || []) retenir(x.id, s, true);
+    for (const [id, liste] of Object.entries(appareil.surnoms)) {
+      if (elParId.has(id) || forfaitParId.has(id)) for (const s of liste) retenir(id, s, false);
+    }
+    for (const e of elsActifs) for (const s of surnomsDe.get(e.id) || []) parNom.set(norm(s), [e]);
     const elementsForfait = new Map();
     const champs = new Map();
     for (const f of forfaits) {
@@ -834,11 +875,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
       elementsForfait.set(f.id, els);
       champs.set(f.id, [
         norm(f.ref), norm(f.designation),
+        ...(surnomsDe.get(f.id) || []).map(norm),
         ...els.map((e) => norm(e.nom)),
+        ...els.flatMap((e) => (surnomsDe.get(e.id) || []).map(norm)), // « la pe » trouve comme « zor »
         ...els.map((e) => norm(famParId.get(e.familleId).nom)),
       ]);
     }
-    return { fams, famParId, elsActifs, elParId, parNom, forfaits, elementsForfait, champs };
+    return { fams, famParId, elsActifs, elParId, parNom, forfaits, forfaitParId, elementsForfait, champs, surnomPris, surnomsDe };
   }
 
   const elementsDe = (familleId) => index.elsActifs.filter((e) => e.familleId === familleId);
@@ -903,15 +946,23 @@ textarea.champ { resize: vertical; min-height: 90px; }
     for (let k = Math.min(3, mots.length); k >= 1; k--) {
       const morceau = mots.slice(-k).join('');
       if (index.parNom.has(morceau)) break;
-      const liste = index.elsActifs.filter((e) => norm(e.nom).includes(morceau) && etatUi.filtres.get(e.familleId) !== e.id);
+      // Trouvé par un surnom seulement : on le montre à côté du vrai nom (le technicien apprend le nom).
+      const via = new Map();
+      const trouve = (e) => {
+        if (norm(e.nom).includes(morceau)) return true;
+        const s = (index.surnomsDe.get(e.id) || []).find((x) => norm(x).includes(morceau));
+        if (s) via.set(e.id, s);
+        return !!s;
+      };
+      const liste = index.elsActifs.filter((e) => etatUi.filtres.get(e.familleId) !== e.id && trouve(e));
       if (liste.length) {
-        const debut = (e) => Number(norm(e.nom).startsWith(morceau));
+        const debut = (e) => Number(norm(via.get(e.id) ?? e.nom).startsWith(morceau));
         const usage = (e) => appareil.usageElements[e.id] || 0;
         liste.sort((a, b) => debut(b) - debut(a) || usage(b) - usage(a)); // tri stable : l'ordre des familles est conservé
-        return { liste: liste.slice(0, 8), nbMots: k };
+        return { liste: liste.slice(0, 8), nbMots: k, via };
       }
     }
-    return { liste: [], nbMots: 0 };
+    return { liste: [], nbMots: 0, via: new Map() };
   }
 
   /* =====================================================================
@@ -1046,10 +1097,103 @@ textarea.champ { resize: vertical; min-height: 90px; }
       elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
         h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
       f.designation ? h('p', { class: 'carte-designation' }, f.designation) : null,
-      f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null, // 0 : exemple jamais touché
+      index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
+      h('div', { class: 'carte-pied' },
+        f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : h('span', {}), // 0 : exemple jamais touché
+        h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Surnom')),
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
         h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);
+  }
+
+  /* ---------- Surnoms ---------- */
+  const nomDe = (id) => index.elParId.get(id)?.nom ?? `forfait ${index.forfaitParId.get(id)?.ref ?? '?'}`;
+  // Pourquoi ce surnom ne peut pas aller à id (null s'il le peut). Un surnom désigne une seule chose.
+  // equipe : un surnom perso ne bloque pas l'équipe (il passe « en conflit » et la recherche l'ignore).
+  function surnomRefuse(s, id, equipe = false) {
+    const cle = norm(s);
+    if (cle.length < 2) return `« ${s} » : un surnom fait au moins 2 lettres ou chiffres.`;
+    const el = index.elsActifs.find((e) => norm(e.nom) === cle);
+    if (el) return el.id === id ? `« ${s} » est déjà son nom.` : `« ${s} » est déjà le nom de ${el.nom}.`;
+    const pris = index.surnomPris.get(cle);
+    if (!pris || pris.id === id || (equipe && !pris.equipe)) return null;
+    return pris.equipe ? `« ${s} » est déjà le surnom de ${nomDe(pris.id)}.`
+      : `« ${s} » est déjà ton surnom perso de ${nomDe(pris.id)} : retire-le d'abord (Menu → Mes surnoms).`;
+  }
+
+  // Surnoms perso d'un élément ou d'un forfait : tout le monde peut en donner, ils restent sur cet appareil.
+  function editeurSurnoms(id, redessiner) {
+    const equipe = (index.elParId.get(id) ?? index.forfaitParId.get(id))?.surnoms || [];
+    const miens = appareil.surnoms[id] || [];
+    const message = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
+    const champ = h('input', { class: 'champ', maxlength: 200, placeholder: 'Nouveau surnom', 'aria-label': `Nouveau surnom pour ${nomDe(id)}` });
+    const enregistrer = (liste) => {
+      if (liste.length) appareil.surnoms[id] = liste; else delete appareil.surnoms[id];
+      sauverAppareil();
+      index = construireIndex();
+      redessiner();
+    };
+    const ajouter = () => {
+      if (!champ.value.trim()) return;
+      const lus = lireSurnoms(champ.value);
+      const nouveaux = lus.filter((s) => !miens.some((x) => norm(x) === norm(s)));
+      const refus = nouveaux.map((s) => (equipe.some((x) => norm(x) === norm(s)) ? `« ${s} » est déjà un surnom de l'équipe.` : surnomRefuse(s, id))).filter(Boolean);
+      if (!lus.length) { message.textContent = 'Un surnom fait au moins 2 lettres ou chiffres.'; return; }
+      if (refus.length || !nouveaux.length) { message.textContent = refus[0] || 'Ce surnom est déjà dans ta liste.'; return; }
+      if (miens.length + nouveaux.length > SURNOMS_MAX) { message.textContent = `${SURNOMS_MAX} surnoms au maximum.`; return; }
+      enregistrer([...miens, ...nouveaux]);
+    };
+    champ.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ajouter(); } });
+    return h('div', { class: 'surnoms' },
+      h('p', { class: 'aide-texte' }, equipe.length ? `Surnoms de l'équipe : ${equipe.join(', ')}.` : "Pas encore de surnom d'équipe."),
+      h('ul', { class: 'liste-elements' }, miens.map((s) => {
+        // Pris ensuite par l'équipe pour autre chose (ou devenu le nom d'un élément) : l'équipe gagne.
+        const pris = index.surnomPris.get(norm(s));
+        return h('li', {}, h('span', { class: 'surnom-mien' }, s),
+          pris?.id === id ? null : h('span', { class: 'surnom-conflit' }, 'déjà pris : ignoré'),
+          h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Retirer le surnom ${s}`, onclick: () => enregistrer(miens.filter((x) => x !== s)) }, '✕'));
+      })),
+      message,
+      h('div', { class: 'ajout-ligne' }, champ, h('button', { type: 'button', class: 'btn btn-blanc', onclick: ajouter }, 'Ajouter')));
+  }
+
+  function ouvrirSurnoms(id) {
+    const zone = h('div', {});
+    const redessiner = () => zone.replaceChildren(editeurSurnoms(id, redessiner));
+    const dlg = ouvrirDialogue({
+      titre: `Surnoms : ${nomDe(id)}`,
+      corps: [h('p', { class: 'aide-texte' }, 'Tes surnoms restent sur cet appareil. Sépare-les par des virgules.'), zone],
+      pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
+    });
+    dlg.addEventListener('close', rafraichir);
+    redessiner();
+    zone.querySelector('input')?.focus();
+  }
+
+  // Menu → Mes surnoms : surnoms perso des appareils (taximètres, boîtiers…), et la liste de tous les miens.
+  function ouvrirMesSurnoms() {
+    const choix = h('select', { class: 'champ', id: 'surnoms-element', 'aria-label': 'Appareil' },
+      h('option', { value: '' }, '— Choisis un appareil —'),
+      index.fams.map((fam) => h('optgroup', { label: fam.nom }, elementsDe(fam.id).map((e) => h('option', { value: e.id }, e.nom)))));
+    const zone = h('div', {});
+    const recap = h('ul', { class: 'recap-surnoms' });
+    const redessiner = () => {
+      zone.replaceChildren(choix.value ? editeurSurnoms(choix.value, redessiner) : '');
+      const lignes = Object.entries(appareil.surnoms).filter(([id]) => index.elParId.has(id) || index.forfaitParId.has(id));
+      recap.replaceChildren(...(lignes.length ? lignes.map(([id, l]) => h('li', {}, h('strong', {}, nomDe(id)), ` : ${l.join(', ')}`))
+        : [h('li', {}, "Aucun surnom perso pour l'instant.")]));
+    };
+    choix.addEventListener('change', redessiner);
+    const dlg = ouvrirDialogue({
+      titre: 'Mes surnoms',
+      corps: [
+        h('p', { class: 'aide-texte' }, "Donne tes propres noms aux appareils : la recherche les reconnaît. Ils restent sur cet appareil. Pour un forfait : « + Surnom » en bas de sa carte."),
+        choix, zone, h('h3', { class: 'titre-recap' }, 'Tous mes surnoms'), recap,
+      ],
+      pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
+    });
+    dlg.addEventListener('close', rafraichir);
+    redessiner();
   }
 
   function basculerFavori(f) {
@@ -1073,7 +1217,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function majSuggestions() {
     const champ = $('recherche');
     const liste = $('suggestions');
-    const { liste: suggestions, nbMots } = document.activeElement === champ ? calculerSuggestions(champ.value) : { liste: [], nbMots: 0 };
+    const { liste: suggestions, nbMots, via } = document.activeElement === champ ? calculerSuggestions(champ.value) : { liste: [], nbMots: 0, via: new Map() };
     etatUi.suggestions = suggestions;
     etatUi.nbMotsSuggestion = nbMots;
     etatUi.suggestionActive = -1;
@@ -1081,7 +1225,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       id: 'sugg-' + i, role: 'option', class: 'suggestion', 'aria-selected': 'false',
       onpointerdown: (ev) => ev.preventDefault(), // garde le clavier ouvert le temps du clic
       onclick: () => choisirSuggestion(i, false),
-    }, h('span', { class: 'suggestion-nom' }, e.nom), h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom))));
+    }, h('span', { class: 'suggestion-nom' }, e.nom), via.has(e.id) ? h('span', { class: 'suggestion-surnom' }, `« ${via.get(e.id)} »`) : null, h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom))));
     liste.hidden = suggestions.length === 0;
     champ.setAttribute('aria-expanded', String(suggestions.length > 0));
     champ.removeAttribute('aria-activedescendant');
@@ -1220,6 +1364,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const champRef = h('input', { id: 'f-ref', class: 'champ', value: existant?.ref ?? '', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
     const msgRef = h('p', { class: 'msg-champ', 'aria-live': 'polite' });
     const champDes = h('textarea', { id: 'f-des', class: 'champ', rows: 3, maxlength: 2000 }, existant?.designation ?? '');
+    const champSurnoms = h('input', { id: 'f-surnoms', class: 'champ', maxlength: 600, autocomplete: 'off', placeholder: 'le gros pack, pack nuit', value: (existant?.surnoms || []).join(', ') });
     const champHt = h('input', { id: 'f-ht', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 234,50', value: existant ? prixSaisie(existant.ht) : '' });
     const champTtc = h('input', { id: 'f-ttc', class: 'champ', inputmode: 'decimal', autocomplete: 'off', placeholder: '1 481,40', value: existant ? prixSaisie(existant.ttc) : '' });
     const calcul = (source, cible, conversion) => () => {
@@ -1248,10 +1393,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ref = champRef.value.trim();
       const ht = lirePrix(champHt.value);
       const ttc = lirePrix(champTtc.value);
+      const surnoms = lireSurnoms(champSurnoms.value);
+      const surnomPris = surnoms.map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
       const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
         : doublon ? ['Cette référence existe déjà : choisis-en une autre.', champRef]
         : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
         : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
+        : surnomPris ? [surnomPris, champSurnoms]
         : ['', null];
       msgErreur.textContent = probleme;
       if (probleme) { champFautif.focus(); return; }
@@ -1276,8 +1424,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       }
 
       // Un exemple modifié devient un vrai forfait : il ne sera pas effacé avec les exemples.
-      const { exemple: _ancienExemple, ...base } = existant || { id: nouvelId('fft') };
-      const forfait = { ...base, ref, designation: champDes.value.trim(), ht, ttc, elements, maj: Date.now() };
+      const { exemple: _ancienExemple, surnoms: _anciensSurnoms, ...base } = existant || { id: nouvelId('fft') };
+      const forfait = { ...base, ref, designation: champDes.value.trim(), ...avecSurnoms(surnoms), ht, ttc, elements, maj: Date.now() };
       remplacer(donnees.forfaits, forfait);
       sauver();
       noterModif();
@@ -1295,6 +1443,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         existant?.exemple ? h('p', { class: 'note-exemple' }, 'Ce forfait est un EXEMPLE. Une fois enregistré, il devient un vrai forfait : vérifie bien la référence et les prix.') : null,
         groupe('Référence *', champRef, msgRef),
         groupe('Désignation / contenu', champDes),
+        groupe("Surnoms de l'équipe (séparés par des virgules)", champSurnoms),
         h('div', { class: 'ligne-prix' },
           groupe('Prix HT *', champHt, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champTtc, champHt, htDepuisTtc) }, 'Calculer depuis le TTC')),
           groupe('Prix TTC *', champTtc, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champHt, champTtc, ttcDepuisHt) }, `Calculer depuis le HT (+ ${TAUX_TVA})`))),
@@ -1403,6 +1552,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         const nom = champNouveau.value.trim();
         if (!nom) return;
         if (!nomLibre(nom, elementsDe(fam.id))) { signaler(`« ${nom} » existe déjà dans ${fam.nom}.`); return; }
+        const surnomDeja = index.surnomPris.get(norm(nom));
+        if (surnomDeja?.equipe) { signaler(`« ${nom} » est déjà le surnom de ${nomDe(surnomDeja.id)}.`); return; }
         signaler('');
         donnees.elements.push({ id: nouvelId('elt'), familleId: fam.id, nom, maj: Date.now() });
         changer();
@@ -1420,8 +1571,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
           champ.addEventListener('change', () => {
             const courant = donnees.elements.find((x) => x.id === e.id);
             const nom = champ.value.trim();
-            if (!nom || !nomLibre(nom, elementsDe(fam.id), e.id)) {
-              signaler(nom ? `« ${nom} » existe déjà dans ${fam.nom}.` : 'Le nom ne peut pas être vide.');
+            const surnomDeja = nom && index.surnomPris.get(norm(nom));
+            if (!nom || !nomLibre(nom, elementsDe(fam.id), e.id) || (surnomDeja?.equipe && surnomDeja.id !== e.id)) {
+              signaler(!nom ? 'Le nom ne peut pas être vide.' : surnomDeja?.equipe && surnomDeja.id !== e.id
+                ? `« ${nom} » est déjà le surnom de ${nomDe(surnomDeja.id)}.` : `« ${nom} » existe déjà dans ${fam.nom}.`);
               champ.value = courant.nom;
               return;
             }
@@ -1429,7 +1582,27 @@ textarea.champ { resize: vertical; min-height: 90px; }
             remplacer(donnees.elements, { ...courant, nom, maj: Date.now() });
             changer(false);
           });
-          return h('li', {}, champ,
+          // Surnoms d'équipe : partent dans le fichier exporté, comme le nom.
+          const champSurnoms = h('input', {
+            class: 'champ champ-surnoms', value: (e.surnoms || []).join(', '), maxlength: 600, placeholder: 'Surnoms (séparés par des virgules)',
+            'aria-label': `Surnoms de l'élément ${e.nom}`,
+          });
+          champSurnoms.addEventListener('change', () => {
+            const courant = donnees.elements.find((x) => x.id === e.id);
+            const surnoms = lireSurnoms(champSurnoms.value);
+            const refus = surnoms.map((s) => surnomRefuse(s, e.id, true)).find(Boolean);
+            if (refus) {
+              signaler(refus);
+              champSurnoms.value = (courant.surnoms || []).join(', ');
+              return;
+            }
+            signaler('');
+            const { surnoms: _anciens, ...reste } = courant;
+            remplacer(donnees.elements, { ...reste, ...avecSurnoms(surnoms), maj: Date.now() });
+            champSurnoms.value = surnoms.join(', ');
+            changer(false);
+          });
+          return h('li', { class: 'element-ligne' }, champ, champSurnoms,
             h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Supprimer ${e.nom}`, onclick: () => supprimerElement(e, fam, changer) }, '✕'));
         })),
         h('div', { class: 'ajout-ligne' }, champNouveau, h('button', { type: 'button', class: 'btn btn-blanc', onclick: ajouter }, 'Ajouter')));
@@ -1560,11 +1733,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
       if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // empêche Excel d'exécuter une formule
       return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', ...fams.map((f) => f.nom), 'Exemple', 'Modifié le']];
+    const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', 'Surnoms', ...fams.map((f) => f.nom), 'Exemple', 'Modifié le']];
     for (const f of [...index.forfaits].sort((a, b) => tri.compare(a.ref, b.ref))) {
       const els = index.elementsForfait.get(f.id);
       lignes.push([
-        f.ref, f.designation, prixSaisie(f.ht), prixSaisie(f.ttc),
+        f.ref, f.designation, prixSaisie(f.ht), prixSaisie(f.ttc), (f.surnoms || []).join(', '),
         ...fams.map((fam) => els.find((e) => e.familleId === fam.id)?.nom ?? ''),
         f.exemple ? 'oui' : '', f.maj ? dateCourte(f.maj) : '',
       ]);
@@ -1636,7 +1809,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // les autres sont créées à l'import (et annoncées avant, pour repérer une faute de frappe).
   const COLONNES_TABLEAU = new Map([
     ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
-    ['exemple', 'exemple'], ['modifiele', null],
+    ['surnoms', 'surnoms'], ['exemple', 'exemple'], ['modifiele', null],
   ]);
   const LIGNES_TABLEAU_MAX = 5000;
   const FAMILLES_TABLEAU_MAX = 10; // nouvelles familles par import : au-delà, c'est sans doute un mauvais fichier
@@ -1730,6 +1903,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const elementsConnus = new Map(index.elsActifs.map((e) => [`${e.familleId}|${norm(e.nom)}`, e]));
     const lignesParRef = new Map();
     const forfaits = [];
+    const brouillons = []; // lignes lues, avant le contrôle des surnoms
     let avecExemples = false;
     for (let n = 1; n < lignes.length; n++) {
       const ligne = lignes[n];
@@ -1764,7 +1938,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
         if (!nom) { delete elements[fam.id]; continue; }
         if (!norm(nom)) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)} » illisible.`); continue; }
         const cleElement = `${fam.id}|${norm(nom)}`;
-        let element = elementsConnus.get(cleElement);
+        // Le surnom d'équipe d'un élément vaut son nom (« la petite » → 3Q) ; pris dans une autre famille, c'est une erreur.
+        let element = elementsConnus.get(cleElement)
+          || index.elsActifs.find((e) => e.familleId === fam.id && (e.surnoms || []).some((s) => norm(s) === norm(nom)));
+        const ailleurs = !element && index.surnomPris.get(norm(nom));
+        if (ailleurs?.equipe) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)} » est le surnom de ${nomDe(ailleurs.id)}.`); continue; }
         if (!element) {
           element = { id: nouvelId('elt'), familleId: fam.id, nom: nom.slice(0, 60), maj: maintenant };
           elementsConnus.set(cleElement, element);
@@ -1778,11 +1956,32 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const designation = colonnes.has('designation') || !existant ? lire('designation') : existant.designation;
       const exemple = colonnes.has('exemple') || !existant ? norm(lire('exemple')) === 'oui' : !!existant.exemple;
       if (exemple) avecExemples = true;
+      // Surnoms : la case remplace ceux de l'équipe (vide = aucun) ; sans la colonne, on garde. Contrôlés après la lecture de tout le tableau.
+      const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms')) : null;
+      brouillons.push({ existant, ref, designation, ht, ttc, elements, exemple, surnomsLus });
+    }
+
+    // Un surnom désigne une seule chose : pas le nom ni le surnom d'un élément, ni le surnom d'un autre forfait
+    // (celui d'un forfait du tableau compte selon sa nouvelle case : un surnom peut passer d'un forfait à l'autre).
+    const pris = new Map();
+    for (const e of [...index.elsActifs, ...elementsCrees]) for (const s of [e.nom, ...(e.surnoms || [])]) pris.set(norm(s), e.nom);
+    const recases = new Set(brouillons.filter((b) => b.surnomsLus && b.existant).map((b) => b.existant.id));
+    for (const f of index.forfaits) if (!recases.has(f.id)) for (const s of f.surnoms || []) pris.set(norm(s), `forfait ${f.ref}`);
+    const surnomsRefuses = [];
+    for (const b of brouillons) {
+      const surnoms = !b.surnomsLus ? b.existant.surnoms || [] : b.surnomsLus.filter((s) => {
+        const deja = pris.get(norm(s));
+        if (deja) { surnomsRefuses.push(`${b.ref} : « ${s} » (déjà pris par ${deja})`); return false; }
+        pris.set(norm(s), `forfait ${b.ref}`);
+        return true;
+      });
+      const { existant, ref, designation, ht, ttc, elements, exemple } = b;
       const inchange = existant && !existant.supprime && existant.ref === ref && existant.designation === designation
         && existant.ht === ht && existant.ttc === ttc && !existant.exemple === !exemple
+        && (existant.surnoms || []).join('|') === surnoms.join('|')
         && JSON.stringify(Object.entries(existant.elements).sort()) === JSON.stringify(Object.entries(elements).sort());
       forfaits.push(inchange ? existant : {
-        id: existant?.id ?? nouvelId('fft'), ref, designation, ht, ttc, elements,
+        id: existant?.id ?? nouvelId('fft'), ref, designation, ...avecSurnoms(surnoms), ht, ttc, elements,
         maj: Math.max(maintenant, (existant?.maj ?? 0) + 1), ...(exemple ? { exemple: true } : {}),
       });
     }
@@ -1791,7 +1990,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     try {
       // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
       const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: [...donnees.familles, ...famillesCreees], elements: [...donnees.elements, ...elementsCrees], forfaits });
-      return { entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples };
+      return { entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples, surnomsRefuses };
     } catch (err) {
       return { erreurs: [err.message] };
     }
@@ -1815,7 +2014,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
       return;
     }
-    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples } = analyse;
+    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
@@ -1829,6 +2028,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
+        resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose)", surnomsRefuses),
       ].filter(Boolean),
       boutons: [
         { texte: 'Importer', valeur: 'fusion', classe: exemplesRestants ? 'btn-bord' : 'btn-rouge' },
@@ -1925,6 +2125,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     for (const f of index.forfaits) compter('ref|' + f.ref.trim().toLocaleUpperCase('fr'), `Référence ${f.ref}`);
     for (const e of index.elsActifs) compter(`elt|${e.familleId}|${norm(e.nom)}`, `${index.famParId.get(e.familleId).nom} : ${e.nom}`);
     const doublons = [...vues.values()].filter((v) => v.n > 1).map((v) => `${v.libelle} (${v.n} fois)`);
+    // Même surnom donné à deux choses sur deux appareils : la recherche n'en garde qu'une.
+    for (const x of [...index.elsActifs, ...index.forfaits]) {
+      for (const s of x.surnoms || []) {
+        const pris = index.surnomPris.get(norm(s));
+        if (pris?.id !== x.id) doublons.push(`Surnom « ${s} » de ${nomDe(x.id)} : déjà ${pris ? 'pris par ' + nomDe(pris.id) : 'le nom d\'un élément'}`);
+      }
+    }
     if (doublons.length) await informer('Doublons à corriger', 'Après la mise à jour, ces références ou éléments existent plusieurs fois. Un responsable doit corriger :', doublons);
   }
 
@@ -1948,6 +2155,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
           choixTheme()),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-mes-surnoms', onclick: fermerPuis(ouvrirMesSurnoms) }, 'Mes surnoms (noms des techniciens)'),
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer (sauvegarde ou tableau Excel)'),
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
         appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
@@ -1998,6 +2206,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: h('ol', { class: 'etapes' },
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
+        h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
         h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),

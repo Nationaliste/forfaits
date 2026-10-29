@@ -1512,6 +1512,7 @@ def test_surnom_deja_pris_est_refuse(page):
         ("La  Petite", "« La Petite » est déjà ton surnom perso de 3Q"),  # majuscules et espaces ignorés
         ("zorba 5", "« zorba 5 » est déjà le nom de Zorba 5"),
         ("4q", "« 4q » est déjà son nom"),
+        ("imprimante", "« imprimante » est déjà le nom de la famille Imprimante"),
         ("x", "au moins 2 lettres ou chiffres"),
     ):
         d.get_by_label("Nouveau surnom pour 4Q").fill(surnom)
@@ -1602,3 +1603,34 @@ def test_fichier_ancien_format_sans_surnoms_reste_lisible(page, tmp_path):
     (tmp_path / "v1.json").write_text(json.dumps(fichier), encoding="utf-8")
     importer(page, tmp_path / "v1.json")
     assert refs(page) == TOUS
+
+
+def test_element_renomme_en_son_surnom_et_surnom_pris_refuse_au_formulaire(page):
+    activer_modif(page)
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    d = dialogue(page)
+    champ = d.get_by_label("Surnoms de l'élément 4Q")
+    champ.fill("la petite, la 4")
+    champ.press("Tab")
+    nom = d.get_by_label("Nom de l'élément 4Q")
+    nom.fill("la petite")  # son propre surnom devient son nom
+    nom.press("Tab")
+    d.get_by_role("button", name="Terminé").click()  # la liste ne se redessine pas au renommage : on la rouvre
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    d = dialogue(page)
+    expect(d.get_by_label("Surnoms de l'élément la petite")).to_have_value("la 4")
+    d.get_by_role("button", name="Terminé").click()
+    chercher(page, "la petite")
+    assert refs(page) == AVEC_4Q
+    chercher(page, "")
+
+    # Formulaire : ses surnoms déjà en place passent, un surnom pris par un élément est refusé.
+    modifier(page, "EX-T2-3Q")
+    page.locator("#f-surnoms").fill("pack nuit")
+    remplir(page)
+    modifier(page, "EX-T2-3Q")
+    page.locator("#f-surnoms").fill("pack nuit, la 4")
+    remplir(page)
+    expect(dialogue(page).locator(".msg-erreur")).to_contain_text("« la 4 » est déjà le surnom de la petite")

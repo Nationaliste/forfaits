@@ -17,23 +17,23 @@ from playwright.sync_api import expect
 
 # Références des forfaits d'exemple, par critère
 TOUS = {
-    "EX-M1-G7-3S",
-    "EX-M1-G7-4S",
-    "EX-M1-SPX-3S",
-    "EX-M1-GTX-4S",
-    "EX-F1-G7-3S",
-    "EX-F1-SPX-4S",
-    "EX-F1-GTX-3S",
-    "EX-F1-SPU-4S",
-    "EX-F1-3S",
+    "EX-T1-Z5-3Q",
+    "EX-T1-Z5-4Q",
+    "EX-T1-KPX-3Q",
+    "EX-T1-ZTX-4Q",
+    "EX-T2-Z5-3Q",
+    "EX-T2-KPX-4Q",
+    "EX-T2-ZTX-3Q",
+    "EX-T2-KPU-4Q",
+    "EX-T2-3Q",
     "EX-LUM-POSE",
-    "EX-M1-G7-3S-P",
+    "EX-T1-Z5-3Q-P",
 }
-AVEC_3S = {"EX-M1-G7-3S", "EX-M1-SPX-3S", "EX-F1-G7-3S", "EX-F1-GTX-3S", "EX-F1-3S", "EX-M1-G7-3S-P"}
-AVEC_M1 = {"EX-M1-G7-3S", "EX-M1-G7-4S", "EX-M1-SPX-3S", "EX-M1-GTX-4S", "EX-M1-G7-3S-P"}
-AVEC_F1_ET_3S = {"EX-F1-G7-3S", "EX-F1-GTX-3S", "EX-F1-3S"}
-AVEC_GAMMA7 = {"EX-M1-G7-3S", "EX-M1-G7-4S", "EX-F1-G7-3S", "EX-M1-G7-3S-P"}
-AVEC_4S = {"EX-M1-G7-4S", "EX-M1-GTX-4S", "EX-F1-SPX-4S", "EX-F1-SPU-4S"}
+AVEC_3Q = {"EX-T1-Z5-3Q", "EX-T1-KPX-3Q", "EX-T2-Z5-3Q", "EX-T2-ZTX-3Q", "EX-T2-3Q", "EX-T1-Z5-3Q-P"}
+AVEC_T1 = {"EX-T1-Z5-3Q", "EX-T1-Z5-4Q", "EX-T1-KPX-3Q", "EX-T1-ZTX-4Q", "EX-T1-Z5-3Q-P"}
+AVEC_T2_ET_3Q = {"EX-T2-Z5-3Q", "EX-T2-ZTX-3Q", "EX-T2-3Q"}
+AVEC_ZORBA5 = {"EX-T1-Z5-3Q", "EX-T1-Z5-4Q", "EX-T2-Z5-3Q", "EX-T1-Z5-3Q-P"}
+AVEC_4Q = {"EX-T1-Z5-4Q", "EX-T1-ZTX-4Q", "EX-T2-KPX-4Q", "EX-T2-KPU-4Q"}
 
 
 # ---------------------------------------------------------------- aides
@@ -125,48 +125,48 @@ def contenu(fichier):
 # ---------------------------------------------------------------- recherche (cas demandés)
 
 
-def test_recherche_3S_ne_donne_que_des_forfaits_3S(page):
-    chercher(page, "3S")
-    assert refs(page) == AVEC_3S
-    assert all(c["elements"].get("Imprimante") == "3S" for c in cartes(page))
+def test_recherche_3Q_ne_donne_que_des_forfaits_3Q(page):
+    chercher(page, "3Q")
+    assert refs(page) == AVEC_3Q
+    assert all(c["elements"].get("Imprimante") == "3Q" for c in cartes(page))
 
 
-def test_m1std_donne_les_memes_resultats_que_M1_STD(page):
+def test_t1demo_donne_les_memes_resultats_que_T1_DEMO(page):
     resultats = {}
-    for saisie in ("M1 STD", "m1std", "M1-STD", "m1 std", "  M1   STD "):
+    for saisie in ("T1 DEMO", "t1demo", "T1-DEMO", "t1 demo", "  T1   DEMO "):
         chercher(page, saisie)
         resultats[saisie] = refs(page)
-    assert all(r == AVEC_M1 for r in resultats.values()), resultats
+    assert all(r == AVEC_T1 for r in resultats.values()), resultats
 
 
-def test_3S_F1_ne_donne_que_les_forfaits_qui_ont_les_deux(page):
-    chercher(page, "3S F1")
-    assert refs(page) == AVEC_F1_ET_3S
+def test_3Q_T2_ne_donne_que_les_forfaits_qui_ont_les_deux(page):
+    chercher(page, "3Q T2")
+    assert refs(page) == AVEC_T2_ET_3Q
     for c in cartes(page):
-        assert c["elements"]["Imprimante"] == "3S" and c["elements"]["Taximètre"] == "F1"
-    chercher(page, "f1 3s")  # l'ordre et la casse ne comptent pas
-    assert refs(page) == AVEC_F1_ET_3S
+        assert c["elements"]["Imprimante"] == "3Q" and c["elements"]["Taximètre"] == "T2"
+    chercher(page, "t2 3q")  # l'ordre et la casse ne comptent pas
+    assert refs(page) == AVEC_T2_ET_3Q
 
 
 def test_reference_complete_ou_morceau(page):
-    chercher(page, "EX-F1-SPU-4S")
-    assert refs(page) == {"EX-F1-SPU-4S"}
-    chercher(page, "spu")
-    assert refs(page) == {"EX-F1-SPU-4S"}
-    chercher(page, "f1 spu")
-    assert refs(page) == {"EX-F1-SPU-4S"}
-    chercher(page, "EX-M1-G7-3S")  # la référence exacte passe avant EX-M1-G7-3S-P
-    assert page.locator("#resultats .carte-ref").first.text_content() == "EX-M1-G7-3S"
+    chercher(page, "EX-T2-KPU-4Q")
+    assert refs(page) == {"EX-T2-KPU-4Q"}
+    chercher(page, "kpu")
+    assert refs(page) == {"EX-T2-KPU-4Q"}
+    chercher(page, "t2 kpu")
+    assert refs(page) == {"EX-T2-KPU-4Q"}
+    chercher(page, "EX-T1-Z5-3Q")  # la référence exacte passe avant EX-T1-Z5-3Q-P
+    assert page.locator("#resultats .carte-ref").first.text_content() == "EX-T1-Z5-3Q"
 
 
 def test_accents_majuscules_espaces_et_tirets_ignores(page):
-    for saisie in ("Starplast universelle", "STARPLAST-UNIVERSELLE", "starplastuniverselle", "stârplast Universellé"):
+    for saisie in ("Kalpo universelle", "KALPO-UNIVERSELLE", "kalpouniverselle", "kâlpo Universellé"):
         chercher(page, saisie)
-        assert refs(page) == {"EX-F1-SPU-4S"}, saisie
-    chercher(page, "boîtier gamma")
+        assert refs(page) == {"EX-T2-KPU-4Q"}, saisie
+    chercher(page, "boîtier zorba")
     avec_accent = refs(page)
-    chercher(page, "BOITIER-GAMMA")
-    assert refs(page) == avec_accent == AVEC_GAMMA7 | {"EX-M1-GTX-4S", "EX-F1-GTX-3S"}
+    chercher(page, "BOITIER-ZORBA")
+    assert refs(page) == avec_accent == AVEC_ZORBA5 | {"EX-T1-ZTX-4Q", "EX-T2-ZTX-3Q"}
 
 
 def test_rien_trouve_puis_effacer(page):
@@ -180,49 +180,49 @@ def test_rien_trouve_puis_effacer(page):
 # ---------------------------------------------------------------- suggestions, étiquettes, boutons
 
 
-def test_suggestions_gam_puis_etiquette(page):
-    chercher(page, "gam")
+def test_suggestions_zor_puis_etiquette(page):
+    chercher(page, "zor")
     suggestions = page.locator("#suggestions .suggestion")
     expect(suggestions).to_have_count(2)
     noms = page.locator("#suggestions .suggestion-nom").all_text_contents()
     familles = page.locator("#suggestions .suggestion-famille").all_text_contents()
-    assert noms == ["Gamma 7", "Gammatech X"]
+    assert noms == ["Zorba 5", "Zorbatech X"]
     assert familles == ["Boîtier", "Boîtier"]
 
-    page.locator("#suggestions .suggestion", has_text="Gamma 7").click()
-    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Gamma 7")
+    page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
+    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Zorba 5")
     expect(page.locator("#recherche")).to_have_value("")
-    assert refs(page) == AVEC_GAMMA7
+    assert refs(page) == AVEC_ZORBA5
 
-    chercher(page, "3s")  # le mot tapé s'ajoute à l'étiquette
-    assert refs(page) == AVEC_GAMMA7 & AVEC_3S
+    chercher(page, "3q")  # le mot tapé s'ajoute à l'étiquette
+    assert refs(page) == AVEC_ZORBA5 & AVEC_3Q
 
     page.locator("#etiquettes .etiquette").click()  # un clic retire l'étiquette
     expect(page.locator("#etiquettes")).to_be_hidden()
-    assert refs(page) == AVEC_3S
+    assert refs(page) == AVEC_3Q
 
 
 def test_suggestion_au_clavier(page):
     page.click("#recherche")
-    page.keyboard.type("starplast u")
-    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Starplast universelle"])
+    page.keyboard.type("kalpo u")
+    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Kalpo universelle"])
     page.keyboard.press("ArrowDown")
     page.keyboard.press("Enter")
-    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Starplast universelle")
-    assert refs(page) == {"EX-F1-SPU-4S"}
+    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Kalpo universelle")
+    assert refs(page) == {"EX-T2-KPU-4Q"}
 
 
 def test_boutons_de_filtre(page):
     page.locator("#filtres .filtre", has_text="Imprimante").click()
-    dialogue(page).get_by_role("button", name="4S", exact=True).click()
-    assert refs(page) == AVEC_4S
+    dialogue(page).get_by_role("button", name="4Q", exact=True).click()
+    assert refs(page) == AVEC_4Q
     expect(page.locator("#filtres .filtre", has_text="Imprimante")).to_have_attribute("aria-pressed", "true")
 
     page.locator("#filtres .filtre", has_text="Imprimante").click()
     dialogue(page).get_by_role("button", name="Tous", exact=True).click()
     page.locator("#filtres .filtre", has_text="Boîtier").click()
     dialogue(page).get_by_role("button", name="Sans boîtier").click()
-    assert refs(page) == {"EX-F1-3S", "EX-LUM-POSE"}
+    assert refs(page) == {"EX-T2-3Q", "EX-LUM-POSE"}
     expect(page.locator("#etiquettes")).to_contain_text("Boîtier : sans")
 
 
@@ -230,12 +230,12 @@ def test_boutons_de_filtre(page):
 
 
 def test_carte_complete_et_prix_au_format_francais(page):
-    chercher(page, "EX-M1-G7-3S-P")
+    chercher(page, "EX-T1-Z5-3Q-P")
     (carte,) = cartes(page)
     assert espaces(carte["ht"]) == "1 150,00 €"
     assert espaces(carte["ttc"]) == "1 380,00 €"
-    assert carte["elements"] == {"Taximètre": "M1 STD", "Boîtier": "Gamma 7", "Imprimante": "3S", "Installation": "Pose EXEMPLE"}
-    chercher(page, "EX-M1-G7-3S")
+    assert carte["elements"] == {"Taximètre": "T1 DEMO", "Boîtier": "Zorba 5", "Imprimante": "3Q", "Installation": "Pose EXEMPLE"}
+    chercher(page, "EX-T1-Z5-3Q")
     assert espaces(cartes(page)[0]["ttc"]) == "1 481,40 €"
     assert " " not in cartes(page)[0]["ttc"]  # espace visible avec toutes les polices
     assert espaces(cartes(page)[0]["ht"]) == "1 234,50 €"
@@ -258,10 +258,10 @@ def test_trier_par_prix(page):
     assert set(refs_affichees()) == TOUS
     page.select_option("#tri", label="prix décroissant")
     assert ttc_affiches() == sorted(ttc_affiches(), reverse=True)
-    chercher(page, "3S")  # le tri s'applique aussi aux résultats d'une recherche
-    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and set(refs_affichees()) == AVEC_3S
-    chercher(page, "EX-F1-3S")  # une référence tapée en entier reste en tête
-    assert refs_affichees()[0] == "EX-F1-3S"
+    chercher(page, "3Q")  # le tri s'applique aussi aux résultats d'une recherche
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and set(refs_affichees()) == AVEC_3Q
+    chercher(page, "EX-T2-3Q")  # une référence tapée en entier reste en tête
+    assert refs_affichees()[0] == "EX-T2-3Q"
     page.select_option("#tri", label="par référence")
     chercher(page, "")
     assert refs_affichees() == sorted(TOUS)
@@ -297,10 +297,10 @@ def test_copier_la_reference(navigateur, appareils):
     a.page.fill("#recherche", "pas-la-reference")
     a.page.keyboard.press("ControlOrMeta+A")
     a.page.keyboard.press("ControlOrMeta+C")
-    chercher(a.page, "EX-F1-3S")
+    chercher(a.page, "EX-T2-3Q")
     bouton = a.page.get_by_role("button", name="Copier la référence")
     bouton.click()
-    expect(a.page.locator("#toast")).to_contain_text("EX-F1-3S copiée")
+    expect(a.page.locator("#toast")).to_contain_text("EX-T2-3Q copiée")
     expect(bouton).to_have_text("Copié")
     # Un second clic relance la confirmation : le premier minuteur ne doit pas la couper.
     a.page.clock.run_for(1000)
@@ -313,7 +313,7 @@ def test_copier_la_reference(navigateur, appareils):
     # Ce qui a été copié : on le colle dans la recherche (les tests n'ont pas le droit de lire le presse-papiers sous Firefox).
     a.page.fill("#recherche", "")
     a.page.keyboard.press("ControlOrMeta+V")
-    expect(a.page.locator("#recherche")).to_have_value("EX-F1-3S")
+    expect(a.page.locator("#recherche")).to_have_value("EX-T2-3Q")
 
 
 # ---------------------------------------------------------------- saisie des forfaits
@@ -329,22 +329,22 @@ def test_ajouter_modifier_supprimer(page):
         "TX-100",
         "1 234,50",
         "1 481,40",
-        {"Taximètre": "F1", "Boîtier": "Gammatech X", "Imprimante": "4S"},
-        designation="Pack F1 complet",
+        {"Taximètre": "T2", "Boîtier": "Zorbatech X", "Imprimante": "4Q"},
+        designation="Pack T2 complet",
     )
     expect(page.locator("#toast")).to_contain_text("TX-100 ajouté")
     chercher(page, "tx100")
     (carte,) = cartes(page)
-    assert carte["ref"] == "TX-100" and carte["designation"] == "Pack F1 complet"
+    assert carte["ref"] == "TX-100" and carte["designation"] == "Pack T2 complet"
     assert espaces(carte["ttc"]) == "1 481,40 €"
-    assert carte["elements"] == {"Taximètre": "F1", "Boîtier": "Gammatech X", "Imprimante": "4S"}
+    assert carte["elements"] == {"Taximètre": "T2", "Boîtier": "Zorbatech X", "Imprimante": "4Q"}
 
     modifier(page, "TX-100")
-    remplir(page, ht="1 100,00", ttc="1 320,00", elements={"Boîtier": "Starplast universelle", "Imprimante": "3S"})
+    remplir(page, ht="1 100,00", ttc="1 320,00", elements={"Boîtier": "Kalpo universelle", "Imprimante": "3Q"})
     (carte,) = cartes(page)
     assert espaces(carte["ht"]) == "1 100,00 €"
-    assert carte["elements"] == {"Taximètre": "F1", "Boîtier": "Starplast universelle", "Imprimante": "3S"}
-    chercher(page, "3S F1 starplast universelle")
+    assert carte["elements"] == {"Taximètre": "T2", "Boîtier": "Kalpo universelle", "Imprimante": "3Q"}
+    chercher(page, "3Q T2 kalpo universelle")
     assert refs(page) == {"TX-100"}
 
     chercher(page, "TX-100")
@@ -362,15 +362,15 @@ def test_ajouter_modifier_supprimer(page):
 def test_date_de_modification_sur_la_carte(page):
     expect(page.locator(".carte-maj")).to_have_count(0)  # exemples jamais touchés : pas de date
     activer_modif(page)
-    modifier(page, "EX-F1-3S")
+    modifier(page, "EX-T2-3Q")
     remplir(page, ht="800", ttc="960")
-    chercher(page, "EX-F1-3S")
+    chercher(page, "EX-T2-3Q")
     expect(page.locator(".carte-maj")).to_have_text(f"Modifié le {datetime.now():%d/%m/%Y}")
 
 
 def test_doublon_de_reference_bloque(page):
     activer_modif(page)
-    for ref in ("EX-F1-3S", "ex-f1-3s"):
+    for ref in ("EX-T2-3Q", "ex-t2-3q"):
         ouvrir_ajout(page)
         remplir(page, ref, "100", "120")
         expect(dialogue(page).locator(".msg-erreur")).to_contain_text("existe déjà")
@@ -381,9 +381,9 @@ def test_doublon_de_reference_bloque(page):
 def test_doublon_de_combinaison_averti(page):
     activer_modif(page)
     ouvrir_ajout(page)
-    remplir(page, "NOUVEAU-1", "1 100", "1 320", {"Taximètre": "M1 STD", "Boîtier": "Gamma 7", "Imprimante": "4S"})
+    remplir(page, "NOUVEAU-1", "1 100", "1 320", {"Taximètre": "T1 DEMO", "Boîtier": "Zorba 5", "Imprimante": "4Q"})
     avertissement = dialogue(page)
-    expect(avertissement).to_contain_text("Même combinaison d'éléments que : EX-M1-G7-4S")
+    expect(avertissement).to_contain_text("Même combinaison d'éléments que : EX-T1-Z5-4Q")
     avertissement.get_by_role("button", name="Revenir").click()
     dialogue(page).locator("#f-enregistrer").click()
     dialogue(page).get_by_role("button", name="Enregistrer quand même").click()
@@ -456,20 +456,42 @@ def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appare
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans boîtier"])
 
 
+def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_path):
+    """Les exemples ont changé d'identifiants : le fichier de l'équipe, qui a supprimé les anciens, retire aussi les nouveaux."""
+    equipe = appareils().page
+    activer_modif(equipe)
+    ouvrir_ajout(equipe)
+    remplir(equipe, "VRAI-1", "100", "120")
+    equipe.click("#btn-suppr-exemples")
+    dialogue(equipe).get_by_role("button", name="Supprimer les exemples").click()
+    fichier = exporter_json(equipe, tmp_path / "equipe.json")
+    for f in fichier["forfaits"]:
+        if f.get("exemple"):
+            f["id"] += "-ancien"  # comme les identifiants des exemples d'avant le renommage
+    (tmp_path / "equipe.json").write_text(json.dumps(fichier), encoding="utf-8")
+
+    neuf = appareils().page
+    importer(neuf, tmp_path / "equipe.json")
+    expect(neuf.locator("#resultats")).to_contain_text("VRAI-1")
+    expect(neuf.locator("#resultats")).not_to_contain_text("EXEMPLE")
+    neuf.locator("#filtres .filtre", has_text="Taximètre").click()  # les éléments d'exemple sont partis aussi
+    expect(dialogue(neuf).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
+
+
 def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
     """Un élément de départ que l'utilisateur a retouché (maj > 0) est à lui : il reste."""
     ancien = exporter_json(page, tmp_path / "ancien.json")
     for e in ancien["elements"]:
         e.pop("exemple", None)
-        if e["nom"] == "F1":
-            e["nom"], e["maj"] = "F1 Plus", 1_700_000_000_000
+        if e["nom"] == "T2":
+            e["nom"], e["maj"] = "T2 Plus", 1_700_000_000_000
     page.evaluate("(d) => localStorage.setItem('forfaits.donnees.v1', JSON.stringify(d))", ancien)
     page.reload()
     activer_modif(page)
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     page.locator("#filtres .filtre", has_text="Taximètre").click()
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "F1 Plus", "Sans taximètre"])
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
 
 
 def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
@@ -477,13 +499,13 @@ def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
     activer_modif(page)
     page.click("#btn-menu")
     page.click("#btn-listes")
-    dialogue(page).get_by_label("Nom de l'élément F1").fill("F1 Plus")
+    dialogue(page).get_by_label("Nom de l'élément T2").fill("T2 Plus")
     dialogue(page).get_by_role("button", name="Terminé").click()
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
     page.locator("#filtres .filtre", has_text="Taximètre").click()
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "F1 Plus", "Sans taximètre"])
+    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
 
 
 # ---------------------------------------------------------------- listes modifiables sans code
@@ -498,30 +520,30 @@ def test_listes_ajouter_renommer_et_proteger(page):
     d.locator("#nouvelle-famille").press("Enter")
     d.get_by_label("Nouvel élément pour TPE").fill("TPE X")
     d.get_by_label("Nouvel élément pour TPE").press("Enter")
-    d.get_by_label("Nouvel élément pour Boîtier").fill("Gamma 8")
+    d.get_by_label("Nouvel élément pour Boîtier").fill("Zorba 8")
     d.get_by_label("Nouvel élément pour Boîtier").press("Enter")
-    d.get_by_label("Nouvel élément pour Boîtier").fill("gamma-8")  # doublon refusé
+    d.get_by_label("Nouvel élément pour Boîtier").fill("zorba-8")  # doublon refusé
     d.get_by_label("Nouvel élément pour Boîtier").press("Enter")
     expect(d.locator(".msg-erreur")).to_contain_text("existe déjà")
-    d.get_by_label("Nom de l'élément Gamma 7").fill("Gamma 7 Plus")
+    d.get_by_label("Nom de l'élément Zorba 5").fill("Zorba 5 Plus")
     # Clic direct sur un autre bouton juste après le renommage : il ne doit pas être perdu.
-    d.get_by_role("button", name="Supprimer 3S").click()  # utilisé : suppression refusée
+    d.get_by_role("button", name="Supprimer 3Q").click()  # utilisé : suppression refusée
     expect(dialogue(page)).to_contain_text("Suppression impossible")
     dialogue(page).get_by_role("button", name="Compris").click()
     dialogue(page).get_by_role("button", name="Terminé").click()
 
     expect(page.locator("#filtres .filtre", has_text="TPE")).to_be_visible()
-    chercher(page, "gamma7plus")  # le renommage s'applique aux forfaits existants
-    assert refs(page) == AVEC_GAMMA7
-    chercher(page, "3S")
-    assert refs(page) == AVEC_3S
+    chercher(page, "zorba5plus")  # le renommage s'applique aux forfaits existants
+    assert refs(page) == AVEC_ZORBA5
+    chercher(page, "3Q")
+    assert refs(page) == AVEC_3Q
 
     ouvrir_ajout(page)
-    remplir(page, "TPE-1", "300", "360", {"TPE": "TPE X", "Boîtier": "Gamma 8"})
+    remplir(page, "TPE-1", "300", "360", {"TPE": "TPE X", "Boîtier": "Zorba 8"})
     chercher(page, "tpe x")
     assert refs(page) == {"TPE-1"}
-    chercher(page, "gam")
-    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Gamma 7 Plus", "Gamma 8", "Gammatech X"])
+    chercher(page, "zor")
+    expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Zorba 5 Plus", "Zorba 8", "Zorbatech X"])
 
 
 # ---------------------------------------------------------------- sauvegarde et partage
@@ -532,9 +554,9 @@ def test_exporter_puis_importer_donne_les_memes_donnees(appareils, tmp_path):
     activer_modif(a)
     ouvrir_ajout(a)
     remplir(
-        a, "VRAI-1", "2 000", "2 400", {"Taximètre": "F1", "Imprimante": "4S"}, designation="Ligne 1\nLigne 2 ; « guillemets »"
+        a, "VRAI-1", "2 000", "2 400", {"Taximètre": "T2", "Imprimante": "4Q"}, designation="Ligne 1\nLigne 2 ; « guillemets »"
     )
-    modifier(a, "EX-F1-3S")
+    modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
     chercher(a, "EX-LUM-POSE")
     a.get_by_role("button", name="Supprimer", exact=True).click()
@@ -558,12 +580,12 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
     activer_modif(a)
     activer_modif(b)
 
-    modifier(a, "EX-F1-3S")
+    modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
     exporter_json(a, tmp_path / "a1.json")
 
     importer(b, tmp_path / "a1.json")
-    chercher(b, "EX-F1-3S")
+    chercher(b, "EX-T2-3Q")
     assert espaces(cartes(b)[0]["ttc"]) == "960,00 €"
     chercher(b, "EX-LUM-POSE")
     b.get_by_role("button", name="Supprimer", exact=True).click()
@@ -574,15 +596,15 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
     exporter_json(b, tmp_path / "b1.json")
 
     # Pendant ce temps, A modifie un autre forfait sans avoir importé le fichier de B.
-    modifier(a, "EX-F1-G7-3S")
+    modifier(a, "EX-T2-Z5-3Q")
     remplir(a, designation="Modifié par A")
     importer(a, tmp_path / "b1.json")
     chercher(a, "")
     resultat = {c["ref"]: c for c in cartes(a)}
     assert "EX-LUM-POSE" not in resultat  # suppression de B propagée
     assert "B-NOUVEAU" in resultat  # ajout de B reçu
-    assert resultat["EX-F1-G7-3S"]["designation"] == "Modifié par A"  # modif de A gardée
-    assert espaces(resultat["EX-F1-3S"]["ttc"]) == "960,00 €"
+    assert resultat["EX-T2-Z5-3Q"]["designation"] == "Modifié par A"  # modif de A gardée
+    assert espaces(resultat["EX-T2-3Q"]["ttc"]) == "960,00 €"
 
     comptoir = appareils().page  # un collègue qui ne fait que consulter
     importer(comptoir, tmp_path / "b1.json")
@@ -592,9 +614,9 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
 def test_import_annonce_les_prix_qui_changent(appareils, tmp_path):
     a = appareils().page
     activer_modif(a)
-    modifier(a, "EX-F1-3S")
+    modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
-    modifier(a, "EX-F1-G7-3S")
+    modifier(a, "EX-T2-Z5-3Q")
     remplir(a, designation="Seule la désignation change")
     exporter_json(a, tmp_path / "a.json")
 
@@ -603,8 +625,8 @@ def test_import_annonce_les_prix_qui_changent(appareils, tmp_path):
     d = dialogue(b)
     expect(d).to_contain_text("2 modifiés")
     texte = espaces(d.inner_text())
-    assert "Prix qui changent : EX-F1-3S : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in texte
-    assert "EX-F1-G7-3S :" not in texte  # modifié, mais pas son prix
+    assert "Prix qui changent : EX-T2-3Q : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in texte
+    assert "EX-T2-Z5-3Q :" not in texte  # modifié, mais pas son prix
     d.get_by_role("button", name="Annuler").click()
 
 
@@ -612,12 +634,12 @@ def test_import_d_un_fichier_plus_ancien_garde_les_versions_recentes(appareils, 
     a = appareils().page
     activer_modif(a)
     exporter_json(a, tmp_path / "ancien.json")
-    modifier(a, "EX-F1-3S")
+    modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
     a.set_input_files("#fichier-import", str(tmp_path / "ancien.json"))
     expect(dialogue(a)).to_contain_text("plus ancien que tes données")
     dialogue(a).get_by_role("button", name="Mettre à jour").click()
-    chercher(a, "EX-F1-3S")
+    chercher(a, "EX-T2-3Q")
     assert espaces(cartes(a)[0]["ttc"]) == "960,00 €"
 
 
@@ -626,12 +648,12 @@ def test_remplacer_tout_annonce_les_anciens_prix(appareils, tmp_path):
     a = appareils().page
     activer_modif(a)
     exporter_json(a, tmp_path / "ancien.json")
-    modifier(a, "EX-F1-3S")
+    modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
     a.set_input_files("#fichier-import", str(tmp_path / "ancien.json"))
     texte = espaces(dialogue(a).inner_text())
     assert "Prix qui changent : " not in texte
-    assert "Prix qui changent avec « Remplacer tout » : EX-F1-3S : 800,00 € → 700,00 € HT, 960,00 € → 840,00 € TTC" in texte
+    assert "Prix qui changent avec « Remplacer tout » : EX-T2-3Q : 800,00 € → 700,00 € HT, 960,00 € → 840,00 € TTC" in texte
     dialogue(a).get_by_role("button", name="Annuler").click()
 
 
@@ -650,8 +672,8 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
         == "Référence;Désignation;Prix HT;Prix TTC;Taximètre;Boîtier;Imprimante;Lumineux;Installation;Exemple;Modifié le"
     )
     assert len(lignes) == 12
-    ligne = next(x for x in lignes if x.startswith("EX-M1-G7-3S;"))
-    assert ";1234,50;1481,40;M1 STD;Gamma 7;3S;;;oui;" in ligne
+    ligne = next(x for x in lignes if x.startswith("EX-T1-Z5-3Q;"))
+    assert ";1234,50;1481,40;T1 DEMO;Zorba 5;3Q;;;oui;" in ligne
 
 
 # ---------------------------------------------------------------- tableau Excel (.csv)
@@ -682,17 +704,17 @@ def test_importer_un_tableau_excel_et_supprimer_les_exemples(appareils, tmp_path
     chemin = ecrire_tableau(
         tmp_path / "tableau.csv",
         [
-            "T-1;Taximètre M1 STD + Gamma 7;1234,50;1481,40;M1 STD;Gamma 7;3S;;",
-            't-2;"Ligne 1\nLigne 2 « guillemets » et ""doubles""";1000,00;1200,00;F1;;4S;;',
-            "001;Référence qui ressemble à un nombre;99,90;119,88;;Gamma 9;;;",
-            "T-4;- désignation qui commence par un tiret;100,00;130,00;F1;;;;",
+            "T-1;Taximètre T1 DEMO + Zorba 5;1234,50;1481,40;T1 DEMO;Zorba 5;3Q;;",
+            't-2;"Ligne 1\nLigne 2 « guillemets » et ""doubles""";1000,00;1200,00;T2;;4Q;;',
+            "001;Référence qui ressemble à un nombre;99,90;119,88;;Zorba 9;;;",
+            "T-4;- désignation qui commence par un tiret;100,00;130,00;T2;;;;",
         ],
         encodage,
     )
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("4 forfaits")
     expect(d).to_contain_text("4 nouveaux, 0 modifié, 0 inchangé")
-    expect(d).to_contain_text("Boîtier : Gamma 9")  # élément inconnu : annoncé avant d'être créé
+    expect(d).to_contain_text("Boîtier : Zorba 9")  # élément inconnu : annoncé avant d'être créé
     expect(d).to_contain_text("TTC à vérifier")  # TTC qui ne correspond pas au HT + 20 %
     expect(d).to_contain_text("T-4 : 130,00")
     d.get_by_role("button", name="Importer et supprimer les exemples", exact=True).click()
@@ -701,20 +723,20 @@ def test_importer_un_tableau_excel_et_supprimer_les_exemples(appareils, tmp_path
     carte = {c["ref"]: c for c in cartes(page)}
     assert espaces(carte["T-1"]["ht"]) == "1 234,50 €"
     assert espaces(carte["T-1"]["ttc"]) == "1 481,40 €"
-    assert carte["T-1"]["elements"] == {"Taximètre": "M1 STD", "Boîtier": "Gamma 7", "Imprimante": "3S"}
+    assert carte["T-1"]["elements"] == {"Taximètre": "T1 DEMO", "Boîtier": "Zorba 5", "Imprimante": "3Q"}
     assert carte["t-2"]["designation"] == 'Ligne 1\nLigne 2 « guillemets » et "doubles"'
-    assert carte["001"]["elements"] == {"Boîtier": "Gamma 9"}
+    assert carte["001"]["elements"] == {"Boîtier": "Zorba 9"}
     assert carte["T-4"]["designation"] == "- désignation qui commence par un tiret"
 
     fichier = exporter_json(page, tmp_path / "apres.json")
-    assert [e["familleId"] for e in fichier["elements"] if e["nom"] == "Gamma 9"] == ["fam-boitier"]  # créé une seule fois
+    assert [e["familleId"] for e in fichier["elements"] if e["nom"] == "Zorba 9"] == ["fam-boitier"]  # créé une seule fois
     assert not [f for f in fichier["forfaits"] if f.get("exemple") and not f.get("supprime")]
     gardes = {e["nom"] for e in fichier["elements"] if not e.get("supprime")}
-    assert {"M1 STD", "F1", "Gamma 7", "3S", "4S", "Gamma 9"} <= gardes  # ceux que les 4 forfaits utilisent
+    assert {"T1 DEMO", "T2", "Zorba 5", "3Q", "4Q", "Zorba 9"} <= gardes  # ceux que les 4 forfaits utilisent
     assert not gardes & {
-        "Starplast X",
-        "Gammatech X",
-        "Starplast universelle",
+        "Kalpo X",
+        "Zorbatech X",
+        "Kalpo universelle",
         "Lumineux EXEMPLE",
         "Pose EXEMPLE",
     }  # les autres partent
@@ -822,17 +844,17 @@ def test_tableau_exporte_par_l_outil_se_reimporte_sans_changement(page, tmp_path
 
 
 def test_tableau_met_a_jour_un_forfait_sans_le_dupliquer(page, tmp_path):
-    chemin = ecrire_tableau(tmp_path / "maj.csv", ["ex-f1-3s;Nouvelle désignation;800,00;960,00;F1;;;;"])
+    chemin = ecrire_tableau(tmp_path / "maj.csv", ["ex-t2-3q;Nouvelle désignation;800,00;960,00;T2;;;;"])
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
-    assert "Prix qui changent : ex-f1-3s : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in espaces(d.inner_text())
+    assert "Prix qui changent : ex-t2-3q : 700,00 € → 800,00 € HT, 840,00 € → 960,00 € TTC" in espaces(d.inner_text())
     d.get_by_role("button", name="Importer", exact=True).click()  # sans supprimer les exemples
     expect(page.locator("#toast")).to_have_text("Tableau importé")
-    assert refs(page) == (TOUS - {"EX-F1-3S"}) | {"ex-f1-3s"}  # même forfait, pas un doublon
-    (carte,) = [c for c in cartes(page) if c["ref"] == "ex-f1-3s"]
+    assert refs(page) == (TOUS - {"EX-T2-3Q"}) | {"ex-t2-3q"}  # même forfait, pas un doublon
+    (carte,) = [c for c in cartes(page) if c["ref"] == "ex-t2-3q"]
     assert espaces(carte["ttc"]) == "960,00 €"
     assert carte["designation"] == "Nouvelle désignation"
-    assert carte["elements"] == {"Taximètre": "F1"}  # cellule vide : l'imprimante 3S est retirée
+    assert carte["elements"] == {"Taximètre": "T2"}  # cellule vide : l'imprimante 3Q est retirée
 
     d = ouvrir_tableau(page, chemin)  # même tableau une seconde fois : rien à changer
     expect(d).to_contain_text("0 nouveau, 0 modifié, 1 inchangé")
@@ -841,24 +863,24 @@ def test_tableau_met_a_jour_un_forfait_sans_le_dupliquer(page, tmp_path):
 
 def test_tableau_sans_colonne_designation_ne_l_efface_pas(page, tmp_path):
     """Un tableau réduit à « Référence ; Prix HT ; Prix TTC » ne met à jour que les prix."""
-    chemin = ecrire_tableau(tmp_path / "prix.csv", ["EX-F1-3S;800,00;960,00"], en_tete="Référence;Prix HT;Prix TTC", vides=0)
+    chemin = ecrire_tableau(tmp_path / "prix.csv", ["EX-T2-3Q;800,00;960,00"], en_tete="Référence;Prix HT;Prix TTC", vides=0)
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
     d.get_by_role("button", name="Importer", exact=True).click()
     expect(page.locator("#toast")).to_have_text("Tableau importé")
-    (carte,) = [c for c in cartes(page) if c["ref"] == "EX-F1-3S"]
+    (carte,) = [c for c in cartes(page) if c["ref"] == "EX-T2-3Q"]
     assert espaces(carte["ttc"]) == "960,00 €"
     assert carte["designation"].startswith("EXEMPLE")  # désignation d'origine gardée
-    assert carte["elements"] == {"Taximètre": "F1", "Imprimante": "3S"}  # familles absentes du tableau : intactes
+    assert carte["elements"] == {"Taximètre": "T2", "Imprimante": "3Q"}  # familles absentes du tableau : intactes
     stock = page.evaluate("JSON.parse(localStorage.getItem('forfaits.donnees.v1'))")
-    assert next(f for f in stock["forfaits"] if f["ref"] == "EX-F1-3S")["exemple"] is True  # le repère « exemple » aussi
+    assert next(f for f in stock["forfaits"] if f["ref"] == "EX-T2-3Q")["exemple"] is True  # le repère « exemple » aussi
 
 
 def test_tableau_la_barre_oblique_veut_dire_pas_de_donnees(page, tmp_path):
     """Dans les tableaux remplis à la main, « / » = pas de données : jamais un élément nommé « / »."""
     chemin = ecrire_tableau(
         tmp_path / "barre.csv",
-        ["EX-F1-3S;/;800,00;960,00;F1;/;/;/;/", "NV-1;Forfait neuf;100,00;120,00;/;/;/;/;/"],
+        ["EX-T2-3Q;/;800,00;960,00;T2;/;/;/;/", "NV-1;Forfait neuf;100,00;120,00;/;/;/;/;/"],
     )
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("1 nouveau, 1 modifié, 0 inchangé")
@@ -866,8 +888,8 @@ def test_tableau_la_barre_oblique_veut_dire_pas_de_donnees(page, tmp_path):
     d.get_by_role("button", name="Importer", exact=True).click()
     expect(page.locator("#toast")).to_have_text("Tableau importé")
     par_ref = {c["ref"]: c for c in cartes(page)}
-    assert par_ref["EX-F1-3S"]["elements"] == {"Taximètre": "F1"}  # « / » comme une case vide : l'imprimante 3S est retirée
-    assert par_ref["EX-F1-3S"]["designation"] == ""
+    assert par_ref["EX-T2-3Q"]["elements"] == {"Taximètre": "T2"}  # « / » comme une case vide : l'imprimante 3Q est retirée
+    assert par_ref["EX-T2-3Q"]["designation"] == ""
     assert par_ref["NV-1"]["elements"] == {}
     assert (
         page.evaluate("JSON.parse(localStorage.getItem('forfaits.donnees.v1')).elements.filter(e => e.nom === '/').length") == 0
@@ -879,16 +901,16 @@ def test_tableau_dans_l_ordre_du_modele_et_forfait_sans_aucun_element(page, tmp_
     Un forfait sans taximètre (dash cam…) n'a que sa référence, sa désignation et ses prix."""
     chemin = ecrire_tableau(
         tmp_path / "ordre-du-modele.csv",
-        ["MO-1;Taximètre avec boîtier;1000,00;1200,00;F1;4S;/;Gamma 7;/", "MO-DASH;Dash cam seule;150,00;180,00;/;/;/;/;/"],
+        ["MO-1;Taximètre avec boîtier;1000,00;1200,00;T2;4Q;/;Zorba 5;/", "MO-DASH;Dash cam seule;150,00;180,00;/;/;/;/;/"],
         en_tete="Référence;Désignation;Prix HT;Prix TTC;Taximètre;Imprimante;Lumineux;Boîtier;Installation",
     )
     d = ouvrir_tableau(page, chemin)
     expect(d).to_contain_text("2 nouveaux, 0 modifié, 0 inchangé")
-    expect(d).not_to_contain_text("n'existent pas encore")  # Gamma 7 est reconnu dans la famille Boîtier
+    expect(d).not_to_contain_text("n'existent pas encore")  # Zorba 5 est reconnu dans la famille Boîtier
     d.get_by_role("button", name="Importer", exact=True).click()
     expect(page.locator("#toast")).to_have_text("Tableau importé")
     par_ref = {c["ref"]: c for c in cartes(page)}
-    assert par_ref["MO-1"]["elements"] == {"Taximètre": "F1", "Imprimante": "4S", "Boîtier": "Gamma 7"}
+    assert par_ref["MO-1"]["elements"] == {"Taximètre": "T2", "Imprimante": "4Q", "Boîtier": "Zorba 5"}
     assert par_ref["MO-DASH"]["elements"] == {}
     page.fill("#recherche", "dash cam")
     assert refs(page) == {"MO-DASH"}  # un forfait sans élément se retrouve par sa désignation
@@ -1014,10 +1036,10 @@ def test_boutons_vider_et_tout_effacer(page):
     page.click("#btn-vider")
     expect(page.locator("#recherche")).to_have_value("")
     assert refs(page) == TOUS
-    chercher(page, "3S")
+    chercher(page, "3Q")
     page.locator("#filtres .filtre", has_text="Taximètre").click()
-    dialogue(page).get_by_role("button", name="F1", exact=True).click()
-    assert refs(page) == AVEC_F1_ET_3S
+    dialogue(page).get_by_role("button", name="T2", exact=True).click()
+    assert refs(page) == AVEC_T2_ET_3Q
     page.click("#btn-tout-effacer")  # efface le texte ET les filtres
     expect(page.locator("#recherche")).to_have_value("")
     expect(page.locator("#etiquettes")).to_be_hidden()
@@ -1026,13 +1048,13 @@ def test_boutons_vider_et_tout_effacer(page):
 
 def test_exemple_modifie_devient_un_vrai_forfait(page):
     activer_modif(page)
-    modifier(page, "EX-F1-3S")
+    modifier(page, "EX-T2-3Q")
     expect(dialogue(page).locator(".note-exemple")).to_contain_text("devient un vrai forfait")
-    remplir(page, ref="VRAI-F1-3S", ht="500", ttc="600", designation="Vrai forfait")
+    remplir(page, ref="VRAI-T2-3Q", ht="500", ttc="600", designation="Vrai forfait")
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats .carte")).to_have_count(1)
-    assert refs(page) == {"VRAI-F1-3S"}
+    assert refs(page) == {"VRAI-T2-3Q"}
     expect(page.locator(".badge-exemple")).to_have_count(0)
 
 
@@ -1040,13 +1062,13 @@ def test_date_absurde_dans_un_fichier_ne_bloque_rien(appareils, tmp_path):
     a = appareils().page
     fichier = exporter_json(a, tmp_path / "base.json")
     for f in fichier["forfaits"]:
-        if f["ref"] == "EX-F1-3S":
+        if f["ref"] == "EX-T2-3Q":
             f["maj"] = 1e20
             f["ttc"] = 99999
     piege = tmp_path / "piege.json"
     piege.write_text(json.dumps(fichier), encoding="utf-8")
     importer(a, piege)
-    chercher(a, "EX-F1-3S")
+    chercher(a, "EX-T2-3Q")
     assert espaces(cartes(a)[0]["ttc"]) == "999,99 €"
     expect(a.locator("#etat-donnees")).to_contain_text("Données du")
     # La date a été ramenée à demain au plus : une vraie modification plus tard l'emportera encore.
@@ -1057,6 +1079,89 @@ def test_date_absurde_dans_un_fichier_ne_bloque_rien(appareils, tmp_path):
     )
 
 
+def test_horloge_en_avance_une_correction_l_emporte_quand_meme(appareils, tmp_path):
+    """Un fichier daté de quelques heures dans le futur (appareil à l'horloge en avance) ne doit pas
+    faire perdre les corrections faites ensuite, ni à la main ni par le tableau."""
+    a = appareils().page
+    fichier = exporter_json(a, tmp_path / "base.json")
+    for f in fichier["forfaits"]:
+        if f["ref"] == "EX-T2-3Q":
+            f["maj"] = int(datetime.now().timestamp() * 1000) + 12 * 3600 * 1000
+            f["ht"], f["ttc"] = 100000, 120000
+    avance = tmp_path / "avance.json"
+    avance.write_text(json.dumps(fichier), encoding="utf-8")
+    importer(a, avance)
+
+    activer_modif(a)
+    modifier(a, "EX-T2-3Q")
+    remplir(a, ht="800", ttc="960")
+    a.set_input_files("#fichier-import", [])
+    importer(a, avance)  # le fichier « du futur » revient : la correction reste
+    chercher(a, "EX-T2-3Q")
+    assert espaces(cartes(a)[0]["ttc"]) == "960,00 €"
+
+    d = ouvrir_tableau(a, ecrire_tableau(tmp_path / "t.csv", ["EX-T2-3Q;Corrigé;850,00;1020,00;T2;;3Q;;"]))
+    expect(d).to_contain_text("0 nouveau, 1 modifié, 0 inchangé")
+    d.get_by_role("button", name="Importer", exact=True).click()
+    expect(a.locator("#toast")).to_have_text("Tableau importé")
+    a.set_input_files("#fichier-import", [])
+    importer(a, avance)
+    chercher(a, "EX-T2-3Q")
+    assert espaces(cartes(a)[0]["ttc"]) == "1 020,00 €"
+
+
+def test_fenetre_lisible_sur_grand_ecran(page):
+    """Safari écrasait le corps des fenêtres à sa seule marge au-delà de 600 px de large."""
+    page.set_viewport_size({"width": 1280, "height": 720})
+    activer_modif(page)
+    ouvrir_ajout(page)
+    corps = dialogue(page).locator(".dlg-corps")
+    assert corps.evaluate("c => c.clientHeight") >= min(300, corps.evaluate("c => c.scrollHeight"))
+
+
+def test_export_iphone_par_le_menu_partager(appareils):
+    """iPhone : le téléchargement peut ne rien enregistrer, l'export passe par le menu Partager."""
+    iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+    page = appareils(user_agent=iphone).page
+    page.evaluate("""() => {
+        navigator.canShare = (d) => !!d.files;
+        navigator.share = async (d) => {
+            if (window.annuler) throw new DOMException('annulé', 'AbortError');
+            if (window.refuser) throw new DOMException('refusé', 'NotAllowedError');
+            window.partage = { nom: d.files[0].name, texte: await d.files[0].text() };
+        };
+    }""")
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "I-1", "100", "120")
+    telechargements = []
+    page.on("download", lambda t: telechargements.append(t))
+
+    page.evaluate("window.annuler = true")
+    page.click("#btn-rappel-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("dialog[open]")).to_have_count(0)
+    expect(page.locator("#rappel")).to_be_visible()  # annulé : le rappel reste
+
+    page.evaluate("window.annuler = false; window.refuser = true")
+    page.click("#btn-rappel-exporter")
+    with page.expect_download():
+        page.click("#btn-export-json")
+    expect(page.locator("#toast")).to_contain_text("Téléchargements")
+    expect(page.locator("#rappel")).to_be_visible()  # partage refusé : téléchargé, sans preuve, le rappel reste
+    telechargements.clear()
+
+    page.evaluate("window.refuser = false")
+    page.click("#btn-rappel-exporter")
+    page.click("#btn-export-json")
+    expect(page.locator("#toast")).to_have_text("Fichier de sauvegarde enregistré")
+    expect(page.locator("#rappel")).to_be_hidden()
+    partage = page.evaluate("window.partage")
+    assert re.fullmatch(r"forfaits-\d{4}-\d\d-\d\d-\d\dh\d\d\.json", partage["nom"])
+    assert "I-1" in {f["ref"] for f in json.loads(partage["texte"])["forfaits"]}
+    assert telechargements == []
+
+
 def test_meme_element_cree_par_deux_responsables_signale(appareils, tmp_path):
     a = appareils().page
     b = appareils().page
@@ -1065,14 +1170,14 @@ def test_meme_element_cree_par_deux_responsables_signale(appareils, tmp_path):
         p.click("#btn-menu")
         p.click("#btn-listes")
         champ = dialogue(p).get_by_label("Nouvel élément pour Boîtier")
-        champ.fill("Gamma 8")
+        champ.fill("Zorba 8")
         champ.press("Enter")
         dialogue(p).get_by_role("button", name="Terminé").click()
     exporter_json(b, tmp_path / "b.json")
     a.set_input_files("#fichier-import", str(tmp_path / "b.json"))
     dialogue(a).get_by_role("button", name="Mettre à jour").click()
     expect(dialogue(a)).to_contain_text("Doublons à corriger")
-    expect(dialogue(a)).to_contain_text("Boîtier : Gamma 8 (2 fois)")
+    expect(dialogue(a)).to_contain_text("Boîtier : Zorba 8 (2 fois)")
 
 
 # ---------------------------------------------------------------- téléphone, hors ligne, fichier local
@@ -1099,11 +1204,11 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     assert min(hauteurs) >= 44, hauteurs
 
     page.click("#recherche")
-    page.keyboard.type("gam")
+    page.keyboard.type("zor")
     expect(page.locator("#suggestions")).to_be_visible()
     sans_defilement_horizontal()
     page.screenshot(path=f"{prefixe}-2-suggestions.png")
-    page.locator("#suggestions .suggestion", has_text="Gamma 7").click()
+    page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
     page.screenshot(path=f"{prefixe}-3-etiquette.png")
 
     activer_modif(page)
@@ -1220,16 +1325,16 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
     dialogue(page).get_by_role("button", name="Clair", exact=True).click()
     page.screenshot(path=f"{prefixe}-1-menu.png")
     page.keyboard.press("Escape")
-    chercher(page, "3S")
+    chercher(page, "3Q")
     page.locator("#filtres .filtre", has_text="Taximètre").click()
     page.screenshot(path=f"{prefixe}-2-filtre.png")
     page.keyboard.press("Escape")
     page.locator("#recherche").fill("")
     page.click("#recherche")
-    page.keyboard.type("gam")
+    page.keyboard.type("zor")
     expect(page.locator("#suggestions")).to_be_visible()
     page.screenshot(path=f"{prefixe}-3-suggestions.png")
-    page.locator("#suggestions .suggestion", has_text="Gamma 7").click()
+    page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
     activer_modif(page)
     ouvrir_ajout(page)
     assert page.evaluate("document.documentElement.scrollWidth") <= largeur
@@ -1250,8 +1355,8 @@ def test_marche_sans_internet(navigateur):
         contexte.set_offline(True)
         page.reload()
         page.wait_for_selector("#resultats .carte")
-        chercher(page, "3S")
-        assert refs(page) == AVEC_3S
+        chercher(page, "3Q")
+        assert refs(page) == AVEC_3Q
     finally:
         contexte.close()
 
@@ -1265,8 +1370,8 @@ def test_marche_en_ouvrant_le_fichier_directement(navigateur):
         page.on("console", lambda m: erreurs.append(m.text) if m.type == "error" else None)
         page.goto((RACINE / "index.html").as_uri())
         page.wait_for_selector("#resultats .carte")
-        chercher(page, "3S F1")
-        assert refs(page) == AVEC_F1_ET_3S
+        chercher(page, "3Q T2")
+        assert refs(page) == AVEC_T2_ET_3Q
         # Seul refus toléré : le navigateur ne lit pas le manifeste (icône d'appli) depuis un fichier local.
         assert all("manifest" in e.lower() for e in erreurs), erreurs
     finally:

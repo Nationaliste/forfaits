@@ -57,7 +57,7 @@ MODE_D_EMPLOI = [
         "Puis choisis chaque élément dans la liste déroulante. Si le forfait n'en a pas : « / » (pas de données) ou case vide, c'est pareil. "
         "Un forfait sans taximètre (dash cam, lumineux…) n'a besoin que de la référence, de la désignation et des prix. "
         "Boîtier et Installation sont à droite parce qu'ils servent rarement. "
-        "Surnoms (facultatif) : les noms que les techniciens donnent au forfait, séparés par des virgules (« le gros pack, pack nuit ») ; "
+        "Surnoms (facultatif) : les noms que les techniciens donnent au forfait, séparés par des virgules (« le gros pack, pack nuit »), 3 au maximum ; "
         "la recherche les reconnaît sur tous les postes. Un surnom ne désigne qu'une seule chose : un surnom déjà pris est ignoré (annoncé à l'import).",
     ),
     (

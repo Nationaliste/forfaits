@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-bwFYmvKu86UR2IBGfV41w35HabgNlHOhXYamgCTVzVs='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8gFV1iNJi1vWU72EItnTxjUJiWyMC++K9Orq/8w1SVc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -563,15 +563,17 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   // Surnoms donnés par les techniciens : « le gros, pack nuit » → ['le gros', 'pack nuit'].
-  // Au moins 2 lettres ou chiffres, 40 caractères, 10 par élément ou forfait, sans doublon.
-  const SURNOMS_MAX = 10;
-  function lireSurnoms(v) {
+  // Au moins 2 lettres ou chiffres, 40 caractères, sans doublon. La saisie en refuse plus de SURNOMS_MAX
+  // (avec un message) ; la lecture en garde jusqu'à 10 : ceux déjà enregistrés avant la limite ne se perdent pas.
+  const SURNOMS_MAX = 3;
+  function lireSurnoms(v, max = 10) { // saisie : max = Infinity, rien ne se perd avant le contrôle
     const vus = new Set();
     return (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [])
       .filter((s) => typeof s === 'string').map((s) => s.trim().replace(/\s+/g, ' ').slice(0, 40))
       .filter((s) => { const cle = norm(s); if (cle.length < 2 || vus.has(cle)) return false; vus.add(cle); return true; })
-      .slice(0, SURNOMS_MAX);
+      .slice(0, max);
   }
+  const tropDeSurnoms = (liste) => (liste.length > SURNOMS_MAX ? `${SURNOMS_MAX} surnoms au maximum.` : null);
   const avecSurnoms = (liste) => (liste.length ? { surnoms: liste } : {});
   const nouveaux = (liste, anciens = []) => liste.filter((s) => !anciens.some((a) => norm(a) === norm(s)));
 
@@ -856,6 +858,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const forfaitParId = new Map(forfaits.map((f) => [f.id, f]));
     // Surnoms : ceux de l'équipe d'abord, puis ceux de cet appareil. Un surnom ne désigne qu'une seule chose :
     // le premier arrivé le garde, un doublon (vrai nom d'un élément, ou déjà pris) est ignoré par la recherche.
+    // Entre deux éléments ou deux forfaits de l'équipe, le plus petit identifiant passe d'abord : l'ordre des listes
+    // dépend des fusions de chaque appareil, l'identifiant est le même partout (et ne bouge pas quand on change un prix).
+    const parId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const nomsFamilles = new Set(fams.map((f) => norm(f.nom))); // « imprimante » doit rester une recherche de famille
     const surnomPris = new Map(); // surnom « à plat » → { id, equipe }
     const surnomsDe = new Map();  // identifiant → surnoms retenus, équipe puis perso
@@ -865,7 +870,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       surnomPris.set(cle, { id, equipe });
       surnomsDe.set(id, [...(surnomsDe.get(id) || []), s]);
     };
-    for (const x of [...elsActifs, ...forfaits]) for (const s of x.surnoms || []) retenir(x.id, s, true);
+    for (const x of [...[...elsActifs].sort(parId), ...[...forfaits].sort(parId)]) for (const s of x.surnoms || []) retenir(x.id, s, true);
     for (const [id, liste] of Object.entries(appareil.surnoms)) {
       if (elParId.has(id) || forfaitParId.has(id)) for (const s of liste) retenir(id, s, false);
     }
@@ -1397,9 +1402,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ref = champRef.value.trim();
       const ht = lirePrix(champHt.value);
       const ttc = lirePrix(champTtc.value);
-      const surnoms = lireSurnoms(champSurnoms.value);
+      const surnoms = lireSurnoms(champSurnoms.value, Infinity);
       // Seuls les surnoms ajoutés sont contrôlés : un ancien doublon (déjà ignoré par la recherche) ne bloque pas un changement de prix.
-      const surnomPris = nouveaux(surnoms, existant?.surnoms).map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
+      const ajoutes = nouveaux(surnoms, existant?.surnoms);
+      const surnomPris = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
       const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
         : doublon ? ['Cette référence existe déjà : choisis-en une autre.', champRef]
         : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
@@ -1596,8 +1602,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
           });
           champSurnoms.addEventListener('change', () => {
             const courant = donnees.elements.find((x) => x.id === e.id);
-            const surnoms = lireSurnoms(champSurnoms.value);
-            const refus = nouveaux(surnoms, courant.surnoms).map((s) => surnomRefuse(s, e.id, true)).find(Boolean);
+            const surnoms = lireSurnoms(champSurnoms.value, Infinity);
+            const ajoutes = nouveaux(surnoms, courant.surnoms);
+            const refus = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, e.id, true)).find(Boolean);
             if (refus) {
               signaler(refus);
               champSurnoms.value = (courant.surnoms || []).join(', ');
@@ -1964,7 +1971,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const exemple = colonnes.has('exemple') || !existant ? norm(lire('exemple')) === 'oui' : !!existant.exemple;
       if (exemple) avecExemples = true;
       // Surnoms : la case remplace ceux de l'équipe (vide = aucun) ; sans la colonne, on garde. Contrôlés après la lecture de tout le tableau.
-      const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms')) : null;
+      const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms'), Infinity) : null;
+      // Comme au formulaire : seul un ajout est refusé (un tableau réexporté avec des surnoms d'avant la limite repasse).
+      const trop = surnomsLus && nouveaux(surnomsLus, existant?.surnoms).length && tropDeSurnoms(surnomsLus);
+      if (trop) { erreurs.push(`${lieu} : ${trop}`); continue; }
       brouillons.push({ existant, ref, designation, ht, ttc, elements, exemple, surnomsLus });
     }
 

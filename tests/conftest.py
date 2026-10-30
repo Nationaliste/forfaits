@@ -66,11 +66,23 @@ def navigateur(request, pw):
     b.close()
 
 
+# Les cartes sont repliées par défaut (réglage de l'appareil). La plupart des tests lisent et
+# cliquent dans le détail des cartes : ils demandent « cartes entières » avant le chargement.
+CARTES_ENTIERES = """try {
+  const cle = ['forfaits', 'appareil', 'v1'].join('.');
+  const regl = JSON.parse(localStorage.getItem(cle) || '{}');
+  regl.compact = false;
+  localStorage.setItem(cle, JSON.stringify(regl));
+} catch {}"""
+
+
 class Appareil:
     """Un appareil (navigateur avec ses propres données) qui ouvre l'outil."""
 
-    def __init__(self, navigateur, url, **options):
+    def __init__(self, navigateur, url, compact=False, **options):
         self.contexte = navigateur.new_context(locale="fr-FR", accept_downloads=True, service_workers="block", **options)
+        if not compact:
+            self.contexte.add_init_script(CARTES_ENTIERES)
         self.erreurs = []
         # Le choix du dossier d'export (Edge, Chrome) ouvrirait une fenêtre : les tests prennent le téléchargement,
         # et test_export_dans_le_dossier_choisi remplace ce choix par un faux.

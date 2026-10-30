@@ -274,6 +274,27 @@ def test_boutons_de_filtre(page):
     expect(page.locator("#etiquettes")).to_contain_text("Boîtier : sans")
 
 
+def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre(page):
+    """Au comptoir : un boîtier d'un forfait, un lumineux d'un autre, à additionner avec « + Total »."""
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    dialogue(page).get_by_role("button", name="T1 DEMO", exact=True).click()
+    page.locator("#filtres .filtre", has_text="Lumineux").click()
+    dialogue(page).get_by_role("button", name="Lumineux EXEMPLE", exact=True).click()
+
+    expect(page.locator("#compte")).to_have_text("Aucun forfait ne contient tout")
+    titres = page.locator("#resultats .titre-groupe").all_text_contents()
+    assert titres == ["Taximètre : T1 DEMO5 forfaits", "Lumineux : Lumineux EXEMPLE1 forfait"]
+    assert refs(page) == AVEC_T1 | {"EX-LUM-POSE"}
+    expect(page.locator(".note-groupes")).to_contain_text("+ Total")
+
+    # Un seul filtre qui ne donne rien : pas de groupes, le message habituel.
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    dialogue(page).get_by_role("button", name="Tous", exact=True).click()
+    chercher(page, "zorba")
+    expect(page.locator("#resultats .vide")).to_contain_text("Aucun forfait ne correspond à cette recherche.")
+    expect(page.locator("#resultats .titre-groupe")).to_have_count(0)
+
+
 # ---------------------------------------------------------------- affichage et prix
 
 

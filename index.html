@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YrMqGaM1Jty3M89zpxxGqT1hDOZ8rWvw3vPM1/6he+o='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Zaiwxg8YMCT/MIptK3NXSLlLZuMXneXcZqk+DFvH89w='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -248,6 +248,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
 .resultats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
+/* Repli : rien ne contient tous les filtres, on montre les forfaits de chaque filtre. */
+.note-groupes { grid-column: 1 / -1; margin: 0; color: var(--texte-doux); }
+.titre-groupe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 17px; }
+.titre-groupe-compte { font-size: 14px; font-weight: 400; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
 .carte {
   display: flex; flex-direction: column; gap: 8px;
@@ -999,9 +1003,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return { mots, contraintes };
   }
 
-  function correspond(forfait, contraintes) {
+  function correspond(forfait, contraintes, filtres = etatUi.filtres) {
     const els = index.elementsForfait.get(forfait.id);
-    for (const [familleId, valeur] of etatUi.filtres) {
+    for (const [familleId, valeur] of filtres) {
       const present = els.find((e) => e.familleId === familleId);
       if (valeur === SANS ? present : present?.id !== valeur) return false;
     }
@@ -1112,6 +1116,19 @@ textarea.champ { resize: vertical; min-height: 90px; }
     zone.hidden = etatUi.filtres.size === 0;
   }
 
+  // Les forfaits de chaque filtre pris tout seul, quand aucun forfait ne les contient tous
+  // (au comptoir : un boîtier d'un forfait + un lumineux d'un autre, à additionner avec « + Total »).
+  // Les filtres « sans » ne font pas de groupe : ils ne désignent aucun élément à retrouver.
+  function groupesParFiltre(contraintes, classer) {
+    const choisis = [...etatUi.filtres].filter(([, valeur]) => valeur !== SANS);
+    if (choisis.length < 2) return [];
+    const groupes = choisis.map(([familleId, valeur]) => ({
+      titre: `${index.famParId.get(familleId).nom} : ${index.elParId.get(valeur).nom}`,
+      liste: classer(index.forfaits.filter((f) => correspond(f, contraintes, new Map([[familleId, valeur]])))),
+    })).filter((g) => g.liste.length);
+    return groupes.length < 2 ? [] : groupes;
+  }
+
   function rendreResultats() {
     const texte = $('recherche').value;
     const analyse = analyserRecherche(texte);
@@ -1123,11 +1140,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[$('tri').value] || 0;
     const favori = (f) => Number(appareil.favoris.includes(f.id));
     const usage = (f) => appareil.usageForfaits[f.id] || 0;
-    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
+    const classer = (liste) => liste.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
       || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || usage(b) - usage(a) || tri.compare(a.ref, b.ref));
+    classer(resultats);
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
+    const groupes = resultats.length === 0 && total > 0 ? groupesParFiltre(analyse.contraintes, classer) : [];
 
-    $('compte').textContent = total === 0 ? '' : resultats.length === 0 ? 'Aucun forfait ne correspond'
+    $('compte').textContent = total === 0 ? '' : groupes.length ? 'Aucun forfait ne contient tout'
+      : resultats.length === 0 ? 'Aucun forfait ne correspond'
       : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
     $('btn-tout-effacer').hidden = !actif;
     $('zone-tri').hidden = total < 2;
@@ -1141,6 +1161,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
         appareil.modeModif
           ? h('button', { type: 'button', class: 'btn btn-rouge', onclick: () => ouvrirFormulaire(null) }, '+ Ajouter un forfait')
           : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le fichier des forfaits'))];
+    } else if (groupes.length) {
+      contenu = [h('p', { class: 'note-groupes' },
+        'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec « + Total ».'),
+        ...groupes.flatMap((g) => [h('h3', { class: 'titre-groupe' }, g.titre, h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))), ...g.liste.map(carte)])];
     } else if (resultats.length === 0) {
       contenu = [h('div', { class: 'vide' },
         h('p', {}, 'Aucun forfait ne correspond à cette recherche.'),

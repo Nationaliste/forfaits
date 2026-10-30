@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-7V2zR14LofP+znxlkyI4utF78ohTvKV6lM8yArwK1mA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-o4Cgsac52sV50zlOpdpDYRrrY4ik0vgkTrD1LhZNr4g='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -46,6 +46,7 @@
   --police: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --police-titre: Bahnschrift, "DIN Alternate", sans-serif-condensed, system-ui, sans-serif;
   --tactile: 48px; /* hauteur minimale des boutons (doigt) */
+  --zoom: 1;       /* grossissement du texte, posé par data-texte sur <html> */
 }
 /* Palette claire : choisie dans le Menu (ou suivant l'appareil), posée par le script sur <html>. */
 :root[data-theme="clair"] {
@@ -70,6 +71,12 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+/* Taille des caractères, réglée par appareil (Menu → Taille du texte) : tout grossit d'un bloc,
+   boutons et espaces compris, et la page se remet en page (pas de défilement horizontal).
+   Piège : les tailles données en vw, vh ou dvh restent celles de l'écran réel, elles ne sont pas
+   grossies ; il faut donc les diviser par --zoom (sinon fenêtres et barres du bas débordent). */
+:root[data-texte="grand"] { --zoom: 1.15; zoom: 1.15; }
+:root[data-texte="tres-grand"] { --zoom: 1.3; zoom: 1.3; }
 html { -webkit-text-size-adjust: 100%; color-scheme: dark; background: var(--fond); }
 body {
   margin: 0;
@@ -78,8 +85,8 @@ body {
   line-height: 1.45;
   color: var(--texte);
   background: var(--fond);
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: calc(100vh / var(--zoom));
+  min-height: calc(100dvh / var(--zoom));
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
@@ -152,6 +159,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-family: var(--police-titre);
   font-size: 24px; line-height: 1;
   letter-spacing: .05em; text-transform: uppercase;
+  /* En grands caractères sur un petit téléphone, le titre se coupe plutôt que de passer sous les boutons. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .etat { margin: 4px 0 0; font-size: 13px; color: var(--texte-doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entete-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -211,7 +220,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin: 0; padding: 6px; list-style: none;
   background: var(--surface); color: var(--texte);
   border: 1px solid var(--trait-fort); border-radius: 12px;
-  max-height: 60vh; overflow: auto;
+  max-height: calc(60vh / var(--zoom)); overflow: auto;
 }
 .suggestion {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -250,9 +259,21 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
 /* Repli : rien ne contient tous les filtres, on montre les forfaits de chaque filtre. */
 .note-groupes { grid-column: 1 / -1; margin: 0; color: var(--texte-doux); }
+/* Derniers forfaits consultés sur cet appareil : la liste complète est longue, celui qu'on vient
+   de regarder revient souvent deux minutes plus tard. */
+.recents { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 2px; }
+.recents-titre { margin: 0; font-size: 14px; color: var(--texte-doux); }
+.recent {
+  max-width: 100%; min-height: 40px; padding: 6px 12px;
+  background: var(--surface-2); border: 1px solid var(--trait); border-radius: 999px;
+  color: var(--texte); font-size: 14px; text-align: left; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recent:hover { border-color: var(--trait-fort); color: var(--texte-fort); }
 .titre-groupe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 17px; }
 .titre-groupe-compte { font-size: 14px; font-weight: 400; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
+.vide-boutons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .carte {
   display: flex; flex-direction: column; gap: 8px;
   background: var(--surface);
@@ -351,7 +372,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 /* ============ Rappel d'export et messages ============ */
 .rappel {
   position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 40;
-  max-width: 720px; margin: 0 auto;
+  width: calc(100vw / var(--zoom) - 24px); max-width: 720px; margin: 0 auto;
   display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between;
   padding: 12px 14px;
   background: var(--rouge); color: var(--blanc);
@@ -362,7 +383,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .rappel :focus-visible { outline-color: var(--blanc); } /* le contour rouge disparaîtrait sur le fond rouge */
 .toast {
   position: fixed; left: 50%; bottom: 96px; z-index: 60;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100vw / var(--zoom) - 32px);
   padding: 12px 18px; border-radius: 999px;
   background: var(--vert); color: var(--blanc); font-weight: 600; text-align: center;
   box-shadow: var(--ombre-forte);
@@ -375,7 +396,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 /* ============ Total (addition de plusieurs lignes, par appareil) ============ */
 .barre-total {
   position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 45;
-  max-width: 720px; margin: 0 auto; min-height: var(--tactile);
+  width: calc(100vw / var(--zoom) - 24px); max-width: 720px; margin: 0 auto; min-height: var(--tactile);
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 14px;
   padding: 10px 16px; border: 0; border-radius: 14px; cursor: pointer; text-align: left;
   background: var(--inverse); color: var(--inverse-texte); font: inherit; font-weight: 700;
@@ -409,15 +430,15 @@ body.avec-total main { padding-bottom: 230px; }
 /* ============ Fenêtres (dialogues) ============ */
 .dlg {
   border: 1px solid var(--trait); padding: 0;
-  width: min(600px, calc(100vw - 24px)); max-width: none;
-  max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
+  width: min(600px, calc(100vw / var(--zoom) - 24px)); max-width: none;
+  max-height: calc(100vh / var(--zoom) - 24px); max-height: calc(100dvh / var(--zoom) - 24px);
   border-radius: 16px;
   background: var(--surface); color: var(--texte);
   box-shadow: var(--ombre-forte);
 }
 .dlg[open] { display: flex; flex-direction: column; animation: monte .18s ease-out; }
 .dlg::backdrop { background: var(--voile); }
-.dlg-large { width: min(820px, calc(100vw - 24px)); }
+.dlg-large { width: min(820px, calc(100vw / var(--zoom) - 24px)); }
 .dlg-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .dlg-tete {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -504,7 +525,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
 /* ============ Téléphone ============ */
 @media (max-width: 600px) {
-  .dlg, .dlg-large { width: 100vw; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; border: 0; margin: 0; }
+  .dlg, .dlg-large { width: calc(100vw / var(--zoom)); height: calc(100vh / var(--zoom)); height: calc(100dvh / var(--zoom)); max-height: none; border-radius: 0; border: 0; margin: 0; }
   /* Sur téléphone, les boutons de filtre tiennent sur une ligne qu'on fait défiler du doigt,
      pour que la zone de recherche (qui reste en haut) ne mange pas l'écran. */
   .filtres { flex-wrap: nowrap; overflow-x: auto; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; scrollbar-width: none; }
@@ -535,7 +556,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   main { padding-top: 10px; padding-bottom: 120px; }
   .barre-resultats { margin-bottom: 8px; }
   .resultats { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
-  .suggestions { max-height: 45vh; }
+  .suggestions { max-height: calc(45vh / var(--zoom)); }
 }
 </style>
 </head>
@@ -609,6 +630,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_DONNEES = 'forfaits.donnees.v1';   // forfaits + listes, sur cet appareil
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
+  const TAILLES = [{ valeur: 'normal', libelle: 'Normal' }, { valeur: 'grand', libelle: 'Grand' }, { valeur: 'tres-grand', libelle: 'Très grand' }];
+  const RECENTS_MAX = 4;           // derniers forfaits consultés (par appareil, jamais exporté)
   const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
   const QTE_MAX = 99;
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
@@ -827,6 +850,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   let stockageOk = true;      // faux si l'appareil refuse d'enregistrer (navigation privée…)
   let donneesIllisibles = false;
+  let nouvelleVersion = false; // le service worker a téléchargé une version plus récente de la page
 
   function charger() {
     let brut = null;
@@ -852,7 +876,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', compact: true, favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, favoris: [], recents: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -860,6 +884,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const lu = JSON.parse(localStorage.getItem(CLE_APPAREIL) || '{}');
       return {
         favoris: Array.isArray(lu.favoris) ? [...new Set(lu.favoris.filter(estId))].slice(0, USAGE_MAX) : [],
+        // Derniers forfaits consultés, le plus récent d'abord.
+        recents: Array.isArray(lu.recents) ? [...new Set(lu.recents.filter(estId))].slice(0, RECENTS_MAX) : [],
         usageElements: compteurs(lu.usageElements),
         usageForfaits: compteurs(lu.usageForfaits),
         // Surnoms perso : identifiant d'élément ou de forfait → surnoms (jamais exportés).
@@ -871,6 +897,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
         dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
+        texte: TAILLES.some((t) => t.valeur === lu.texte) ? lu.texte : 'normal',
         compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
       };
     } catch {
@@ -897,6 +924,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (autres.length >= USAGE_MAX) delete compteurs[autres.reduce((a, b) => (compteurs[b] < compteurs[a] ? b : a))]; // oublie le moins utilisé
     sauverAppareil();
   }
+  // Forfait qu'on vient de regarder (carte dépliée, référence copiée, ajout au total) : il revient
+  // en haut des résultats quand la recherche est vide, le temps des quelques suivants.
+  function noterConsulte(id) {
+    appareil.recents = [id, ...appareil.recents.filter((x) => x !== id)].slice(0, RECENTS_MAX);
+    sauverAppareil();
+  }
+
   // À appeler après chaque changement fait sur cet appareil (sert au rappel d'export).
   function noterModif() {
     appareil.modifsEnAttente += 1;
@@ -940,13 +974,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
   let appareil = chargerAppareil();
 
   // Le CSS n'a que deux palettes : « auto » est résolu ici d'après le réglage de l'appareil.
+  // La taille du texte est posée de la même façon, sur <html>.
   const themeSysteme = window.matchMedia('(prefers-color-scheme: light)');
-  function appliquerTheme() {
+  function appliquerApparence() {
     const clair = appareil.theme === 'clair' || (appareil.theme === 'auto' && themeSysteme.matches);
     document.documentElement.dataset.theme = clair ? 'clair' : 'sombre';
+    document.documentElement.dataset.texte = appareil.texte;
   }
-  appliquerTheme();
-  themeSysteme.addEventListener('change', appliquerTheme);
+  appliquerApparence();
+  themeSysteme.addEventListener('change', appliquerApparence);
 
   /* =====================================================================
      INDEX : vues prêtes à l'emploi, recalculées après chaque changement
@@ -1002,7 +1038,24 @@ textarea.champ { resize: vertical; min-height: 90px; }
         ...els.map((e) => norm(famParId.get(e.familleId).nom)),
       ]);
     }
-    return { fams, famParId, elsActifs, elParId, parNom, forfaits, forfaitParId, elementsForfait, champs, surnomPris, surnomsDe };
+    // Mots connus (mot « à plat » → mot tel qu'on l'écrit), pour rattraper une faute de frappe.
+    // Moins de 4 lettres : laissés de côté, « 3Q » deviendrait « 4Q ».
+    const motsConnus = new Map();
+    const retenirMot = (texte) => {
+      const cle = norm(texte);
+      if (cle.length >= 4 && !motsConnus.has(cle)) motsConnus.set(cle, texte);
+    };
+    for (const e of elsActifs) {
+      retenirMot(e.nom);
+      for (const s of surnomsDe.get(e.id) || []) retenirMot(s);
+    }
+    for (const fam of fams) retenirMot(fam.nom);
+    for (const f of forfaits) {
+      retenirMot(f.ref);
+      for (const s of surnomsDe.get(f.id) || []) retenirMot(s);
+      for (const mot of decouper(f.designation)) retenirMot(mot);
+    }
+    return { fams, famParId, elsActifs, elParId, parNom, forfaits, forfaitParId, elementsForfait, champs, surnomPris, surnomsDe, motsConnus };
   }
 
   const elementsDe = (familleId) => index.elsActifs.filter((e) => e.familleId === familleId);
@@ -1086,6 +1139,56 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return { liste: [], nbMots: 0, via: new Map() };
   }
 
+  // Nombre de lettres à changer pour passer d'un mot à l'autre ; abandonne dès que ça dépasse « max ».
+  function distanceMots(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let ligne = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      const suivante = [i];
+      let mini = i;
+      for (let j = 1; j <= b.length; j++) {
+        suivante[j] = Math.min(ligne[j] + 1, suivante[j - 1] + 1, ligne[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (suivante[j] < mini) mini = suivante[j];
+      }
+      if (mini > max) return max + 1;
+      ligne = suivante;
+    }
+    return ligne[b.length];
+  }
+
+  // Au doigt, une lettre part de travers : « kalpoo » ne trouve rien alors que « Kalpo X » existe.
+  // On ne touche qu'aux mots d'au moins 4 lettres qui ne trouvent rien du tout, et on ne propose la
+  // correction que si elle donne vraiment des forfaits (sinon autant ne rien dire).
+  // À égalité de distance, l'ordre de index.motsConnus tranche : noms d'éléments, puis familles,
+  // puis références, puis mots des désignations.
+  // Renvoie la recherche corrigée, ou null s'il n'y a rien à proposer.
+  function corrigerRecherche(texte) {
+    const mots = decouper(texte);
+    const connu = (plat) => index.parNom.has(plat)
+      || [...index.champs.values()].some((champs) => champs.some((ch) => ch.includes(plat)));
+    let corrige = false;
+    const proposes = mots.map((mot) => {
+      const plat = norm(mot);
+      if (plat.length < 4 || connu(plat)) return mot;
+      const max = plat.length <= 6 ? 1 : 2;
+      let meilleureDistance = max;
+      let candidats = [];
+      for (const [cle, affichage] of index.motsConnus) {
+        const d = distanceMots(plat, cle, max);
+        if (d > meilleureDistance) continue;
+        if (d < meilleureDistance) { meilleureDistance = d; candidats = []; }
+        if (!candidats.some((c) => norm(c) === norm(affichage))) candidats.push(affichage);
+      }
+      if (!candidats.length) return mot;
+      corrige = true;
+      return candidats[0];
+    });
+    if (!corrige) return null;
+    const propose = proposes.join(' ');
+    const { contraintes } = analyserRecherche(propose);
+    return index.forfaits.some((f) => correspond(f, contraintes)) ? propose : null;
+  }
+
   /* =====================================================================
      AFFICHAGE
      ===================================================================== */
@@ -1123,6 +1226,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const liste = [];
     if (!stockageOk) liste.push(bandeau("Cet appareil n'enregistre pas les données (navigation privée ?). Exporte avant de fermer la page.", null, true));
     if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer'), true));
+    // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
+    if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
     const exemples = index.forfaits.some((f) => f.exemple);
     if (exemples) {
       liste.push(bandeau(
@@ -1172,6 +1277,22 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return groupes.length < 2 ? [] : groupes;
   }
 
+  // Les derniers forfaits consultés, quand la recherche est vide : un appui remet le forfait seul
+  // à l'écran (la liste complète est longue, celui qu'on vient de regarder revient souvent).
+  function rangeeRecents(liste) {
+    return h('div', { class: 'recents' },
+      h('p', { class: 'recents-titre' }, 'Derniers consultés'),
+      ...liste.map((f) => h('button', {
+        type: 'button', class: 'recent', title: f.designation || f.ref,
+        onclick: () => {
+          $('recherche').value = f.ref;
+          etatUi.ouvertes.add(f.id);
+          rendreRecherche();
+          window.scrollTo({ top: 0 });
+        },
+      }, f.designation || f.ref)));
+  }
+
   function rendreResultats() {
     const texte = $('recherche').value;
     const analyse = analyserRecherche(texte);
@@ -1199,6 +1320,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('btn-ajouter').hidden = !appareil.modeModif;
     $('btn-vider').hidden = texte === '';
 
+    const recents = actif ? [] : appareil.recents.map((id) => index.forfaitParId.get(id)).filter(Boolean);
+
     let contenu;
     if (total === 0) {
       contenu = [h('div', { class: 'vide' },
@@ -1211,11 +1334,17 @@ textarea.champ { resize: vertical; min-height: 90px; }
         'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec « + Total ».'),
         ...groupes.flatMap((g) => [h('h3', { class: 'titre-groupe' }, g.titre, h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))), ...g.liste.map(carte)])];
     } else if (resultats.length === 0) {
+      const corrige = analyse.mots.length ? corrigerRecherche(texte) : null;
       contenu = [h('div', { class: 'vide' },
         h('p', {}, 'Aucun forfait ne correspond à cette recherche.'),
-        h('button', { type: 'button', class: 'btn btn-bord', onclick: toutEffacer }, 'Effacer la recherche'))];
+        h('div', { class: 'vide-boutons' },
+          corrige ? h('button', {
+            type: 'button', class: 'btn btn-blanc', id: 'btn-correction',
+            onclick: () => { $('recherche').value = corrige; rendreRecherche(); },
+          }, `Chercher « ${corrige} » ?`) : null,
+          h('button', { type: 'button', class: 'btn btn-bord', onclick: toutEffacer }, 'Effacer la recherche')))];
     } else {
-      contenu = resultats.map(carte);
+      contenu = [...(recents.length ? [rangeeRecents(recents)] : []), ...resultats.map(carte)];
     }
     $('resultats').replaceChildren(...contenu);
   }
@@ -1255,9 +1384,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
           // Pas de nouveau classement tout de suite : la carte ne doit pas bouger sous le doigt.
           h('button', {
             type: 'button', class: 'btn btn-total', 'aria-label': `Ajouter ${f.ref} au total`, title: 'Ajouter au total (additionner plusieurs lignes)',
-            onclick: (ev) => { ajouterAuTotal(f); ev.currentTarget.textContent = texteBoutonTotal(f); },
+            onclick: (ev) => { ajouterAuTotal(f); noterConsulte(f.id); ev.currentTarget.textContent = texteBoutonTotal(f); },
           }, texteBoutonTotal(f)),
-          h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); copier(f.ref, ev.currentTarget); } },
+          h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); noterConsulte(f.id); copier(f.ref, ev.currentTarget); } },
             h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier')))),
       h('div', { class: 'carte-pied' },
         f.designation ? h('span', { class: 'carte-ref' }, f.ref) : null, // sinon la référence est déjà le titre
@@ -1276,6 +1405,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         onclick: (ev) => {
           const ouvre = !etatUi.ouvertes.has(f.id);
           if (ouvre) etatUi.ouvertes.add(f.id); else etatUi.ouvertes.delete(f.id);
+          if (ouvre) noterConsulte(f.id); // la carte ne bouge pas : la rangée « Derniers consultés » sert à la prochaine recherche vide
+
           ev.currentTarget.setAttribute('aria-expanded', String(ouvre));
           ev.currentTarget.closest('.carte').classList.toggle('carte-ouverte', ouvre);
           corps.hidden = !ouvre;
@@ -2460,7 +2591,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-mes-surnoms', onclick: fermerPuis(ouvrirMesSurnoms) }, 'Mes surnoms (perso, sur cet appareil)'),
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Apparence'), h('p', {}, "« Auto » suit le réglage de l'appareil.")),
-          choixTheme()),
+          choixReglage('theme', THEMES, 'Apparence')),
+        h('div', { class: 'menu-mode' },
+          h('div', {}, h('strong', {}, 'Taille du texte'), h('p', {}, 'Tout grossit, sur cet appareil seulement.')),
+          choixReglage('texte', TAILLES, 'Taille du texte')),
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
         h('div', { class: 'menu-mode' },
@@ -2479,19 +2613,20 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
   }
 
-  // Trois boutons ; le choix s'applique tout de suite et la fenêtre reste ouverte pour voir le résultat.
-  function choixTheme() {
-    const boutons = THEMES.map(({ valeur, libelle }) => h('button', {
-      type: 'button', 'data-theme-choix': valeur,
-      onclick: () => { appareil.theme = valeur; sauverAppareil(); appliquerTheme(); marquer(); },
+  // Trois boutons (thème, taille du texte) ; le choix s'applique tout de suite et la fenêtre reste
+  // ouverte pour voir le résultat. Réglages de l'appareil : jamais exportés.
+  function choixReglage(cle, choix, libelleGroupe) {
+    const boutons = choix.map(({ valeur, libelle }) => h('button', {
+      type: 'button', 'data-choix': valeur,
+      onclick: () => { appareil[cle] = valeur; sauverAppareil(); appliquerApparence(); marquer(); },
     }, libelle));
     const marquer = () => boutons.forEach((b) => {
-      const actif = b.dataset.themeChoix === appareil.theme;
+      const actif = b.dataset.choix === appareil[cle];
       b.className = 'btn ' + (actif ? 'btn-rouge' : 'btn-bord');
       b.setAttribute('aria-pressed', String(actif));
     });
     marquer();
-    return h('div', { class: 'groupe-theme', role: 'group', 'aria-label': 'Apparence' }, ...boutons);
+    return h('div', { class: 'groupe-theme', role: 'group', 'aria-label': libelleGroupe }, ...boutons);
   }
 
   async function basculerModeModif() {
@@ -2571,7 +2706,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // Si la page est ouverte dans deux onglets, ils restent d'accord.
   window.addEventListener('storage', (ev) => {
     if (ev.key === CLE_DONNEES) donnees = charger();
-    else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerTheme(); }
+    else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerApparence(); }
     else return;
     rafraichir();
   });
@@ -2583,11 +2718,23 @@ textarea.champ { resize: vertical; min-height: 90px; }
   rafraichir();
   if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
 
-  // Mode hors ligne (seulement quand la page vient d'une adresse web).
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Mode hors ligne (seulement quand la page vient d'une adresse web). Le service worker prévient
+  // quand il a téléchargé une page plus récente : on propose « Recharger » au lieu d'attendre
+  // la deuxième ouverture.
+  function signalerNouvelleVersion() {
+    if (nouvelleVersion) return;
+    nouvelleVersion = true;
+    rendreBandeaux();
+  }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      if (ev.data?.type === 'nouvelle-version') signalerNouvelleVersion();
+    });
+  }
 
-  // Fonction exposée pour les tests automatiques.
-  window.Forfaits = Object.freeze({ lirePrix });
+  // Fonctions exposées pour les tests automatiques.
+  window.Forfaits = Object.freeze({ lirePrix, signalerNouvelleVersion });
 })();
 </script>
 </body>

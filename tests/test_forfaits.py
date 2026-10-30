@@ -295,6 +295,26 @@ def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre
     expect(page.locator("#resultats .titre-groupe")).to_have_count(0)
 
 
+def test_faute_de_frappe_propose_la_bonne_recherche(page):
+    """Au doigt, une lettre part de travers : « kalpoo » ne doit pas finir sur un écran vide."""
+    chercher(page, "kalpoo")
+    expect(page.locator("#resultats .vide")).to_be_visible()
+    correction = page.locator("#btn-correction")
+    expect(correction).to_have_text("Chercher « Kalpo X » ?")
+    correction.click()
+    assert page.locator("#recherche").input_value() == "Kalpo X"
+    assert refs(page) == {"EX-T1-KPX-3Q", "EX-T2-KPX-4Q"}
+
+    # Rien de proche : pas de proposition au hasard.
+    chercher(page, "machinchose")
+    expect(page.locator("#resultats .vide")).to_be_visible()
+    expect(page.locator("#btn-correction")).to_have_count(0)
+
+    # Mots courts laissés tranquilles : « 3Q » ne doit jamais devenir « 4Q ».
+    chercher(page, "T1 DEMO 5Q")
+    expect(page.locator("#btn-correction")).to_have_count(0)
+
+
 # ---------------------------------------------------------------- affichage et prix
 
 
@@ -1376,6 +1396,42 @@ def test_telephone_tourne_garde_les_forfaits_visibles(navigateur, appareils):
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
 
 
+def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
+    """La liste est longue : le forfait regardé il y a deux minutes revient en haut, en un appui."""
+    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
+    expect(page.locator("#resultats .recents")).to_have_count(0)  # rien de consulté : pas de rangée
+
+    carte = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text="EX-T2-3Q"))
+    carte.locator(".carte-ouvrir").click()
+    chercher(page, "3Q")  # une recherche, puis on revient à la liste complète
+    chercher(page, "")
+    recent = page.locator("#resultats .recent")
+    expect(recent).to_have_count(1)
+    expect(recent).to_contain_text("Taximètre T2 + imprimante 3Q")
+
+    recent.click()
+    assert refs(page) == {"EX-T2-3Q"}
+    expect(page.locator("#resultats .carte")).to_have_class(re.compile(r"\bcarte-ouverte\b"))
+
+
+def test_grands_caracteres_grossissent_tout_sans_deborder(appareils):
+    """Comptoir et atelier : un cran de plus, gardé sur l'appareil, sans casser la mise en page."""
+    page = appareils(compact=True, viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
+    avant = page.locator("#recherche").bounding_box()["height"]
+
+    page.click("#btn-menu")
+    dialogue(page).get_by_role("button", name="Très grand", exact=True).click()
+    # Piège : les tailles en vw/vh ne sont pas grossies, une fenêtre déborderait de l'écran.
+    boite = dialogue(page).bounding_box()
+    assert boite["width"] <= 375 and boite["height"] <= 812, boite
+    page.keyboard.press("Escape")
+
+    assert page.locator("#recherche").bounding_box()["height"] > avant * 1.2
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
+    page.reload()  # gardé sur l'appareil
+    expect(page.locator("html")).to_have_attribute("data-texte", "tres-grand")
+
+
 # ---------------------------------------------------------------- thème clair et sombre
 
 
@@ -1514,6 +1570,33 @@ def test_marche_sans_internet(navigateur):
         page.wait_for_selector("#resultats .carte")
         chercher(page, "3Q")
         assert refs(page) == AVEC_3Q
+    finally:
+        contexte.close()
+
+
+def test_nouvelle_version_proposee_sans_attendre_la_prochaine_ouverture(navigateur, url_site):
+    """Le service worker sert d'abord la copie gardée : sans ce bandeau, la nouveauté attend la 2e ouverture."""
+    contexte = navigateur.new_context(service_workers="allow")
+    try:
+        page = contexte.new_page()
+        page.goto(url_site)
+        page.wait_for_selector("#resultats .carte")
+        expect(page.locator("#btn-recharger")).to_have_count(0)
+
+        # La copie gardée n'est plus celle du serveur : le service worker doit prévenir l'onglet ouvert.
+        # L'attente se fait ici : page.wait_for_function passe par eval(), que la CSP refuse (Firefox).
+        page.evaluate(
+            """async () => {
+            await navigator.serviceWorker.ready;
+            for (let i = 0; i < 100 && !navigator.serviceWorker.controller; i++) {
+                await new Promise((fin) => setTimeout(fin, 50));
+            }
+            const cache = await caches.open('forfaits-v1');
+            await cache.put('./index.html', new Response('<!doctype html><title>version precedente</title>'));
+            await fetch('./index.html');
+        }"""
+        )
+        expect(page.locator("#btn-recharger")).to_be_visible()
     finally:
         contexte.close()
 

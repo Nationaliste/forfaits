@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Paml1hDq0VeEzScu+DIeWHgJyry/kkDdDPaJK7cTyBM='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-oKKyoRGWi90I5HgiEDQXOPJXRsmiFnoQ+SGhI7QxjdI='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -290,10 +290,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .prix { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .prix-montant { font-family: var(--police-titre); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .prix-ttc .prix-montant { color: var(--rouge-vif); }
-.prix-type { font-size: 13px; font-weight: 700; color: var(--texte-doux); }
+.prix-type { font-size: 15px; font-weight: 700; color: var(--texte-doux); }
 .carte-elements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .carte-elements li { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 8px; background: var(--surface-2); }
-.el-famille { font-size: 13px; color: var(--texte-doux); }
+.el-famille { font-size: 15px; color: var(--texte-doux); }
 .el-nom { font-weight: 700; }
 .carte-designation { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte-doux); }
 .carte-maj { margin: 0; font-size: 13px; color: var(--texte-doux); }
@@ -342,9 +342,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 }
 .barre-total[hidden] { display: none; }
 .barre-total-montants { display: flex; gap: 14px; flex-wrap: wrap; }
-body.avec-total .rappel { bottom: 76px; }
-body.avec-total .toast { bottom: 150px; }
-body.avec-total main { padding-bottom: 200px; }
+body.avec-total .rappel { bottom: 96px; } /* la barre peut passer sur 2 lignes : 70 px de haut */
+body.avec-total .toast { bottom: 170px; }
+body.avec-total main { padding-bottom: 230px; }
 .btn-total { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
 .btn-total:hover { border-color: var(--rouge); }
 .total-ligne { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--trait); }
@@ -354,7 +354,10 @@ body.avec-total main { padding-bottom: 200px; }
 .total-ligne-commandes { display: flex; align-items: center; gap: 6px; grid-column: 1 / -1; }
 .total-ligne-commandes .btn-carre { background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
 .total-qte { min-width: 32px; text-align: center; font-weight: 700; }
-.total-retirer { margin-left: auto; }
+.total-retirer { margin-left: auto; min-height: var(--tactile); min-width: var(--tactile); }
+.carte-pied .btn-lien { min-height: var(--tactile); }
+.total-libre .msg-erreur { margin: 0; }
+.total-libre .msg-erreur:empty { display: none; }
 .total-somme { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin-top: 14px; font-size: 22px; font-weight: 800; }
 .total-somme dd { margin: 0; text-align: right; }
 .total-libre { display: grid; gap: 8px; margin-top: 14px; }
@@ -412,6 +415,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .msg-champ.erreur, .msg-erreur { color: var(--rouge-vif); }
 .msg-champ.attention { color: var(--ambre); }
 .msg-erreur { margin: 0 0 10px; font-weight: 700; }
+/* Le message reste visible en haut de la fenêtre même quand le formulaire a défilé. */
+.dlg-corps > .msg-reserve:not(:empty) { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 /* Place gardée : si le message disparaît pendant un clic, la liste ne remonte pas (Safari perdrait le clic). */
 .msg-reserve { min-height: 1.5em; }
 .note-exemple { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); border-left: 4px solid var(--ambre); font-weight: 600; }
@@ -498,7 +503,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   <div class="champ-recherche">
     <svg class="loupe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
     <label for="recherche" class="sr">Rechercher un forfait</label>
-    <input id="recherche" type="search" placeholder="Référence, 3Q, T1 DEMO, Zorba…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
+    <input id="recherche" type="search" placeholder="Référence, taximètre, imprimante, surnom…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
     <button type="button" class="btn-icone" id="btn-vider" aria-label="Effacer la recherche" hidden>✕</button>
     <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
   </div>
@@ -1160,7 +1165,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
       h('div', { class: 'carte-pied' },
         f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : h('span', {}), // 0 : exemple jamais touché
-        h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Surnom')),
+        h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Mon surnom')),
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
         h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);
@@ -1234,8 +1239,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Menu → Mes surnoms : surnoms perso des appareils (taximètres, boîtiers…), et la liste de tous les miens.
   function ouvrirMesSurnoms() {
-    const choix = h('select', { class: 'champ', id: 'surnoms-element', 'aria-label': 'Appareil' },
-      h('option', { value: '' }, '— Choisis un appareil —'),
+    const choix = h('select', { class: 'champ', id: 'surnoms-element', 'aria-label': 'Élément' },
+      h('option', { value: '' }, '— Choisis un élément (taximètre, boîtier…) —'),
       index.fams.map((fam) => h('optgroup', { label: fam.nom }, elementsDe(fam.id).map((e) => h('option', { value: e.id }, e.nom)))));
     const zone = h('div', {});
     const recap = h('ul', { class: 'recap-surnoms' });
@@ -1249,7 +1254,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const dlg = ouvrirDialogue({
       titre: 'Mes surnoms',
       corps: [
-        h('p', { class: 'aide-texte' }, "Donne tes propres noms aux appareils : la recherche les reconnaît. Ils restent sur cet appareil. Pour un forfait : « + Surnom » en bas de sa carte."),
+        h('p', { class: 'aide-texte' }, "Donne tes propres noms aux appareils : la recherche les reconnaît. Ils restent sur cet appareil. Pour un forfait : « + Mon surnom » en bas de sa carte."),
         choix, zone, h('h3', { class: 'titre-recap' }, 'Tous mes surnoms'), recap,
       ],
       pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
@@ -1291,9 +1296,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const ligne = appareil.total.find((l) => l.id === f.id);
     if (ligne) {
       if (ligne.qte >= QTE_MAX) { toast(`${QTE_MAX} au maximum pour ${f.ref}`, true); return; }
-      ligne.qte += 1;
-      ligne.ht = f.ht; // le prix du jour
-      ligne.ttc = f.ttc;
+      ligne.qte += 1; // le prix reste celui de la première fois : les unités déjà comptées ne changent pas
     } else {
       if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : ouvre le total et retire-en`, true); return; }
       appareil.total.push({ id: f.id, nom: f.ref, qte: 1, ht: f.ht, ttc: f.ttc });
@@ -1316,21 +1319,28 @@ textarea.champ { resize: vertical; min-height: 90px; }
       sauverAppareil();
       redessiner();
     } }, 'Tout vider');
-    const changer = (action) => { action(); sauverAppareil(); redessiner(); };
+    // La ligne l peut avoir disparu si le total a changé dans un autre onglet : on redessine sans rien toucher.
+    // Le bouton touché est recréé : le focus y revient (le « + » si le « − » vient de se désactiver).
+    const changer = (l, action, cmd, i) => {
+      if (appareil.total.includes(l)) { action(); sauverAppareil(); }
+      redessiner();
+      const bouton = (c) => lignes.querySelector(`[data-cmd="${c}"][data-i="${i}"]`);
+      (bouton(cmd)?.disabled ? bouton('plus') : bouton(cmd))?.focus();
+    };
 
     function redessiner() {
       rendreBarreTotal();
       btnVider.disabled = appareil.total.length === 0;
-      lignes.replaceChildren(...(appareil.total.length ? appareil.total.map((l) => h('div', { class: 'total-ligne' },
+      lignes.replaceChildren(...(appareil.total.length ? appareil.total.map((l, i) => h('div', { class: 'total-ligne' },
         h('span', { class: 'total-ligne-nom' }, l.nom),
         h('span', { class: 'total-ligne-prix' }, `${formatPrix(l.ttc * l.qte)} TTC`,
           h('div', { class: 'total-ligne-unite' }, `${formatPrix(l.ht * l.qte)} HT`)),
         h('div', { class: 'total-ligne-commandes' },
-          h('button', { type: 'button', class: 'btn btn-carre', 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(() => { l.qte -= 1; }) }, '−'),
-          h('span', { class: 'total-qte', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
-          h('button', { type: 'button', class: 'btn btn-carre', 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(() => { l.qte += 1; }) }, '+'),
+          h('button', { type: 'button', class: 'btn btn-carre', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, '−'),
+          h('span', { class: 'total-qte', role: 'status', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
+          h('button', { type: 'button', class: 'btn btn-carre', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, '+'),
           l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
-          h('button', { type: 'button', class: 'btn-lien total-retirer', 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(() => { appareil.total.splice(appareil.total.indexOf(l), 1); }) }, 'Retirer'))))
+          h('button', { type: 'button', class: 'btn-lien total-retirer', 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, 'Retirer'))))
         : [h('p', { class: 'total-vide' }, 'Rien dans le total. Sur un forfait, appuie sur « + Total ».')]));
       const { ht, ttc } = sommeTotal();
       somme.replaceChildren(h('dt', {}, 'Total HT'), h('dd', {}, formatPrix(ht)), h('dt', {}, 'Total TTC'), h('dd', {}, formatPrix(ttc)));
@@ -1342,12 +1352,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const ttc = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix TTC', 'aria-label': 'Prix TTC de la ligne libre' });
     ht.addEventListener('input', () => { const v = lirePrix(ht.value); ttc.value = v === null ? '' : prixSaisie(ttcDepuisHt(v)); });
     ttc.addEventListener('input', () => { const v = lirePrix(ttc.value); ht.value = v === null ? '' : prixSaisie(htDepuisTtc(v)); });
+    const erreur = h('p', { class: 'msg-erreur', role: 'alert' });
     const libre = h('form', { class: 'total-libre', novalidate: true, onsubmit: (ev) => {
       ev.preventDefault();
       const prixHt = lirePrix(ht.value);
       const prixTtc = lirePrix(ttc.value);
-      if (prixHt === null || prixTtc === null) { toast('Tape un prix (exemple : 45,50)', true); (prixHt === null ? ht : ttc).focus(); return; }
-      if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : retires-en une`, true); return; }
+      // Message dans la fenêtre même : un toast passerait sous la fenêtre modale.
+      erreur.textContent = '';
+      if (prixHt === null || prixTtc === null) { erreur.textContent = 'Tape un prix (exemple : 45,50).'; (prixHt === null ? ht : ttc).focus(); return; }
+      if (appareil.total.length >= TOTAL_MAX) { erreur.textContent = `${TOTAL_MAX} lignes au maximum : retires-en une.`; return; }
       appareil.total.push({ id: null, nom: nom.value.trim().slice(0, 80) || 'Divers', qte: 1, ht: prixHt, ttc: prixTtc });
       sauverAppareil();
       nom.value = ht.value = ttc.value = '';
@@ -1357,6 +1370,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       h('strong', {}, 'Ajouter une pièce ou un service'),
       nom,
       h('div', { class: 'total-libre-prix' }, ht, ttc),
+      erreur,
       h('button', { type: 'submit', class: 'btn btn-bord' }, '+ Ajouter à la liste'));
 
     const dlg = ouvrirDialogue({
@@ -1565,7 +1579,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
         : surnomPris ? [surnomPris, champSurnoms]
         : ['', null];
       msgErreur.textContent = probleme;
-      if (probleme) { champFautif.focus(); return; }
+      if (probleme) {
+        champFautif.closest('.champ-groupe')?.append(msgErreur); // le message apparaît sous le champ à corriger, pas en bas du formulaire
+        champFautif.focus();
+        return;
+      }
 
       const elements = {};
       for (const liste of listes) if (liste.value) elements[liste.dataset.famille] = liste.value;
@@ -1606,12 +1624,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
         existant?.exemple ? h('p', { class: 'note-exemple' }, 'Ce forfait est un EXEMPLE. Une fois enregistré, il devient un vrai forfait : vérifie bien la référence et les prix.') : null,
         groupe('Référence *', champRef, msgRef),
         groupe('Désignation / contenu', champDes),
-        groupe("Surnoms de l'équipe (séparés par des virgules)", champSurnoms),
+        groupe("Surnoms de l'équipe (3 max, séparés par des virgules)", champSurnoms),
         h('div', { class: 'ligne-prix' },
           groupe('Prix HT *', champHt, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champTtc, champHt, htDepuisTtc) }, 'Calculer depuis le TTC')),
           groupe('Prix TTC *', champTtc, h('button', { type: 'button', class: 'btn-lien', onclick: calcul(champHt, champTtc, ttcDepuisHt) }, `Calculer depuis le HT (+ ${TAUX_TVA})`))),
         h('div', { class: 'grille-familles' }, index.fams.map((fam, i) => groupe(fam.nom, listes[i]))),
-        msgErreur,
       ],
       pied: [
         h('button', { type: 'submit', class: 'btn btn-rouge', id: 'f-enregistrer' }, 'Enregistrer'),
@@ -1749,7 +1766,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
           });
           // Surnoms d'équipe : partent dans le fichier exporté, comme le nom.
           const champSurnoms = h('input', {
-            class: 'champ champ-surnoms', value: (e.surnoms || []).join(', '), maxlength: 600, placeholder: 'Surnoms (séparés par des virgules)',
+            class: 'champ champ-surnoms', value: (e.surnoms || []).join(', '), maxlength: 600, placeholder: 'Surnoms (3 max, séparés par des virgules)',
             'aria-label': `Surnoms de l'élément ${e.nom}`,
           });
           champSurnoms.addEventListener('change', () => {
@@ -1923,7 +1940,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
               const enCours = exporterJson(); // d'abord : le choix du dossier doit suivre le clic
               dlg.close();
               const resultat = await enCours;
-              if (resultat) toast(resultat === 'telecharge' ? 'Fichier enregistré dans Téléchargements : range-le dans OneDrive' : 'Fichier de sauvegarde enregistré');
+              if (resultat === 'telecharge') {
+                await informer('Fichier dans Téléchargements', 'Déplace-le maintenant dans le dossier OneDrive des forfaits (fichier .json), sinon les autres ne verront pas tes changements.');
+              } else if (resultat) toast('Fichier de sauvegarde enregistré');
             },
           }, 'Fichier de sauvegarde (.json)'),
           h('button', {
@@ -2221,6 +2240,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
   async function importerFichier(fichier) {
     if (!fichier) return;
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
+    if (/\.xlsx?$/i.test(fichier.name)) {
+      await informer('Import impossible', "C'est le fichier Excel lui-même. Dans Excel : Fichier → Enregistrer sous → « CSV UTF-8 », puis importe ce fichier .csv.");
+      return;
+    }
     if (/\.csv$/i.test(fichier.name)) { await importerTableau(fichier); return; }
     let entrant, exporteLe, texte;
     try {
@@ -2319,22 +2342,24 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const dlg = ouvrirDialogue({
       titre: 'Menu',
       corps: h('div', { class: 'menu-liste' },
-        h('div', { class: 'menu-mode' },
-          h('div', {}, h('strong', {}, 'Mode modification'), h('p', {}, 'Pour les responsables : ajouter, modifier, supprimer.')),
-          h('button', {
-            type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-rouge' : 'btn-bord'),
-            'aria-pressed': String(appareil.modeModif), onclick: fermerPuis(basculerModeModif),
-          }, appareil.modeModif ? 'Activé' : 'Désactivé')),
+        // Ce qu'on utilise tous les jours d'abord ; ce qui sert aux responsables ensuite.
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer (sauvegarde ou tableau Excel)'),
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-mes-surnoms', onclick: fermerPuis(ouvrirMesSurnoms) }, 'Mes surnoms (perso, sur cet appareil)'),
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Apparence'), h('p', {}, "« Auto » suit le réglage de l'appareil.")),
           choixTheme()),
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
+        h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
+        h('div', { class: 'menu-mode' },
+          h('div', {}, h('strong', {}, 'Mode modification'), h('p', {}, appareil.modeModif ? 'Activé sur cet appareil.' : 'Pour ajouter, modifier, supprimer.')),
+          h('button', {
+            type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-bord' : 'btn-rouge'),
+            title: appareil.modeModif ? 'Mode modification : activé' : 'Mode modification : désactivé', onclick: fermerPuis(basculerModeModif),
+          }, appareil.modeModif ? 'Désactiver' : 'Activer')),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
-        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-mes-surnoms', onclick: fermerPuis(ouvrirMesSurnoms) }, 'Mes surnoms (noms des techniciens)'),
-        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer (sauvegarde ou tableau Excel)'),
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
         appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
-        h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' },
           `${pluriel(index.forfaits.length, 'forfait')} · dernier export : ${appareil.dernierExport ? dateCourte(appareil.dernierExport) : 'jamais'}`
           + ` · dernier import : ${appareil.dernierImport ? dateCourte(appareil.dernierImport) : 'jamais'} · version ${VERSION_OUTIL}`)),
@@ -2381,7 +2406,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: h('ol', { class: 'etapes' },
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
-        h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
+        h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Mon surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
         h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),

@@ -99,12 +99,20 @@ def modifier(page, ref):
     ).click()
 
 
+def fermer_rappel_telechargement(page):
+    """Après un téléchargement, l'outil rappelle de ranger le fichier dans OneDrive : fenêtre à fermer."""
+    expect(dialogue(page)).to_contain_text("Déplace-le maintenant dans le dossier OneDrive")
+    dialogue(page).get_by_role("button", name="Compris").click()
+    expect(page.locator("dialog[open]")).to_have_count(0)
+
+
 def exporter_json(page, chemin):
     page.click("#btn-menu")
     page.click("#btn-menu-exporter")
     with page.expect_download() as telechargement:
         page.click("#btn-export-json")
     telechargement.value.save_as(chemin)
+    fermer_rappel_telechargement(page)
     return json.loads(chemin.read_text(encoding="utf-8"))
 
 
@@ -1217,7 +1225,8 @@ def test_export_iphone_par_le_menu_partager(appareils):
     page.click("#btn-rappel-exporter")
     with page.expect_download():
         page.click("#btn-export-json")
-    expect(page.locator("#toast")).to_contain_text("Téléchargements")
+    expect(dialogue(page)).to_contain_text("Téléchargements")
+    fermer_rappel_telechargement(page)
     expect(page.locator("#rappel")).to_be_visible()  # partage refusé : téléchargé, sans preuve, le rappel reste
     telechargements.clear()
 
@@ -1822,5 +1831,49 @@ def test_total_abime_ou_invalide_ne_bloque_rien(page):
     d = dialogue(page)
     d.get_by_label("Nom de la ligne libre").fill("Sans prix")
     d.get_by_role("button", name="+ Ajouter à la liste").click()
-    expect(page.locator("#toast")).to_contain_text("Tape un prix")
+    expect(d.locator(".msg-erreur")).to_contain_text("Tape un prix")  # dans la fenêtre : un toast passerait dessous
     expect(d.locator(".total-ligne")).to_have_count(1)
+
+
+def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(page):
+    a = sorted(TOUS)[0]
+    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
+    page.locator("#barre-total").click()
+    d = dialogue(page)
+    plus = d.get_by_role("button", name=f"Plus : {a}")
+    plus.focus()
+    page.keyboard.press("Enter")
+    expect(d.locator(".total-qte")).to_have_text("2")
+    expect(d.get_by_role("button", name=f"Plus : {a}")).to_be_focused()  # le focus ne se perd pas
+    hauteur = d.get_by_role("button", name=f"Retirer {a}").bounding_box()
+    assert hauteur["height"] >= 44 and hauteur["width"] >= 44, hauteur
+    # Le total a changé dans un autre onglet : « Retirer » sur une ligne périmée ne retire pas la mauvaise
+    page.evaluate(
+        """() => { const l = JSON.parse(localStorage.getItem('forfaits.appareil.v1'));
+          l.total.push({id: null, nom: 'Autre', qte: 1, ht: 100, ttc: 120});
+          localStorage.setItem('forfaits.appareil.v1', JSON.stringify(l));
+          window.dispatchEvent(new StorageEvent('storage', {key: ['forfaits', 'appareil', 'v1'].join('.')})); }"""
+    )
+    d.get_by_role("button", name=f"Retirer {a}").click()
+    expect(d.locator(".total-ligne")).to_have_count(2)  # rien n'est retiré à tort : la liste est redessinée
+    expect(d.locator(".total-ligne-nom")).to_have_text([a, "Autre"])
+
+
+def test_fichier_excel_directement_est_explique(page, tmp_path):
+    xlsx = tmp_path / "Forfaits.xlsx"
+    xlsx.write_bytes(b"PK")
+    page.set_input_files("#fichier-import", str(xlsx))
+    expect(dialogue(page)).to_contain_text("CSV UTF-8")
+    expect(dialogue(page)).to_contain_text("fichier Excel lui-même")
+
+
+def test_menu_les_actions_de_tous_les_jours_avant_celles_des_responsables(page):
+    page.click("#btn-menu")
+    d = dialogue(page)
+    texte = d.inner_text()
+    assert texte.index("Importer") < texte.index("Mes surnoms") < texte.index("Responsables") < texte.index("Mode modification")
+    expect(d.locator("#btn-mode-modif")).to_have_text("Activer")
+    page.keyboard.press("Escape")
+    activer_modif(page)
+    page.click("#btn-menu")
+    expect(dialogue(page).locator("#btn-mode-modif")).to_have_text("Désactiver")

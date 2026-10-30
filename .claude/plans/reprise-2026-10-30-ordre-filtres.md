@@ -13,8 +13,8 @@ Choix tranché par lui : **ordre par appareil** (comme le thème et la taille du
 
 ## État
 
-Branche `feat/ordre-des-filtres`, commit `943cacf` + les corrections de relecture (non commitées au
-moment de la pause, à vérifier avec `git status`).
+Branche `feat/ordre-des-filtres` poussée, commits `943cacf` (la fonctionnalité) et `75dd2bd`
+(corrections de relecture + cette note). Rien à récupérer en local.
 
 Fait :
 - `ordreFams` dans `forfaits.appareil.v1` (jamais exporté) ; `construireIndex` classe par cet ordre,
@@ -42,10 +42,9 @@ d'un fichier bricolé.
 
 ## Prochaine étape
 
-1. `git status` : si les corrections de relecture ne sont pas commitées, les commiter.
-2. Relancer `NAVIGATEURS=chromium python -m pytest -q` (la dernière exécution n'était pas terminée
-   à la pause).
-3. `gh pr create` puis demander la fusion à l'utilisateur.
+`gh pr create` depuis la branche, puis demander la fusion à l'utilisateur. Tout est validé : le
+dernier passage après les corrections de relecture (csp, ruff, pytest Chromium) est vert.
+Pas de CI à attendre : quota GitHub Actions épuisé jusqu'au 1er novembre.
 
 ## À lui montrer / à décider
 

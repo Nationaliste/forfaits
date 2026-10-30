@@ -1287,6 +1287,18 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     boite = dialogue(page).bounding_box()
     assert boite["width"] <= largeur
     page.screenshot(path=f"{prefixe}-4-formulaire.png")
+    dialogue(page).get_by_role("button", name="Fermer").click()
+
+    # Le Total : le bouton de carte, la barre du bas et le panneau tiennent dans l'écran
+    page.get_by_role("button", name="Ajouter EX-T1-Z5-3Q au total", exact=True).click()
+    page.get_by_role("button", name="Ajouter EX-T1-Z5-3Q au total", exact=True).click()
+    expect(page.locator("#barre-total")).to_be_visible()
+    sans_defilement_horizontal()
+    page.screenshot(path=f"{prefixe}-5-total-barre.png")
+    page.locator("#barre-total").click()
+    boite = dialogue(page).bounding_box()
+    assert boite["width"] <= largeur and boite["y"] >= 0
+    page.screenshot(path=f"{prefixe}-6-total-panneau.png")
 
 
 # ---------------------------------------------------------------- thème clair et sombre
@@ -1734,3 +1746,81 @@ def test_plus_de_trois_surnoms_d_avant_la_limite_ne_bloquent_rien(page, tmp_path
     expect(page.locator("#toast")).to_have_text("Tableau importé")
     chercher(page, "fd")
     assert refs(page) == set()
+
+
+def centimes(texte):
+    """« 1 234,50 € HT » → 123450."""
+    chiffres = re.sub(r"[^\d,]", "", texte)
+    entier, _, decimales = chiffres.partition(",")
+    return int(entier) * 100 + int(decimales.ljust(2, "0"))
+
+
+def prix_carte(page, ref):
+    carte = page.locator(f'.carte:has(h2.carte-ref:text-is("{ref}"))')
+    return centimes(carte.locator(".prix-ht .prix-montant").text_content()), centimes(
+        carte.locator(".prix-ttc .prix-montant").text_content()
+    )
+
+
+def test_total_additionne_forfaits_quantites_et_lignes_libres(page):
+    a, b = sorted(TOUS)[:2]
+    (ht_a, ttc_a), (ht_b, ttc_b) = prix_carte(page, a), prix_carte(page, b)
+    expect(page.locator("#barre-total")).to_be_hidden()  # rien à afficher tant que le total est vide
+
+    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
+    expect(page.locator("#toast")).to_contain_text(f"{a} ajouté au total")
+    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
+    expect(page.get_by_role("button", name=f"Ajouter {a} au total", exact=True)).to_have_text("Total ×2")
+    page.get_by_role("button", name=f"Ajouter {b} au total", exact=True).click()
+    expect(page.locator("#barre-total-nb")).to_contain_text("3 articles")
+    assert centimes(page.locator("#barre-total-ht").text_content()) == 2 * ht_a + ht_b
+    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2 * ttc_a + ttc_b
+
+    page.locator("#barre-total").click()
+    d = dialogue(page)
+    d.get_by_role("button", name=f"Moins : {a}").click()  # 2 → 1
+    d.get_by_role("button", name=f"Retirer {b}").click()
+    expect(d.locator(".total-ligne")).to_have_count(1)
+    # Ligne libre : 0,10 + 0,20 doit faire 0,30 exactement ; le TTC se calcule depuis le HT
+    d.get_by_label("Nom de la ligne libre").fill("Pièce test")
+    d.get_by_label("Prix HT de la ligne libre").fill("0,10")
+    expect(d.get_by_label("Prix TTC de la ligne libre")).to_have_value("0,12")
+    d.get_by_role("button", name="+ Ajouter à la liste").click()
+    d.get_by_label("Prix TTC de la ligne libre").fill("0,24")
+    expect(d.get_by_label("Prix HT de la ligne libre")).to_have_value("0,20")
+    d.get_by_role("button", name="+ Ajouter à la liste").click()
+    expect(d.locator(".total-ligne")).to_have_count(3)
+    assert centimes(d.locator(".total-somme dd").first.text_content()) == ht_a + 10 + 20
+    assert centimes(d.locator(".total-somme dd").last.text_content()) == ttc_a + 12 + 24
+    d.get_by_role("button", name="Terminé").click()
+
+    page.reload()  # gardé sur l'appareil
+    expect(page.locator("#barre-total-nb")).to_contain_text("3 articles")
+    assert centimes(page.locator("#barre-total-ht").text_content()) == ht_a + 30
+    page.locator("#barre-total").click()
+    dialogue(page).get_by_role("button", name="Tout vider").click()
+    dialogue(page).get_by_role("button", name="Vider", exact=True).click()
+    expect(dialogue(page).locator(".total-vide")).to_be_visible()
+    dialogue(page).get_by_role("button", name="Terminé").click()
+    expect(page.locator("#barre-total")).to_be_hidden()
+
+
+def test_total_abime_ou_invalide_ne_bloque_rien(page):
+    # Données d'appareil bricolées : la page s'ouvre quand même et ne garde que les lignes valides.
+    page.evaluate(
+        """() => localStorage.setItem('forfaits.appareil.v1', JSON.stringify({total: [
+            {id: null, nom: 'Bonne', qte: 2, ht: 1000, ttc: 1200},
+            {id: null, nom: '', qte: 1, ht: 1, ttc: 1},
+            {id: null, nom: 'Prix faux', qte: 1, ht: -5, ttc: 1},
+            {id: null, nom: 'Trop', qte: 500, ht: 1, ttc: 1},
+            'x', null]}))"""
+    )
+    page.reload()
+    expect(page.locator("#barre-total-nb")).to_contain_text("2 articles")
+    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2400
+    page.locator("#barre-total").click()
+    d = dialogue(page)
+    d.get_by_label("Nom de la ligne libre").fill("Sans prix")
+    d.get_by_role("button", name="+ Ajouter à la liste").click()
+    expect(page.locator("#toast")).to_contain_text("Tape un prix")
+    expect(d.locator(".total-ligne")).to_have_count(1)

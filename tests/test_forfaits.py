@@ -274,6 +274,27 @@ def test_boutons_de_filtre(page):
     expect(page.locator("#etiquettes")).to_contain_text("Boîtier : sans")
 
 
+def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre(page):
+    """Au comptoir : un boîtier d'un forfait, un lumineux d'un autre, à additionner avec « + Total »."""
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    dialogue(page).get_by_role("button", name="T1 DEMO", exact=True).click()
+    page.locator("#filtres .filtre", has_text="Lumineux").click()
+    dialogue(page).get_by_role("button", name="Lumineux EXEMPLE", exact=True).click()
+
+    expect(page.locator("#compte")).to_have_text("Aucun forfait ne contient tout")
+    titres = page.locator("#resultats .titre-groupe").all_text_contents()
+    assert titres == ["Taximètre : T1 DEMO5 forfaits", "Lumineux : Lumineux EXEMPLE1 forfait"]
+    assert refs(page) == AVEC_T1 | {"EX-LUM-POSE"}
+    expect(page.locator(".note-groupes")).to_contain_text("+ Total")
+
+    # Un seul filtre qui ne donne rien : pas de groupes, le message habituel.
+    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    dialogue(page).get_by_role("button", name="Tous", exact=True).click()
+    chercher(page, "zorba")
+    expect(page.locator("#resultats .vide")).to_contain_text("Aucun forfait ne correspond à cette recherche.")
+    expect(page.locator("#resultats .titre-groupe")).to_have_count(0)
+
+
 # ---------------------------------------------------------------- affichage et prix
 
 
@@ -1308,6 +1329,51 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     boite = dialogue(page).bounding_box()
     assert boite["width"] <= largeur and boite["y"] >= 0
     page.screenshot(path=f"{prefixe}-6-total-panneau.png")
+
+
+def test_cartes_repliees_par_defaut_puis_deroulees(navigateur, appareils):
+    """Au départ : le nom et le TTC. Le reste au premier appui ; « Cartes entières » reste sur l'appareil."""
+    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
+    carte = page.locator("#resultats .carte").first
+    expect(carte).to_have_class(re.compile(r"\bcarte-compacte\b"))
+    expect(carte.locator(".prix-ttc .prix-montant")).to_be_visible()
+    expect(carte.locator(".carte-elements")).to_be_hidden()
+    expect(carte.locator(".prix-ht .prix-montant")).to_be_hidden()
+    expect(carte.locator(".btn-copier")).to_be_hidden()
+    assert carte.locator(".carte-ouvrir").bounding_box()["height"] >= 44
+    CAPTURES.mkdir(exist_ok=True)
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-7-cartes-repliees.png")
+
+    ouvrir = carte.locator(".carte-ouvrir")
+    expect(ouvrir).to_have_attribute("aria-expanded", "false")
+    ouvrir.click()
+    expect(ouvrir).to_have_attribute("aria-expanded", "true")
+    expect(carte.locator(".carte-elements")).to_be_visible()
+    expect(carte.locator(".btn-copier")).to_be_visible()
+    ouvrir.click()  # un deuxième appui referme
+    expect(carte.locator(".carte-elements")).to_be_hidden()
+
+    page.click("#btn-compact")
+    expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
+    expect(page.locator("#btn-compact")).to_have_text("Liste compacte")
+    expect(page.locator("#resultats .carte").first.locator(".btn-copier")).to_be_visible()
+    page.reload()  # gardé sur l'appareil
+    expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
+
+
+def test_telephone_tourne_garde_les_forfaits_visibles(navigateur, appareils):
+    """Mode paysage : en-tête et recherche aplatis, et tout revient en retournant le téléphone."""
+    appareil = appareils(compact=True, viewport={"width": 812, "height": 375}, reduced_motion="reduce")
+    page = appareil.page
+    assert page.evaluate("document.documentElement.scrollWidth") <= 812
+    CAPTURES.mkdir(exist_ok=True)
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-8-paysage.png")
+    hauteur_entete = page.evaluate("document.querySelector('.entete').getBoundingClientRect().height")
+    haut_premiere = page.locator("#resultats .carte").first.bounding_box()["y"]
+    assert haut_premiere < 375, haut_premiere  # un forfait au moins est déjà à l'écran
+    page.set_viewport_size({"width": 375, "height": 812})  # le téléphone revient droit
+    assert page.evaluate("document.querySelector('.entete').getBoundingClientRect().height") > hauteur_entete
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
 
 
 # ---------------------------------------------------------------- thème clair et sombre

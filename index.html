@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YrMqGaM1Jty3M89zpxxGqT1hDOZ8rWvw3vPM1/6he+o='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-7V2zR14LofP+znxlkyI4utF78ohTvKV6lM8yArwK1mA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -248,6 +248,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
 .resultats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
+/* Repli : rien ne contient tous les filtres, on montre les forfaits de chaque filtre. */
+.note-groupes { grid-column: 1 / -1; margin: 0; color: var(--texte-doux); }
+.titre-groupe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 17px; }
+.titre-groupe-compte { font-size: 14px; font-weight: 400; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
 .carte {
   display: flex; flex-direction: column; gap: 8px;
@@ -256,6 +260,28 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   padding: 10px 12px 10px 14px;
 }
 .carte-exemple { border-style: dashed; border-color: var(--trait-fort); }
+/* Cartes repliées : le nom et le TTC, le reste au premier appui (réglage « Cartes entières »). */
+.carte-compacte { gap: 0; padding: 0; }
+.carte-titre-h { margin: 0; font: inherit; }
+.carte-ouvrir {
+  display: flex; align-items: center; gap: 6px 12px; width: 100%;
+  margin: 0; padding: 8px 12px 8px 14px; min-height: var(--tactile);
+  background: none; border: 0; border-radius: 12px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.carte-ouvrir:hover { background: var(--surface-2); }
+.carte-ouvrir .carte-tete { flex: 1 1 auto; min-width: 0; }
+/* Repliée, le badge reste sur la ligne du nom : une carte = une ligne ou deux. */
+.carte-ouvrir .carte-nom { flex: 1 1 auto; min-width: 0; font-size: 17px; -webkit-line-clamp: 2; }
+/* Le badge EXEMPLE passe au-dessus du nom quand il ne reste pas la place (données réelles : pas de badge). */
+.carte-ouvrir .badge-exemple { font-size: 11px; padding: 0 5px; }
+.carte-ouvrir .prix-ttc .prix-montant { font-size: 20px; }
+.chevron {
+  flex-shrink: 0; width: 0; height: 0; margin-right: 2px;
+  border: 6px solid transparent; border-top: 7px solid var(--texte-doux); border-bottom: 0;
+  transition: transform .15s ease;
+}
+.carte-ouverte .chevron { transform: rotate(180deg); }
+.carte-details { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 10px 14px; }
 /* Le nom du forfait en premier et en grand : les techniciens se repèrent au nom et aux éléments.
    La référence (petite, en bas) sert à l'accueil et au magasin, avec le bouton Copier. */
 .carte-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
@@ -492,6 +518,25 @@ textarea.champ { resize: vertical; min-height: 90px; }
 @media (max-width: 400px) {
   .marque-bloc { display: none; }
 }
+/* Téléphone tourné : l'écran ne fait plus que ~375 px de haut. On rend l'en-tête et la
+   recherche plus plats pour garder des forfaits visibles ; tout revient en se retournant. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .entete { padding-top: 6px; padding-bottom: 6px; }
+  .marque h1 { font-size: 20px; }
+  .marque-bloc { width: 36px; height: 34px; font-size: 20px; }
+  .etat { display: none; }
+  .damier { height: 6px; }
+  .zone-recherche { padding: 8px 16px; }
+  #recherche { font-size: 17px; padding: 9px 10px; }
+  .loupe { width: 20px; height: 20px; margin-left: 12px; }
+  .etiquettes, .filtres { margin-top: 8px; }
+  .bandeau { margin-top: 8px; padding: 6px 6px 6px 12px; }
+  .bandeau p { font-size: 14px; }
+  main { padding-top: 10px; padding-bottom: 120px; }
+  .barre-resultats { margin-bottom: 8px; }
+  .resultats { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
+  .suggestions { max-height: 45vh; }
+}
 </style>
 </head>
 <body>
@@ -537,6 +582,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
           <option value="prix-decroissant">prix décroissant</option>
         </select>
       </label>
+      <button type="button" class="btn-lien" id="btn-compact" hidden>Cartes entières</button>
     </div>
     <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+ Ajouter un forfait</button>
   </div>
@@ -806,7 +852,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', compact: true, favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -825,6 +871,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
         dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
+        compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
       };
     } catch {
       return defaut;
@@ -972,7 +1019,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   /* =====================================================================
      RECHERCHE
      ===================================================================== */
-  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1 };
+  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, ouvertes: new Set() };
 
   const decouper = (texte) => texte.split(/[\s,;+]+/).filter((m) => norm(m) !== '');
 
@@ -999,9 +1046,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return { mots, contraintes };
   }
 
-  function correspond(forfait, contraintes) {
+  function correspond(forfait, contraintes, filtres = etatUi.filtres) {
     const els = index.elementsForfait.get(forfait.id);
-    for (const [familleId, valeur] of etatUi.filtres) {
+    for (const [familleId, valeur] of filtres) {
       const present = els.find((e) => e.familleId === familleId);
       if (valeur === SANS ? present : present?.id !== valeur) return false;
     }
@@ -1112,6 +1159,19 @@ textarea.champ { resize: vertical; min-height: 90px; }
     zone.hidden = etatUi.filtres.size === 0;
   }
 
+  // Les forfaits de chaque filtre pris tout seul, quand aucun forfait ne les contient tous
+  // (au comptoir : un boîtier d'un forfait + un lumineux d'un autre, à additionner avec « + Total »).
+  // Les filtres « sans » ne font pas de groupe : ils ne désignent aucun élément à retrouver.
+  function groupesParFiltre(contraintes, classer) {
+    const choisis = [...etatUi.filtres].filter(([, valeur]) => valeur !== SANS);
+    if (choisis.length < 2) return [];
+    const groupes = choisis.map(([familleId, valeur]) => ({
+      titre: `${index.famParId.get(familleId).nom} : ${index.elParId.get(valeur).nom}`,
+      liste: classer(index.forfaits.filter((f) => correspond(f, contraintes, new Map([[familleId, valeur]])))),
+    })).filter((g) => g.liste.length);
+    return groupes.length < 2 ? [] : groupes;
+  }
+
   function rendreResultats() {
     const texte = $('recherche').value;
     const analyse = analyserRecherche(texte);
@@ -1123,14 +1183,19 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[$('tri').value] || 0;
     const favori = (f) => Number(appareil.favoris.includes(f.id));
     const usage = (f) => appareil.usageForfaits[f.id] || 0;
-    resultats.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
+    const classer = (liste) => liste.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
       || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || usage(b) - usage(a) || tri.compare(a.ref, b.ref));
+    classer(resultats);
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
+    const groupes = resultats.length === 0 && total > 0 ? groupesParFiltre(analyse.contraintes, classer) : [];
 
-    $('compte').textContent = total === 0 ? '' : resultats.length === 0 ? 'Aucun forfait ne correspond'
+    $('compte').textContent = total === 0 ? '' : groupes.length ? 'Aucun forfait ne contient tout'
+      : resultats.length === 0 ? 'Aucun forfait ne correspond'
       : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
     $('btn-tout-effacer').hidden = !actif;
     $('zone-tri').hidden = total < 2;
+    $('btn-compact').hidden = total < 2;
+    $('btn-compact').textContent = appareil.compact ? 'Cartes entières' : 'Liste compacte';
     $('btn-ajouter').hidden = !appareil.modeModif;
     $('btn-vider').hidden = texte === '';
 
@@ -1141,6 +1206,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
         appareil.modeModif
           ? h('button', { type: 'button', class: 'btn btn-rouge', onclick: () => ouvrirFormulaire(null) }, '+ Ajouter un forfait')
           : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le fichier des forfaits'))];
+    } else if (groupes.length) {
+      contenu = [h('p', { class: 'note-groupes' },
+        'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec « + Total ».'),
+        ...groupes.flatMap((g) => [h('h3', { class: 'titre-groupe' }, g.titre, h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))), ...g.liste.map(carte)])];
     } else if (resultats.length === 0) {
       contenu = [h('div', { class: 'vide' },
         h('p', {}, 'Aucun forfait ne correspond à cette recherche.'),
@@ -1151,24 +1220,33 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('resultats').replaceChildren(...contenu);
   }
 
+  const prix = (type, centimes) => h('span', { class: `prix prix-${type}` },
+    h('span', { class: 'prix-montant' }, formatPrix(centimes)), h('span', { class: 'prix-type' }, type.toUpperCase()));
+
   function carte(f) {
     const elements = index.elementsForfait.get(f.id);
+    // Repliée (réglage de l'appareil) : le nom et le TTC seulement, le reste au premier appui.
+    // Repliée, le titre vit dans le bouton qui déroule : des <span>, car un <button> n'accepte
+    // ni <h2> ni <div>, et c'est le <h2> autour du bouton qui porte le titre.
+    const compact = appareil.compact;
+    const balise = compact ? 'span' : 'h2';
     // Titre = le nom du forfait (sa désignation) ; sans désignation, la référence fait le titre.
     // Dans les deux cas, un seul élément porte la classe carte-ref avec la référence.
     const titre = f.designation
-      ? h('h2', { class: 'carte-nom carte-designation', title: f.designation }, f.designation)
-      : h('h2', { class: 'carte-nom carte-ref' }, f.ref);
-    return h('article', { class: 'carte' + (f.exemple ? ' carte-exemple' : ''), 'data-id': f.id },
-      h('div', { class: 'carte-tete' },
-        f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
-        titre),
+      ? h(balise, { class: 'carte-nom carte-designation', title: f.designation }, f.designation)
+      : h(balise, { class: 'carte-nom carte-ref' }, f.ref);
+    const tete = h(compact ? 'span' : 'div', { class: 'carte-tete' },
+      f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
+      titre);
+    const ouvert = etatUi.ouvertes.has(f.id);
+    const details = [
       elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
         h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
       index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
       h('div', { class: 'carte-bas' },
         h('div', { class: 'carte-prix' },
-          h('div', { class: 'prix prix-ttc' }, h('span', { class: 'prix-montant' }, formatPrix(f.ttc)), h('span', { class: 'prix-type' }, 'TTC')),
-          h('div', { class: 'prix prix-ht' }, h('span', { class: 'prix-montant' }, formatPrix(f.ht)), h('span', { class: 'prix-type' }, 'HT'))),
+          compact ? null : prix('ttc', f.ttc),
+          prix('ht', f.ht)),
         h('div', { class: 'carte-boutons' },
           h('button', {
             type: 'button', class: 'btn btn-favori', 'aria-pressed': String(appareil.favoris.includes(f.id)),
@@ -1187,7 +1265,23 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Mon surnom')),
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
-        h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null);
+        h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null,
+    ];
+    const classes = 'carte' + (f.exemple ? ' carte-exemple' : '') + (compact ? ' carte-compacte' : '') + (compact && ouvert ? ' carte-ouverte' : '');
+    if (!compact) return h('article', { class: classes, 'data-id': f.id }, tete, ...details);
+    const corps = h('div', { class: 'carte-details', hidden: !ouvert }, ...details);
+    return h('article', { class: classes, 'data-id': f.id },
+      h('h2', { class: 'carte-titre-h' }, h('button', {
+        type: 'button', class: 'carte-ouvrir', 'aria-expanded': String(ouvert),
+        onclick: (ev) => {
+          const ouvre = !etatUi.ouvertes.has(f.id);
+          if (ouvre) etatUi.ouvertes.add(f.id); else etatUi.ouvertes.delete(f.id);
+          ev.currentTarget.setAttribute('aria-expanded', String(ouvre));
+          ev.currentTarget.closest('.carte').classList.toggle('carte-ouverte', ouvre);
+          corps.hidden = !ouvre;
+        },
+      }, tete, prix('ttc', f.ttc), h('span', { class: 'chevron', 'aria-hidden': 'true' }))),
+      corps);
   }
 
   /* ---------- Surnoms ---------- */
@@ -2461,6 +2555,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
   $('btn-vider').addEventListener('click', () => { champ.value = ''; champ.focus(); rendreResultats(); majSuggestions(); });
   $('btn-tout-effacer').addEventListener('click', toutEffacer);
   $('tri').addEventListener('change', rendreResultats);
+  $('btn-compact').addEventListener('click', () => {
+    appareil.compact = !appareil.compact;
+    sauverAppareil();
+    etatUi.ouvertes.clear();
+    rendreResultats();
+  });
   $('btn-ajouter').addEventListener('click', () => ouvrirFormulaire(null));
   $('btn-importer').addEventListener('click', lancerImport);
   $('btn-menu').addEventListener('click', ouvrirMenu);

@@ -71,6 +71,22 @@ def dialogue(page):
     return page.locator("dialog[open]").last
 
 
+def noms_filtres(page):
+    """Les boutons de la rangée de filtres, dans l'ordre, sans le chevron."""
+    return [t.strip().removesuffix("▾").strip() for t in page.locator("#filtres .filtre").all_text_contents()]
+
+
+def ouvrir_filtre(page, nom, cadre=None):
+    """Ouvre la fenêtre de filtre d'une famille, qu'elle soit un bouton ou rangée dans « Autres »."""
+    cadre = cadre or page
+    bouton = cadre.locator("#filtres .filtre", has_text=nom)
+    if bouton.count() == 0:
+        cadre.locator("#btn-autres-filtres").click()
+        dialogue(cadre).get_by_role("button", name=nom, exact=True).click()
+    else:
+        bouton.click()
+
+
 def activer_modif(page):
     page.click("#btn-menu")
     page.click("#btn-mode-modif")
@@ -261,24 +277,50 @@ def test_suggestion_au_clavier(page):
 
 
 def test_boutons_de_filtre(page):
-    page.locator("#filtres .filtre", has_text="Imprimante").click()
+    ouvrir_filtre(page, "Imprimante")
     dialogue(page).get_by_role("button", name="4Q", exact=True).click()
     assert refs(page) == AVEC_4Q
     expect(page.locator("#filtres .filtre", has_text="Imprimante")).to_have_attribute("aria-pressed", "true")
 
-    page.locator("#filtres .filtre", has_text="Imprimante").click()
+    ouvrir_filtre(page, "Imprimante")
     dialogue(page).get_by_role("button", name="Tous", exact=True).click()
-    page.locator("#filtres .filtre", has_text="Boîtier").click()
+    ouvrir_filtre(page, "Boîtier")
     dialogue(page).get_by_role("button", name="Sans boîtier").click()
     assert refs(page) == {"EX-T2-3Q", "EX-LUM-POSE"}
     expect(page.locator("#etiquettes")).to_contain_text("Boîtier : sans")
 
 
+def test_ordre_des_filtres_se_regle_sans_mode_modification_et_reste_sur_l_appareil(page, tmp_path):
+    """Un vendeur doit pouvoir ranger ses familles ; son ordre ne part pas dans le fichier exporté."""
+    assert noms_filtres(page) == ["Taximètre", "Lumineux", "Imprimante", "Autres"]
+    page.click("#btn-menu")
+    page.click("#btn-ordre-filtres")
+    d = dialogue(page)
+    d.get_by_role("button", name="Monter Boîtier").click()
+    d.get_by_role("button", name="Monter Boîtier").click()
+    d.get_by_role("button", name="Terminé").click()
+    assert noms_filtres(page) == ["Taximètre", "Boîtier", "Lumineux", "Autres"]
+
+    page.reload()
+    assert noms_filtres(page) == ["Taximètre", "Boîtier", "Lumineux", "Autres"]
+    # L'ordre est un réglage d'appareil : les données exportées gardent le leur.
+    assert noms_familles(page, tmp_path / "ordre.json") == ["Taximètre", "Lumineux", "Imprimante", "Boîtier", "Installation"]
+
+
+def test_famille_rangee_dans_autres_filtre_et_redevient_un_bouton_une_fois_posee(page):
+    page.click("#btn-autres-filtres")
+    dialogue(page).get_by_role("button", name="Boîtier", exact=True).click()
+    dialogue(page).get_by_role("button", name="Zorba 5", exact=True).click()
+    assert refs(page) == AVEC_ZORBA5
+    # Le filtre posé reste visible, et « Autres » disparaît : il ne restait qu'une famille.
+    assert noms_filtres(page) == ["Taximètre", "Lumineux", "Imprimante", "Boîtier : Zorba 5", "Installation"]
+
+
 def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre(page):
     """Au comptoir : un boîtier d'un forfait, un lumineux d'un autre, à additionner avec « + Total »."""
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     dialogue(page).get_by_role("button", name="T1 DEMO", exact=True).click()
-    page.locator("#filtres .filtre", has_text="Lumineux").click()
+    ouvrir_filtre(page, "Lumineux")
     dialogue(page).get_by_role("button", name="Lumineux EXEMPLE", exact=True).click()
 
     expect(page.locator("#compte")).to_have_text("Aucun forfait ne contient tout")
@@ -288,7 +330,7 @@ def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre
     expect(page.locator(".note-groupes")).to_contain_text("+ Total")
 
     # Un seul filtre qui ne donne rien : pas de groupes, le message habituel.
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     dialogue(page).get_by_role("button", name="Tous", exact=True).click()
     chercher(page, "zorba")
     expect(page.locator("#resultats .vide")).to_contain_text("Aucun forfait ne correspond à cette recherche.")
@@ -519,10 +561,10 @@ def test_supprimer_les_exemples(page):
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    page.locator("#filtres .filtre", has_text="Lumineux").click()  # l'élément d'exemple a disparu
+    ouvrir_filtre(page, "Lumineux")  # l'élément d'exemple a disparu
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans lumineux"])
     dialogue(page).get_by_role("button", name="Tous").click()
-    page.locator("#filtres .filtre", has_text="Taximètre").click()  # les éléments de départ, inutilisés, sont partis aussi
+    ouvrir_filtre(page, "Taximètre")  # les éléments de départ, inutilisés, sont partis aussi
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
 
 
@@ -538,10 +580,10 @@ def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appare
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
     dialogue(page).get_by_role("button", name="Tous").click()
-    page.locator("#filtres .filtre", has_text="Boîtier").click()
+    ouvrir_filtre(page, "Boîtier")
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans boîtier"])
 
 
@@ -563,7 +605,7 @@ def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_pa
     importer(neuf, tmp_path / "equipe.json")
     expect(neuf.locator("#resultats")).to_contain_text("VRAI-1")
     expect(neuf.locator("#resultats")).not_to_contain_text("EXEMPLE")
-    neuf.locator("#filtres .filtre", has_text="Taximètre").click()  # les éléments d'exemple sont partis aussi
+    ouvrir_filtre(neuf, "Taximètre")  # les éléments d'exemple sont partis aussi
     expect(dialogue(neuf).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
 
 
@@ -579,7 +621,7 @@ def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
     activer_modif(page)
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
 
 
@@ -593,7 +635,7 @@ def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
 
 
@@ -621,7 +663,10 @@ def test_listes_ajouter_renommer_et_proteger(page):
     dialogue(page).get_by_role("button", name="Compris").click()
     dialogue(page).get_by_role("button", name="Terminé").click()
 
-    expect(page.locator("#filtres .filtre", has_text="TPE")).to_be_visible()
+    # Nouvelle famille : elle arrive après les trois boutons de filtre, donc dans « Autres ».
+    page.click("#btn-autres-filtres")
+    expect(dialogue(page).get_by_role("button", name="TPE", exact=True)).to_be_visible()
+    dialogue(page).get_by_role("button", name="Fermer").click()
     chercher(page, "zorba5plus")  # le renommage s'applique aux forfaits existants
     assert refs(page) == AVEC_ZORBA5
     chercher(page, "3Q")
@@ -788,11 +833,11 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
     lignes = brut.decode("utf-8-sig").split("\r\n")
     assert (
         lignes[0]
-        == "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Boîtier;Imprimante;Lumineux;Installation;Exemple;Modifié le"
+        == "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Lumineux;Imprimante;Boîtier;Installation;Exemple;Modifié le"
     )
     assert len(lignes) == 12
     ligne = next(x for x in lignes if x.startswith("EX-T1-Z5-3Q;"))
-    assert ";1234,50;1481,40;;T1 DEMO;Zorba 5;3Q;;;oui;" in ligne
+    assert ";1234,50;1481,40;;T1 DEMO;;3Q;Zorba 5;;oui;" in ligne  # colonnes dans l'ordre des familles
 
 
 # ---------------------------------------------------------------- tableau Excel (.csv)
@@ -913,7 +958,7 @@ def test_tableau_une_colonne_nouvelle_cree_la_famille(page, tmp_path):
     expect(d).to_contain_text("Familles (colonnes) qui n'existent pas encore")
     expect(d).to_contain_text("Dash cam")
     d.get_by_role("button", name="Annuler").click()
-    familles_de_depart = ["Taximètre", "Boîtier", "Imprimante", "Lumineux", "Installation"]
+    familles_de_depart = ["Taximètre", "Lumineux", "Imprimante", "Boîtier", "Installation"]
     assert noms_familles(page, tmp_path / "annule.json") == familles_de_depart  # annuler ne crée rien
 
     d = ouvrir_tableau(page, chemin)
@@ -1156,7 +1201,7 @@ def test_boutons_vider_et_tout_effacer(page):
     expect(page.locator("#recherche")).to_have_value("")
     assert refs(page) == TOUS
     chercher(page, "3Q")
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     dialogue(page).get_by_role("button", name="T2", exact=True).click()
     assert refs(page) == AVEC_T2_ET_3Q
     page.click("#btn-tout-effacer")  # efface le texte ET les filtres
@@ -1539,7 +1584,7 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
     page.screenshot(path=f"{prefixe}-1-menu.png")
     page.keyboard.press("Escape")
     chercher(page, "3Q")
-    page.locator("#filtres .filtre", has_text="Taximètre").click()
+    ouvrir_filtre(page, "Taximètre")
     page.screenshot(path=f"{prefixe}-2-filtre.png")
     page.keyboard.press("Escape")
     page.locator("#recherche").fill("")

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-o4Cgsac52sV50zlOpdpDYRrrY4ik0vgkTrD1LhZNr4g='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-c9+oTI86zFRKvFTwGFvvnKxxGJUpAr1whsOS7qD3p2U='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -504,6 +504,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
 .menu-info { margin: 6px 0 0; font-size: 14px; color: var(--texte-doux); }
 
 /* Listes des éléments */
+/* Ordre des filtres (Menu) : une ligne par famille, sa place puis ses flèches. */
+.ordre-ligne { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--trait); }
+.ordre-place { min-width: 60px; font-size: 13px; color: var(--texte-doux); }
+.ordre-nom { flex: 1; font-weight: 700; color: var(--texte-fort); }
 .famille-bloc { border: 1px solid var(--trait-fort); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
 .famille-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .famille-tete .champ { flex: 1 1 160px; width: auto; font-weight: 700; }
@@ -632,6 +636,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
   const TAILLES = [{ valeur: 'normal', libelle: 'Normal' }, { valeur: 'grand', libelle: 'Grand' }, { valeur: 'tres-grand', libelle: 'Très grand' }];
   const RECENTS_MAX = 4;           // derniers forfaits consultés (par appareil, jamais exporté)
+  const FILTRES_VISIBLES = 3;      // familles en boutons de filtre ; les suivantes vont dans « Autres »
   const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
   const QTE_MAX = 99;
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
@@ -747,10 +752,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function donneesInitiales() {
     const familles = [
+      // Ordre voulu au comptoir : les trois familles qu'on filtre tous les jours d'abord (ce sont
+      // les boutons de filtre), le reste derrière, dans « Autres ». Chaque appareil peut le changer.
       { id: 'fam-taximetre', nom: 'Taximètre', ordre: 1, maj: 0 },
-      { id: 'fam-boitier', nom: 'Boîtier', ordre: 2, maj: 0 },
+      { id: 'fam-lumineux', nom: 'Lumineux', ordre: 2, maj: 0 },
       { id: 'fam-imprimante', nom: 'Imprimante', ordre: 3, maj: 0 },
-      { id: 'fam-lumineux', nom: 'Lumineux', ordre: 4, maj: 0 },
+      { id: 'fam-boitier', nom: 'Boîtier', ordre: 4, maj: 0 },
       { id: 'fam-installation', nom: 'Installation', ordre: 5, maj: 0 },
     ];
     // Tous les éléments de départ sont des exemples : « Supprimer les exemples » les retire (sauf ceux qu'un vrai forfait utilise).
@@ -876,7 +883,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, favoris: [], recents: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -886,6 +893,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         favoris: Array.isArray(lu.favoris) ? [...new Set(lu.favoris.filter(estId))].slice(0, USAGE_MAX) : [],
         // Derniers forfaits consultés, le plus récent d'abord.
         recents: Array.isArray(lu.recents) ? [...new Set(lu.recents.filter(estId))].slice(0, RECENTS_MAX) : [],
+        // Ordre des familles voulu sur cet appareil (Menu → Ordre des filtres) : identifiants de familles.
+        ordreFams: Array.isArray(lu.ordreFams) ? [...new Set(lu.ordreFams.filter(estId))].slice(0, USAGE_MAX) : [],
         usageElements: compteurs(lu.usageElements),
         usageForfaits: compteurs(lu.usageForfaits),
         // Surnoms perso : identifiant d'élément ou de forfait → surnoms (jamais exportés).
@@ -990,11 +999,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
   let index = null;
 
   function construireIndex() {
+    // Ordre des familles : celui rangé sur cet appareil d'abord ; une famille qu'il ne connaît pas
+    // encore (nouvelle, ou appareil jamais réglé) passe après, dans l'ordre des données.
+    const rangAppareil = new Map(appareil.ordreFams.map((id, i) => [id, i]));
+    const rangFamille = (f) => (rangAppareil.has(f.id) ? rangAppareil.get(f.id) : appareil.ordreFams.length + f.ordre);
     const fams = donnees.familles.filter((f) => !f.supprime)
-      .sort((a, b) => a.ordre - b.ordre || tri.compare(a.nom, b.nom));
+      .sort((a, b) => rangFamille(a) - rangFamille(b) || tri.compare(a.nom, b.nom));
     const famParId = new Map(fams.map((f) => [f.id, f]));
+    const rangFam = new Map(fams.map((f, i) => [f.id, i]));
     const elsActifs = donnees.elements.filter((e) => !e.supprime && famParId.has(e.familleId))
-      .sort((a, b) => famParId.get(a.familleId).ordre - famParId.get(b.familleId).ordre || tri.compare(a.nom, b.nom));
+      .sort((a, b) => rangFam.get(a.familleId) - rangFam.get(b.familleId) || tri.compare(a.nom, b.nom));
     const elParId = new Map(elsActifs.map((e) => [e.id, e]));
     // Nom « à plat » → éléments (pour reconnaître « 3Q » ou « T1 DEMO » tapés en entier).
     const parNom = new Map();
@@ -1243,12 +1257,62 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('bandeaux').replaceChildren(...liste);
   }
 
+  function boutonFiltre(fam) {
+    const valeur = etatUi.filtres.get(fam.id);
+    const libelle = valeur === undefined ? fam.nom : `${fam.nom} : ${valeur === SANS ? 'sans' : index.elParId.get(valeur).nom}`;
+    return h('button', { type: 'button', class: 'filtre', 'aria-pressed': String(valeur !== undefined), onclick: () => ouvrirChoixFiltre(fam) }, libelle, ' ▾');
+  }
+
+  // Les premières familles de l'appareil sont des boutons ; les suivantes passent dans « Autres »,
+  // sinon un magasin qui a quinze familles n'a plus que des filtres à l'écran. Un filtre posé reste
+  // toujours visible, et une seule famille de reste s'affiche telle quelle (« Autres » n'y sert à rien).
   function rendreFiltres() {
-    $('filtres').replaceChildren(...index.fams.map((fam) => {
-      const valeur = etatUi.filtres.get(fam.id);
-      const libelle = valeur === undefined ? fam.nom : `${fam.nom} : ${valeur === SANS ? 'sans' : index.elParId.get(valeur).nom}`;
-      return h('button', { type: 'button', class: 'filtre', 'aria-pressed': String(valeur !== undefined), onclick: () => ouvrirChoixFiltre(fam) }, libelle, ' ▾');
-    }));
+    const fams = index.fams;
+    const cachee = (fam, i) => i >= FILTRES_VISIBLES && !etatUi.filtres.has(fam.id);
+    const caches = fams.filter(cachee);
+    $('filtres').replaceChildren(
+      ...fams.filter((fam, i) => !cachee(fam, i)).map(boutonFiltre),
+      ...(caches.length > 1
+        ? [h('button', { type: 'button', class: 'filtre', id: 'btn-autres-filtres', onclick: () => ouvrirAutresFiltres(caches) }, 'Autres', ' ▾')]
+        : caches.map(boutonFiltre)),
+    );
+  }
+
+  // Ordre des filtres : réglage de cet appareil (jamais exporté), ouvert à tout le monde — un vendeur
+  // doit pouvoir mettre ses familles dans son ordre sans passer par le mode modification.
+  function ouvrirOrdreFiltres() {
+    const liste = h('div', {});
+    const deplacer = (i, sens) => {
+      const ids = index.fams.map((f) => f.id);
+      [ids[i], ids[i + sens]] = [ids[i + sens], ids[i]];
+      appareil.ordreFams = ids;
+      sauverAppareil();
+      // Tout de suite : la rangée de filtres bouge derrière la fenêtre, on voit ce qu'on range.
+      // (L'événement « close » d'un dialogue part en différé : s'y fier laisserait la rangée en retard.)
+      rafraichir();
+      dessiner();
+    };
+    const dessiner = () => liste.replaceChildren(...index.fams.map((fam, i) => h('div', { class: 'ordre-ligne' },
+      h('span', { class: 'ordre-place' }, i < FILTRES_VISIBLES ? 'Filtre' : 'Autres'),
+      h('span', { class: 'ordre-nom' }, fam.nom),
+      h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacer(i, -1) }, '↑'),
+      h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Descendre ${fam.nom}`, disabled: i === index.fams.length - 1, onclick: () => deplacer(i, 1) }, '↓'))));
+    const dlg = ouvrirDialogue({
+      titre: 'Ordre des filtres',
+      corps: [h('p', { class: 'aide-texte' }, `Les ${FILTRES_VISIBLES} premières sont les boutons de filtre sous la recherche ; les autres se rangent dans « Autres ». Sur cet appareil seulement.`), liste],
+      pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
+    });
+    dessiner();
+  }
+
+  // La liste des familles rangées dans « Autres » : on en choisit une, sa fenêtre de filtre s'ouvre.
+  function ouvrirAutresFiltres(caches) {
+    const dlg = ouvrirDialogue({
+      titre: 'Autres filtres',
+      corps: h('div', { class: 'grille-choix' }, caches.map((fam) => h('button', {
+        type: 'button', class: 'choix', onclick: () => { dlg.close(); ouvrirChoixFiltre(fam); },
+      }, fam.nom))),
+    });
   }
 
   function rendreEtiquettes() {
@@ -1957,7 +2021,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const fams = index.fams;
     const nomLibre = (nom, liste, idActuel) => !liste.some((x) => x.id !== idActuel && norm(x.nom) === norm(nom));
 
-    const blocs = fams.map((fam, i) => {
+    const blocs = fams.map((fam) => {
       const champNom = h('input', { class: 'champ', value: fam.nom, maxlength: 60, 'aria-label': 'Nom de la famille ' + fam.nom });
       champNom.addEventListener('change', () => {
         const courante = donnees.familles.find((x) => x.id === fam.id);
@@ -1987,8 +2051,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
       return h('section', { class: 'famille-bloc' },
         h('div', { class: 'famille-tete' },
           champNom,
-          h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacerFamille(i, -1, changer) }, '↑'),
-          h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Descendre ${fam.nom}`, disabled: i === fams.length - 1, onclick: () => deplacerFamille(i, 1, changer) }, '↓'),
           h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerFamille(fam, changer) }, 'Supprimer la famille')),
         h('ul', { class: 'liste-elements' }, elementsDe(fam.id).map((e) => {
           const champ = h('input', { class: 'champ', value: e.nom, maxlength: 60, 'aria-label': `Nom de l'élément ${e.nom}` });
@@ -2052,15 +2114,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
       h('div', { class: 'ajout-ligne' }, champFamille, h('button', { type: 'button', class: 'btn btn-rouge', onclick: ajouterFamille }, 'Ajouter')))];
   }
 
-  function deplacerFamille(i, sens, changer) {
-    const ordre = [...index.fams];
-    [ordre[i], ordre[i + sens]] = [ordre[i + sens], ordre[i]];
-    const maintenant = Date.now();
-    ordre.forEach((fam, rang) => {
-      if (fam.ordre !== rang + 1) remplacer(donnees.familles, { ...fam, ordre: rang + 1, maj: maintenant });
-    });
-    changer();
-  }
 
   // On refuse de supprimer un élément encore utilisé : on ne perd jamais une info sans le voir.
   async function supprimerElement(e, fam, changer) {
@@ -2595,6 +2648,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Taille du texte'), h('p', {}, 'Tout grossit, sur cet appareil seulement.')),
           choixReglage('texte', TAILLES, 'Taille du texte')),
+        index.fams.length > 1 ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-ordre-filtres', onclick: fermerPuis(ouvrirOrdreFiltres) }, 'Ordre des filtres (sur cet appareil)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
         h('div', { class: 'menu-mode' },
@@ -2655,6 +2709,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
         h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
         h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Mon surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
+        h('li', {}, h('strong', {}, 'Boutons de filtre : '), `les ${FILTRES_VISIBLES} premières familles sont des boutons, les autres sont dans « Autres ». Pour les ranger dans ton ordre : Menu → Ordre des filtres. C'est propre à cet appareil, personne d'autre n'est touché.`),
         h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),

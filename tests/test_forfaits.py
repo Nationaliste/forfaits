@@ -297,6 +297,8 @@ def test_ordre_des_filtres_se_regle_sans_mode_modification_et_reste_sur_l_appare
     page.click("#btn-ordre-filtres")
     d = dialogue(page)
     d.get_by_role("button", name="Monter Boîtier").click()
+    # La flèche garde le focus : au clavier, on monte une famille de plusieurs crans d'affilée.
+    assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "Monter Boîtier"
     d.get_by_role("button", name="Monter Boîtier").click()
     d.get_by_role("button", name="Terminé").click()
     assert noms_filtres(page) == ["Taximètre", "Boîtier", "Lumineux", "Autres"]

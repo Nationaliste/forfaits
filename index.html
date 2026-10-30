@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YSK97x+cj7SYLVZnSfERtdRrybZDHBAOPlNZAncgR8E='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Paml1hDq0VeEzScu+DIeWHgJyry/kkDdDPaJK7cTyBM='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -256,8 +256,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   padding: 12px 12px 14px 16px;
 }
 .carte-exemple { border-style: dashed; border-color: var(--trait-fort); }
-.carte-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.carte-titre { min-width: 0; padding-top: 4px; }
+.carte-tete { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
+.carte-titre { flex: 1 1 190px; min-width: 0; padding-top: 4px; } /* sous 190 px de libre, les boutons passent sous la référence */
+.carte-boutons { margin-left: auto; }
 .carte-ref { margin: 0; font-family: var(--police-titre); font-size: 26px; line-height: 1.1; letter-spacing: .02em; color: var(--texte-fort); overflow-wrap: anywhere; }
 .badge-exemple {
   display: inline-block; margin-bottom: 4px; padding: 0 7px; border-radius: 6px;
@@ -329,6 +330,37 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 .toast.erreur { background: var(--rouge); }
+
+/* ============ Total (addition de plusieurs lignes, par appareil) ============ */
+.barre-total {
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 45;
+  max-width: 720px; margin: 0 auto; min-height: var(--tactile);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 14px;
+  padding: 10px 16px; border: 0; border-radius: 14px; cursor: pointer; text-align: left;
+  background: var(--inverse); color: var(--inverse-texte); font: inherit; font-weight: 700;
+  box-shadow: var(--ombre-forte);
+}
+.barre-total[hidden] { display: none; }
+.barre-total-montants { display: flex; gap: 14px; flex-wrap: wrap; }
+body.avec-total .rappel { bottom: 76px; }
+body.avec-total .toast { bottom: 150px; }
+body.avec-total main { padding-bottom: 200px; }
+.btn-total { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
+.btn-total:hover { border-color: var(--rouge); }
+.total-ligne { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--trait); }
+.total-ligne-nom { font-weight: 700; overflow-wrap: anywhere; }
+.total-ligne-prix { text-align: right; font-weight: 700; white-space: nowrap; }
+.total-ligne-unite { color: var(--texte-doux); font-size: 14px; }
+.total-ligne-commandes { display: flex; align-items: center; gap: 6px; grid-column: 1 / -1; }
+.total-ligne-commandes .btn-carre { background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
+.total-qte { min-width: 32px; text-align: center; font-weight: 700; }
+.total-retirer { margin-left: auto; }
+.total-somme { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin-top: 14px; font-size: 22px; font-weight: 800; }
+.total-somme dd { margin: 0; text-align: right; }
+.total-libre { display: grid; gap: 8px; margin-top: 14px; }
+.total-libre .champ { width: 100%; }
+.total-libre-prix { display: flex; gap: 8px; }
+.total-vide { color: var(--texte-doux); margin: 8px 0; }
 
 /* ============ Fenêtres (dialogues) ============ */
 .dlg {
@@ -496,6 +528,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
   <p id="rappel-texte"></p>
   <button type="button" class="btn btn-blanc" id="btn-rappel-exporter">Exporter</button>
 </div>
+<button type="button" class="barre-total" id="barre-total" hidden>
+  <span id="barre-total-nb"></span>
+  <span class="barre-total-montants"><span id="barre-total-ht"></span><span id="barre-total-ttc"></span></span>
+</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fichier-import" hidden>
 
@@ -508,7 +544,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_DONNEES = 'forfaits.donnees.v1';   // forfaits + listes, sur cet appareil
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
-  const USAGE_MAX = 300;           // favoris et compteurs d'usage gardés par appareil
+  const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
+  const QTE_MAX = 99;
+  const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
   const VERSION_OUTIL = '1.0';
@@ -749,7 +787,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {} };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', favoris: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -762,6 +800,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         // Surnoms perso : identifiant d'élément ou de forfait → surnoms (jamais exportés).
         surnoms: Object.fromEntries(lu.surnoms && typeof lu.surnoms === 'object' && !Array.isArray(lu.surnoms)
           ? Object.entries(lu.surnoms).filter(([id]) => estId(id)).map(([id, v]) => [id, lireSurnoms(v)]).filter(([, v]) => v.length).slice(0, USAGE_MAX) : []),
+        total: Array.isArray(lu.total) ? lu.total.map(lireLigneTotal).filter(Boolean).slice(0, TOTAL_MAX) : [],
         modeModif: lu.modeModif === true,
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
@@ -771,6 +810,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
     } catch {
       return defaut;
     }
+  }
+  // Une ligne du total : forfait (id) ou ligne libre (id null), prix en centimes mémorisés à l'ajout.
+  function lireLigneTotal(l) {
+    if (!l || typeof l !== 'object') return null;
+    const centimes = (v) => Number.isInteger(v) && v >= 0 && v <= 99999999;
+    const nom = typeof l.nom === 'string' ? l.nom.trim().slice(0, 80) : '';
+    if (!nom || !centimes(l.ht) || !centimes(l.ttc) || !Number.isInteger(l.qte) || l.qte < 1 || l.qte > QTE_MAX) return null;
+    const id = typeof l.id === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(l.id) ? l.id : null;
+    return { id, nom, qte: l.qte, ht: l.ht, ttc: l.ttc };
   }
   function sauverAppareil() {
     try { localStorage.setItem(CLE_APPAREIL, JSON.stringify(appareil)); } catch { stockageOk = false; }
@@ -985,6 +1033,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     rendreBandeaux();
     rendreRecherche();
     rendreRappel();
+    rendreBarreTotal();
   }
 
   function rendreRecherche() {
@@ -1096,6 +1145,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
             'aria-label': `Favori : ${f.ref}`, title: 'Favori : en tête de liste sur cet appareil', onclick: () => basculerFavori(f),
           }, appareil.favoris.includes(f.id) ? '★' : '☆'),
           // Pas de nouveau classement tout de suite : la carte ne doit pas bouger sous le doigt.
+          h('button', {
+            type: 'button', class: 'btn btn-total', 'aria-label': `Ajouter ${f.ref} au total`, title: 'Ajouter au total (additionner plusieurs lignes)',
+            onclick: (ev) => { ajouterAuTotal(f); ev.currentTarget.textContent = texteBoutonTotal(f); },
+          }, texteBoutonTotal(f)),
           h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); copier(f.ref, ev.currentTarget); } },
             h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier')))),
       h('div', { class: 'carte-prix' },
@@ -1214,6 +1267,105 @@ textarea.champ { resize: vertical; min-height: 90px; }
     // La carte a changé de place : le clavier reste sur son étoile.
     $('resultats').querySelector(`[data-id="${CSS.escape(f.id)}"] .btn-favori`)?.focus();
     toast(i < 0 ? `${f.ref} en favori : en tête de liste` : `${f.ref} retiré des favoris`);
+  }
+
+  /* ---------- Total : additionner plusieurs forfaits, pièces ou services (par appareil, jamais exporté) ---------- */
+  const sommeTotal = () => appareil.total.reduce((s, l) => ({ ht: s.ht + l.ht * l.qte, ttc: s.ttc + l.ttc * l.qte }), { ht: 0, ttc: 0 });
+  const nbArticlesTotal = () => appareil.total.reduce((n, l) => n + l.qte, 0);
+  const qteDansTotal = (f) => appareil.total.find((l) => l.id === f.id)?.qte || 0;
+  const texteBoutonTotal = (f) => (qteDansTotal(f) ? `Total ×${qteDansTotal(f)}` : '+ Total');
+
+  function rendreBarreTotal() {
+    const vide = appareil.total.length === 0;
+    $('barre-total').hidden = vide;
+    document.body.classList.toggle('avec-total', !vide);
+    if (vide) return;
+    const { ht, ttc } = sommeTotal();
+    $('barre-total-nb').textContent = `Total · ${pluriel(nbArticlesTotal(), 'article')}`;
+    $('barre-total-ht').textContent = `${formatPrix(ht)} HT`;
+    $('barre-total-ttc').textContent = `${formatPrix(ttc)} TTC`;
+    $('barre-total').setAttribute('aria-label', `Voir le total : ${pluriel(nbArticlesTotal(), 'article')}, ${formatPrix(ht)} HT, ${formatPrix(ttc)} TTC`);
+  }
+
+  function ajouterAuTotal(f) {
+    const ligne = appareil.total.find((l) => l.id === f.id);
+    if (ligne) {
+      if (ligne.qte >= QTE_MAX) { toast(`${QTE_MAX} au maximum pour ${f.ref}`, true); return; }
+      ligne.qte += 1;
+      ligne.ht = f.ht; // le prix du jour
+      ligne.ttc = f.ttc;
+    } else {
+      if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : ouvre le total et retire-en`, true); return; }
+      appareil.total.push({ id: f.id, nom: f.ref, qte: 1, ht: f.ht, ttc: f.ttc });
+    }
+    sauverAppareil();
+    rendreBarreTotal();
+    toast(`${f.ref} ajouté au total${qteDansTotal(f) > 1 ? ` (×${qteDansTotal(f)})` : ''}`);
+  }
+
+  function ouvrirTotal() {
+    const lignes = h('div', {});
+    const somme = h('dl', { class: 'total-somme' });
+    const btnVider = h('button', { type: 'button', class: 'btn btn-danger', onclick: async () => {
+      const ok = await demander({
+        titre: 'Vider le total ?', message: `${pluriel(appareil.total.length, 'ligne')} ${appareil.total.length > 1 ? 'seront retirées' : 'sera retirée'}.`,
+        boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Vider', valeur: true, classe: 'btn-rouge' }],
+      });
+      if (!ok) return;
+      appareil.total = [];
+      sauverAppareil();
+      redessiner();
+    } }, 'Tout vider');
+    const changer = (action) => { action(); sauverAppareil(); redessiner(); };
+
+    function redessiner() {
+      rendreBarreTotal();
+      btnVider.disabled = appareil.total.length === 0;
+      lignes.replaceChildren(...(appareil.total.length ? appareil.total.map((l) => h('div', { class: 'total-ligne' },
+        h('span', { class: 'total-ligne-nom' }, l.nom),
+        h('span', { class: 'total-ligne-prix' }, `${formatPrix(l.ttc * l.qte)} TTC`,
+          h('div', { class: 'total-ligne-unite' }, `${formatPrix(l.ht * l.qte)} HT`)),
+        h('div', { class: 'total-ligne-commandes' },
+          h('button', { type: 'button', class: 'btn btn-carre', 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(() => { l.qte -= 1; }) }, '−'),
+          h('span', { class: 'total-qte', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
+          h('button', { type: 'button', class: 'btn btn-carre', 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(() => { l.qte += 1; }) }, '+'),
+          l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
+          h('button', { type: 'button', class: 'btn-lien total-retirer', 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(() => { appareil.total.splice(appareil.total.indexOf(l), 1); }) }, 'Retirer'))))
+        : [h('p', { class: 'total-vide' }, 'Rien dans le total. Sur un forfait, appuie sur « + Total ».')]));
+      const { ht, ttc } = sommeTotal();
+      somme.replaceChildren(h('dt', {}, 'Total HT'), h('dd', {}, formatPrix(ht)), h('dt', {}, 'Total TTC'), h('dd', {}, formatPrix(ttc)));
+    }
+
+    // Pièce ou service qui n'est pas un forfait : on tape un nom et un prix (l'autre prix se calcule).
+    const nom = h('input', { class: 'champ', maxlength: 80, placeholder: 'Nom (pièce, service…)', 'aria-label': 'Nom de la ligne libre' });
+    const ht = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix HT', 'aria-label': 'Prix HT de la ligne libre' });
+    const ttc = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix TTC', 'aria-label': 'Prix TTC de la ligne libre' });
+    ht.addEventListener('input', () => { const v = lirePrix(ht.value); ttc.value = v === null ? '' : prixSaisie(ttcDepuisHt(v)); });
+    ttc.addEventListener('input', () => { const v = lirePrix(ttc.value); ht.value = v === null ? '' : prixSaisie(htDepuisTtc(v)); });
+    const libre = h('form', { class: 'total-libre', novalidate: true, onsubmit: (ev) => {
+      ev.preventDefault();
+      const prixHt = lirePrix(ht.value);
+      const prixTtc = lirePrix(ttc.value);
+      if (prixHt === null || prixTtc === null) { toast('Tape un prix (exemple : 45,50)', true); (prixHt === null ? ht : ttc).focus(); return; }
+      if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : retires-en une`, true); return; }
+      appareil.total.push({ id: null, nom: nom.value.trim().slice(0, 80) || 'Divers', qte: 1, ht: prixHt, ttc: prixTtc });
+      sauverAppareil();
+      nom.value = ht.value = ttc.value = '';
+      redessiner();
+      nom.focus();
+    } },
+      h('strong', {}, 'Ajouter une pièce ou un service'),
+      nom,
+      h('div', { class: 'total-libre-prix' }, ht, ttc),
+      h('button', { type: 'submit', class: 'btn btn-bord' }, '+ Ajouter à la liste'));
+
+    const dlg = ouvrirDialogue({
+      titre: 'Total',
+      corps: [lignes, somme, libre],
+      pied: [btnVider, h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
+    });
+    dlg.addEventListener('close', rendreResultats); // remet à jour le compteur des boutons « Total »
+    redessiner();
   }
 
   function rendreRappel() {
@@ -2269,6 +2421,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   $('btn-importer').addEventListener('click', lancerImport);
   $('btn-menu').addEventListener('click', ouvrirMenu);
   $('btn-rappel-exporter').addEventListener('click', ouvrirExport);
+  $('barre-total').addEventListener('click', ouvrirTotal);
   $('fichier-import').addEventListener('change', (ev) => importerFichier(ev.target.files[0]));
 
   // Si la page est ouverte dans deux onglets, ils restent d'accord.

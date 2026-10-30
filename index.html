@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-oKKyoRGWi90I5HgiEDQXOPJXRsmiFnoQ+SGhI7QxjdI='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YrMqGaM1Jty3M89zpxxGqT1hDOZ8rWvw3vPM1/6he+o='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -250,27 +250,34 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
 .carte {
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: 8px;
   background: var(--surface);
   border: 1px solid var(--trait); border-radius: 12px;
-  padding: 12px 12px 14px 16px;
+  padding: 10px 12px 10px 14px;
 }
 .carte-exemple { border-style: dashed; border-color: var(--trait-fort); }
-.carte-tete { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
-.carte-titre { flex: 1 1 190px; min-width: 0; padding-top: 4px; } /* sous 190 px de libre, les boutons passent sous la référence */
-.carte-boutons { margin-left: auto; }
-.carte-ref { margin: 0; font-family: var(--police-titre); font-size: 26px; line-height: 1.1; letter-spacing: .02em; color: var(--texte-fort); overflow-wrap: anywhere; }
+/* Le nom du forfait en premier et en grand : les techniciens se repèrent au nom et aux éléments.
+   La référence (petite, en bas) sert à l'accueil et au magasin, avec le bouton Copier. */
+.carte-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.carte-nom {
+  margin: 0; flex: 1 1 100%;
+  font-family: var(--police-titre); font-size: 19px; line-height: 1.25; letter-spacing: .02em;
+  color: var(--texte-fort); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
 .badge-exemple {
-  display: inline-block; margin-bottom: 4px; padding: 0 7px; border-radius: 6px;
+  display: inline-block; padding: 0 7px; border-radius: 6px;
   border: 1px solid var(--trait-fort); color: var(--texte-doux);
   font-size: 12px; font-weight: 700; letter-spacing: .08em;
 }
-/* Copier : l'action la plus fréquente, collée à la référence qu'elle copie. */
-.carte-boutons { display: flex; gap: 8px; flex-shrink: 0; }
-.btn-favori { padding: 6px 12px; font-size: 22px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait); }
+/* Prix à gauche, actions à droite : une seule rangée au lieu de deux. */
+.carte-bas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: auto; }
+.carte-boutons { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
+.carte-boutons .btn { min-height: var(--tactile); } /* boutons plus petits, zone de toucher gardée */
+.btn-favori { padding: 4px 11px; font-size: 20px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait); }
 .btn-favori:hover { border-color: var(--ambre); }
 .btn-favori[aria-pressed="true"] { color: var(--ambre); }
-.btn-copier { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
+.btn-copier { flex-shrink: 0; padding: 6px 12px; background: var(--surface-2); color: var(--texte); border-color: var(--trait); }
 .btn-copier:hover { border-color: var(--rouge); }
 .btn-copier.copie { background: var(--vert); border-color: var(--vert); color: var(--blanc); }
 .icone-copier { position: relative; width: 17px; height: 17px; flex-shrink: 0; }
@@ -286,19 +293,27 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   border-width: 0 3px 3px 0; border-color: var(--blanc); transform: rotate(45deg);
 }
 .copie .icone-copier::after { display: none; }
-.carte-prix { display: flex; flex-wrap: wrap; gap: 2px 20px; }
-.prix { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-.prix-montant { font-family: var(--police-titre); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.prix-ttc .prix-montant { color: var(--rouge-vif); }
-.prix-type { font-size: 15px; font-weight: 700; color: var(--texte-doux); }
-.carte-elements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.carte-elements li { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 8px; background: var(--surface-2); }
-.el-famille { font-size: 15px; color: var(--texte-doux); }
+/* Le TTC est le prix qu'on donne au client : en rouge et en gros. Le HT reste lisible à côté. */
+.carte-prix { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.prix { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.prix-montant { font-family: var(--police-titre); font-weight: 700; font-variant-numeric: tabular-nums; }
+.prix-type { font-weight: 700; color: var(--texte-doux); }
+.prix-ttc .prix-montant { font-size: 23px; color: var(--rouge-vif); }
+.prix-ttc .prix-type { font-size: 14px; color: var(--rouge-vif); }
+.prix-ht .prix-montant { font-size: 15px; color: var(--texte-doux); }
+.prix-ht .prix-type { font-size: 13px; }
+.carte-elements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.carte-elements li { padding: 2px 9px; border-radius: 7px; background: var(--surface-2); font-size: 14px; }
+/* La famille (Taximètre, Boîtier…) n'est plus affichée : l'équipe reconnaît ses éléments au nom.
+   Gardée pour les lecteurs d'écran et les filtres, qui eux nomment les familles. */
+.el-famille { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .el-nom { font-weight: 700; }
-.carte-designation { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte-doux); }
-.carte-maj { margin: 0; font-size: 13px; color: var(--texte-doux); }
-.carte-surnoms { margin: 8px 0 0; font-size: 14px; color: var(--texte-doux); font-style: italic; overflow-wrap: anywhere; }
-.carte-pied { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.carte-maj { margin: 0; }
+.carte-surnoms { margin: 0; font-size: 13px; color: var(--texte-doux); font-style: italic; overflow-wrap: anywhere; }
+.carte-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; font-size: 13px; color: var(--texte-doux); }
+.carte-pied .carte-ref { font-family: var(--police-titre); letter-spacing: .02em; overflow-wrap: anywhere; }
+/* Discret : sur la carte, le nom et le prix passent avant le surnom. */
+.carte-pied .btn-lien { margin-left: auto; color: var(--texte-doux); }
 .suggestion-surnom { margin-left: 8px; color: var(--texte-doux); font-style: italic; }
 .surnom-mien { flex: 1; overflow-wrap: anywhere; }
 .surnom-conflit { font-size: 13px; color: var(--ambre); }
@@ -473,7 +488,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
 @media (max-width: 440px) {
   .ligne-prix { grid-template-columns: 1fr; }
   #recherche { font-size: 18px; }
-  .carte-ref { font-size: 24px; }
 }
 @media (max-width: 400px) {
   .marque-bloc { display: none; }
@@ -1139,11 +1153,22 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function carte(f) {
     const elements = index.elementsForfait.get(f.id);
+    // Titre = le nom du forfait (sa désignation) ; sans désignation, la référence fait le titre.
+    // Dans les deux cas, un seul élément porte la classe carte-ref avec la référence.
+    const titre = f.designation
+      ? h('h2', { class: 'carte-nom carte-designation', title: f.designation }, f.designation)
+      : h('h2', { class: 'carte-nom carte-ref' }, f.ref);
     return h('article', { class: 'carte' + (f.exemple ? ' carte-exemple' : ''), 'data-id': f.id },
       h('div', { class: 'carte-tete' },
-        h('div', { class: 'carte-titre' },
-          f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
-          h('h2', { class: 'carte-ref' }, f.ref)),
+        f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
+        titre),
+      elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
+        h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
+      index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
+      h('div', { class: 'carte-bas' },
+        h('div', { class: 'carte-prix' },
+          h('div', { class: 'prix prix-ttc' }, h('span', { class: 'prix-montant' }, formatPrix(f.ttc)), h('span', { class: 'prix-type' }, 'TTC')),
+          h('div', { class: 'prix prix-ht' }, h('span', { class: 'prix-montant' }, formatPrix(f.ht)), h('span', { class: 'prix-type' }, 'HT'))),
         h('div', { class: 'carte-boutons' },
           h('button', {
             type: 'button', class: 'btn btn-favori', 'aria-pressed': String(appareil.favoris.includes(f.id)),
@@ -1156,15 +1181,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
           }, texteBoutonTotal(f)),
           h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); copier(f.ref, ev.currentTarget); } },
             h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier')))),
-      h('div', { class: 'carte-prix' },
-        h('div', { class: 'prix prix-ht' }, h('span', { class: 'prix-montant' }, formatPrix(f.ht)), h('span', { class: 'prix-type' }, 'HT')),
-        h('div', { class: 'prix prix-ttc' }, h('span', { class: 'prix-montant' }, formatPrix(f.ttc)), h('span', { class: 'prix-type' }, 'TTC'))),
-      elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
-        h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
-      f.designation ? h('p', { class: 'carte-designation' }, f.designation) : null,
-      index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
       h('div', { class: 'carte-pied' },
-        f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : h('span', {}), // 0 : exemple jamais touché
+        f.designation ? h('span', { class: 'carte-ref' }, f.ref) : null, // sinon la référence est déjà le titre
+        f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null, // 0 : exemple jamais touché
         h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Mon surnom')),
       appareil.modeModif ? h('div', { class: 'carte-actions' },
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),

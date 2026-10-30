@@ -1765,7 +1765,7 @@ def centimes(texte):
 
 
 def prix_carte(page, ref):
-    carte = page.locator(f'.carte:has(h2.carte-ref:text-is("{ref}"))')
+    carte = page.locator(f'.carte:has(.carte-ref:text-is("{ref}"))')
     return centimes(carte.locator(".prix-ht .prix-montant").text_content()), centimes(
         carte.locator(".prix-ttc .prix-montant").text_content()
     )

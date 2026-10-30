@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-c9+oTI86zFRKvFTwGFvvnKxxGJUpAr1whsOS7qD3p2U='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-oWM6CGIjFudr5FRdT+IMHDYhczyIeKDTzvA3vFWIWoc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1002,7 +1002,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     // Ordre des familles : celui rangé sur cet appareil d'abord ; une famille qu'il ne connaît pas
     // encore (nouvelle, ou appareil jamais réglé) passe après, dans l'ordre des données.
     const rangAppareil = new Map(appareil.ordreFams.map((id, i) => [id, i]));
-    const rangFamille = (f) => (rangAppareil.has(f.id) ? rangAppareil.get(f.id) : appareil.ordreFams.length + f.ordre);
+    const rangFamille = (f) => (rangAppareil.has(f.id) ? rangAppareil.get(f.id) : appareil.ordreFams.length + Math.max(0, f.ordre));
     const fams = donnees.familles.filter((f) => !f.supprime)
       .sort((a, b) => rangFamille(a) - rangFamille(b) || tri.compare(a.nom, b.nom));
     const famParId = new Map(fams.map((f) => [f.id, f]));
@@ -1282,8 +1282,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // doit pouvoir mettre ses familles dans son ordre sans passer par le mode modification.
   function ouvrirOrdreFiltres() {
     const liste = h('div', {});
+    const fleche = (sens, id) => liste.querySelector(`[data-fleche="${sens > 0 ? 'bas' : 'haut'}-${id}"]`);
     const deplacer = (i, sens) => {
       const ids = index.fams.map((f) => f.id);
+      const id = ids[i];
       [ids[i], ids[i + sens]] = [ids[i + sens], ids[i]];
       appareil.ordreFams = ids;
       sauverAppareil();
@@ -1291,12 +1293,20 @@ textarea.champ { resize: vertical; min-height: 90px; }
       // (L'événement « close » d'un dialogue part en différé : s'y fier laisserait la rangée en retard.)
       rafraichir();
       dessiner();
+      // Les boutons viennent d'être refaits : on rend le focus à la flèche qu'on utilisait (l'autre
+      // si elle est devenue inactive), sinon on repart du début de la fenêtre à chaque appui.
+      const rendue = fleche(sens, id);
+      (rendue && !rendue.disabled ? rendue : fleche(-sens, id))?.focus();
     };
-    const dessiner = () => liste.replaceChildren(...index.fams.map((fam, i) => h('div', { class: 'ordre-ligne' },
-      h('span', { class: 'ordre-place' }, i < FILTRES_VISIBLES ? 'Filtre' : 'Autres'),
-      h('span', { class: 'ordre-nom' }, fam.nom),
-      h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacer(i, -1) }, '↑'),
-      h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'aria-label': `Descendre ${fam.nom}`, disabled: i === index.fams.length - 1, onclick: () => deplacer(i, 1) }, '↓'))));
+    const dessiner = () => {
+      // Une seule famille de reste n'irait pas dans « Autres » : la rangée la montre telle quelle.
+      const groupees = index.fams.length - FILTRES_VISIBLES > 1;
+      liste.replaceChildren(...index.fams.map((fam, i) => h('div', { class: 'ordre-ligne' },
+        h('span', { class: 'ordre-place' }, i < FILTRES_VISIBLES || !groupees ? 'Filtre' : 'Autres'),
+        h('span', { class: 'ordre-nom' }, fam.nom),
+        h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'data-fleche': 'haut-' + fam.id, 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacer(i, -1) }, '↑'),
+        h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'data-fleche': 'bas-' + fam.id, 'aria-label': `Descendre ${fam.nom}`, disabled: i === index.fams.length - 1, onclick: () => deplacer(i, 1) }, '↓'))));
+    };
     const dlg = ouvrirDialogue({
       titre: 'Ordre des filtres',
       corps: [h('p', { class: 'aide-texte' }, `Les ${FILTRES_VISIBLES} premières sont les boutons de filtre sous la recherche ; les autres se rangent dans « Autres ». Sur cet appareil seulement.`), liste],

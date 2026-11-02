@@ -1369,6 +1369,14 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
         "#filtres .filtre, .btn-copier, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
     )
     assert min(hauteurs) >= 44, hauteurs
+    # Tous les boutons de filtre sont dans l'écran : sur téléphone ils passent à la ligne au lieu
+    # de défiler du doigt, sinon « Autres » reste hors de l'écran sans que rien ne le signale.
+    debords = page.eval_on_selector_all(
+        "#filtres .filtre",
+        "els => els.filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1)"
+        ".map(e => e.textContent)",
+    )
+    assert not debords, debords
 
     page.click("#recherche")
     page.keyboard.type("zor")

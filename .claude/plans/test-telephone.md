@@ -61,6 +61,9 @@ Attendu : au départ, chaque carte montre seulement le **nom** et le **prix TTC*
   proposer la correction, et seulement si elle donne vraiment des forfaits.
 - Vide la recherche → la rangée **Derniers consultés** doit montrer les forfaits que tu viens de
   regarder (4 au maximum).
+- Appuie sur le titre **Derniers consultés** → la rangée se replie et rend la place aux forfaits ;
+  le chevron se retourne. Réappuie pour la rouvrir. Ce choix reste sur ce téléphone, même après
+  avoir fermé l'outil.
 
 ## 7. Le Total
 

@@ -1490,6 +1490,36 @@ def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
     expect(page.locator("#resultats .carte")).to_have_class(re.compile(r"\bcarte-ouverte\b"))
 
 
+def test_la_rangee_des_derniers_consultes_se_replie(appareils):
+    """Sur un petit écran la rangée mange une ligne : on doit pouvoir la rendre aux forfaits."""
+    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
+    carte = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text="EX-T2-3Q"))
+    carte.locator(".carte-ouvrir").click()
+    chercher(page, "3Q")
+    chercher(page, "")
+    expect(page.locator("#resultats .recent")).to_have_count(1)
+
+    bouton = page.locator("#btn-recents")
+    expect(bouton).to_have_attribute("aria-expanded", "true")
+    # Mesure depuis le haut du document : la page peut être défilée, ce qui fausserait bounding_box.
+    haut_premiere_carte = "document.querySelector('#resultats .carte').offsetTop"
+    haut_avant = page.evaluate(haut_premiere_carte)
+
+    bouton.click()
+    expect(page.locator("#resultats .recent")).to_be_hidden()
+    expect(bouton).to_have_attribute("aria-expanded", "false")
+    haut_apres = page.evaluate(haut_premiere_carte)
+    assert haut_apres < haut_avant, (haut_avant, haut_apres)  # la place est rendue aux forfaits
+
+    # Réglage de cet appareil : il tient au rechargement, et on peut la rouvrir.
+    page.reload()
+    page.wait_for_selector("#resultats .carte")
+    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "false")
+    expect(page.locator("#resultats .recent")).to_be_hidden()
+    page.locator("#btn-recents").click()
+    expect(page.locator("#resultats .recent").first).to_be_visible()
+
+
 def test_grands_caracteres_grossissent_tout_sans_deborder(appareils):
     """Comptoir et atelier : un cran de plus, gardé sur l'appareil, sans casser la mise en page."""
     page = appareils(compact=True, viewport={"width": 375, "height": 812}, reduced_motion="reduce").page

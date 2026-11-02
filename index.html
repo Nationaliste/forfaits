@@ -230,6 +230,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .suggestion-nom { font-weight: 700; font-size: 18px; }
 .suggestion-famille { font-size: 13px; color: var(--texte-doux); }
 .etiquettes, .filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) couperait sinon le mot
+   nulle part et ferait défiler toute la page en largeur : 24 caractères y suffisent sur un
+   téléphone. L'étiquette et le bouton de filtre portent tous deux ce nom. */
+.etiquette, .filtre { overflow-wrap: anywhere; }
 .etiquette {
   display: inline-flex; align-items: center; gap: 8px;
   min-height: 44px; padding: 6px 8px 6px 14px;
@@ -530,11 +534,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
 /* ============ Téléphone ============ */
 @media (max-width: 600px) {
   .dlg, .dlg-large { width: calc(100vw / var(--zoom)); height: calc(100vh / var(--zoom)); height: calc(100dvh / var(--zoom)); max-height: none; border-radius: 0; border: 0; margin: 0; }
-  /* Sur téléphone, les boutons de filtre tiennent sur une ligne qu'on fait défiler du doigt,
-     pour que la zone de recherche (qui reste en haut) ne mange pas l'écran. */
-  .filtres { flex-wrap: nowrap; overflow-x: auto; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; scrollbar-width: none; }
-  .filtres::-webkit-scrollbar { display: none; }
-  .filtre { flex-shrink: 0; }
+  /* Sur téléphone, les boutons de filtre passent à la ligne : tout est visible d'un coup.
+     (Une rangée qui défile du doigt laissait « Autres » hors de l'écran, sans rien qui le signale.)
+     Boutons un peu plus serrés pour qu'ils tiennent souvent sur une seule ligne ; la zone tactile
+     de 44 px est gardée par min-height. */
+  .filtre { padding: 8px 12px; font-size: 15px; }
 }
 @media (max-width: 440px) {
   .ligne-prix { grid-template-columns: 1fr; }

@@ -13,8 +13,9 @@ Choix tranché par lui : **ordre par appareil** (comme le thème et la taille du
 
 ## État
 
-Branche `feat/ordre-des-filtres` poussée, commits `943cacf` (la fonctionnalité) et `75dd2bd`
-(corrections de relecture + cette note). Rien à récupérer en local.
+Branche `feat/ordre-des-filtres`, trois commits (la fonctionnalité, les corrections de relecture,
+cette note). Rebasée le 02/11 sur `origin/main` réécrit : les hachages d'avant ne valent plus,
+et la branche distante doit être repoussée avec `git push --force-with-lease`.
 
 Fait :
 - `ordreFams` dans `forfaits.appareil.v1` (jamais exporté) ; `construireIndex` classe par cet ordre,

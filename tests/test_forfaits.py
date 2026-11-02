@@ -1378,6 +1378,25 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     )
     assert not debords, debords
 
+    # Un nom d'élément d'une seule traite (le champ en accepte 60) ne doit pas faire défiler la page
+    # en largeur : le bouton de filtre coupe le mot au lieu de pousser la page.
+    def sans_debord_avec_nom_long(selecteur):
+        depasse = page.evaluate(
+            """([sel, mot]) => {
+                 const e = document.querySelector(sel);
+                 if (!e) return 'absent';
+                 const avant = e.textContent;
+                 e.textContent = mot;
+                 const trop = document.documentElement.scrollWidth > document.documentElement.clientWidth;
+                 e.textContent = avant;
+                 return trop;
+               }""",
+            [selecteur, "Imprimante : " + "M" * 60],
+        )
+        assert depasse is False, f"{selecteur} : {depasse if depasse == 'absent' else 'un nom long fait défiler la page'}"
+
+    sans_debord_avec_nom_long("#filtres .filtre")
+
     page.click("#recherche")
     page.keyboard.type("zor")
     expect(page.locator("#suggestions")).to_be_visible()
@@ -1385,6 +1404,8 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-2-suggestions.png")
     page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
     page.screenshot(path=f"{prefixe}-3-etiquette.png")
+    # L'étiquette du filtre posé porte le même nom : elle aussi coupe un mot trop long.
+    sans_debord_avec_nom_long("#etiquettes .etiquette span")
 
     activer_modif(page)
     ouvrir_ajout(page)

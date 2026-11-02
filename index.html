@@ -230,6 +230,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .suggestion-nom { font-weight: 700; font-size: 18px; }
 .suggestion-famille { font-size: 13px; color: var(--texte-doux); }
 .etiquettes, .filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) couperait sinon le mot
+   nulle part et ferait défiler toute la page en largeur : 24 caractères y suffisent sur un
+   téléphone. L'étiquette et le bouton de filtre portent tous deux ce nom. */
+.etiquette, .filtre { overflow-wrap: anywhere; }
 .etiquette {
   display: inline-flex; align-items: center; gap: 8px;
   min-height: 44px; padding: 6px 8px 6px 14px;

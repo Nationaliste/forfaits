@@ -33,13 +33,14 @@ envoie le `.json` aux autres. Le même tableau importé deux fois donne des doub
 
 ## 4. Les filtres (le point corrigé aujourd'hui)
 
-Sous la recherche, quatre boutons : Taximètre, Lumineux, Imprimante, Autres.
+Sous la recherche : trois boutons de famille, puis **Autres**. (Avec les exemples ce sera
+Taximètre, Lumineux, Imprimante ; avec ton vrai fichier, tes familles à toi.)
 
-Attendu : **les quatre sont visibles**, sur deux lignes, sans rien faire glisser.
+Attendu : **tous les boutons sont visibles**, sur une ou deux lignes, sans rien faire glisser.
 Avant aujourd'hui, « Autres » était hors de l'écran.
 
-- Appuie sur **Taximètre** → une liste plein écran s'ouvre, choisis un modèle.
-- Attendu : une étiquette « Taximètre : … ✕ » apparaît au-dessus, et la liste des forfaits se
+- Appuie sur le premier → une liste plein écran s'ouvre, choisis un modèle.
+- Attendu : une étiquette « Famille : modèle ✕ » apparaît au-dessus, et la liste des forfaits se
   réduit. L'appui sur la croix retire le filtre.
 - Appuie sur **Autres** → les familles qui ne sont pas en bouton (Boîtier, Installation…).
 - Pour les ranger dans ton ordre : **Menu ☰ → Ordre des filtres**. Les 3 premières deviennent des

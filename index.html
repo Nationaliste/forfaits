@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-oWM6CGIjFudr5FRdT+IMHDYhczyIeKDTzvA3vFWIWoc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-55Cl8PYm3q+a2iF25//2n/gtngEUrurLKI41ERkef7k='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -266,7 +266,17 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 /* Derniers forfaits consultés sur cet appareil : la liste complète est longue, celui qu'on vient
    de regarder revient souvent deux minutes plus tard. */
 .recents { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 2px; }
-.recents-titre { margin: 0; font-size: 14px; color: var(--texte-doux); }
+/* Le titre replie la rangée (réglage de l'appareil) : même hauteur que les pastilles à côté,
+   pour que le repli ne coûte pas la place qu'il fait gagner. */
+.recents-titre {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0; padding: 6px 8px 6px 0; min-height: 40px;
+  background: none; border: 0; color: var(--texte-doux); font: inherit; font-size: 14px;
+  text-align: left; cursor: pointer;
+}
+.recents-titre:hover { color: var(--texte-fort); }
+.recents-liste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.recents:not(.recents-plies) .recents-titre .chevron { transform: rotate(180deg); }
 .recent {
   max-width: 100%; min-height: 40px; padding: 6px 12px;
   background: var(--surface-2); border: 1px solid var(--trait); border-radius: 999px;
@@ -887,7 +897,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsPlies: false, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -912,6 +922,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
         texte: TAILLES.some((t) => t.valeur === lu.texte) ? lu.texte : 'normal',
         compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
+        recentsPlies: lu.recentsPlies === true, // vrai = rangée « Derniers consultés » repliée ; dépliée tant que l'appareil n'a rien choisi
       };
     } catch {
       return defaut;
@@ -1357,9 +1368,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Les derniers forfaits consultés, quand la recherche est vide : un appui remet le forfait seul
   // à l'écran (la liste complète est longue, celui qu'on vient de regarder revient souvent).
+  // Le titre replie la rangée pour rendre la place aux forfaits : réglage de cet appareil.
   function rangeeRecents(liste) {
-    return h('div', { class: 'recents' },
-      h('p', { class: 'recents-titre' }, 'Derniers consultés'),
+    const plies = appareil.recentsPlies;
+    const pastilles = h('div', { class: 'recents-liste', hidden: plies },
       ...liste.map((f) => h('button', {
         type: 'button', class: 'recent', title: f.designation || f.ref,
         onclick: () => {
@@ -1369,6 +1381,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
           window.scrollTo({ top: 0 });
         },
       }, f.designation || f.ref)));
+    return h('div', { class: 'recents' + (plies ? ' recents-plies' : '') },
+      h('button', {
+        type: 'button', class: 'recents-titre', id: 'btn-recents',
+        'aria-expanded': String(!plies),
+        onclick: (ev) => {
+          const plie = !appareil.recentsPlies;
+          appareil.recentsPlies = plie;
+          sauverAppareil();
+          // Tout de suite, sans tout redessiner : la rangée est au-dessus des forfaits, on voit la place rendue.
+          ev.currentTarget.setAttribute('aria-expanded', String(!plie));
+          ev.currentTarget.closest('.recents').classList.toggle('recents-plies', plie);
+          pastilles.hidden = plie;
+        },
+      }, 'Derniers consultés', h('span', { class: 'chevron', 'aria-hidden': 'true' })),
+      pastilles);
   }
 
   function rendreResultats() {

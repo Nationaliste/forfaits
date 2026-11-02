@@ -49,6 +49,9 @@ Pas de CI à attendre : quota GitHub Actions épuisé jusqu'au 1er novembre.
 
 ## À lui montrer / à décider
 
-- À 375 px la rangée de filtres défile toujours latéralement : « Autres » est le 4e bouton, donc
-  hors écran au repos. C'est mieux qu'avant (5 boutons) mais pas réglé ; lui demander si ça le gêne.
-- Rien n'est vérifié sur un vrai téléphone, seulement en émulation.
+- ~~À 375 px la rangée de filtres défile toujours latéralement~~ **Réglé le 02/11 (PR #42)** : elle
+  passe à la ligne, les quatre filtres sont visibles d'un coup. La même PR a corrigé un nom
+  d'élément d'une seule traite qui faisait défiler toute la page en largeur (24 caractères
+  suffisaient) — bouton de filtre et étiquette coupent maintenant le mot.
+- Rien n'est vérifié sur un vrai téléphone, seulement en émulation. Marche à suivre écrite pour
+  l'utilisateur : `.claude/plans/test-telephone.md`. **En attente de son retour.**

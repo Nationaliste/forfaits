@@ -1615,7 +1615,9 @@ PAIRES_PAGE = [
     ("--ambre", "--surface-2", 4.5), ("--ambre", "--surface", 4.5),
     ("--inverse-texte", "--inverse", 4.5),
     ("--blanc", "--rouge", 4.5), ("--blanc", "--vert", 4.5),
-    ("--trait-fort", "--fond", 3),
+    # Bordure des boutons : elle doit se voir sur le fond de page, mais aussi sur une carte et
+    # sur une puce, sinon on ne comprend pas que c'est un bouton.
+    ("--trait-fort", "--fond", 3), ("--trait-fort", "--surface", 3), ("--trait-fort", "--surface-2", 3),
 ]  # fmt: skip
 PAIRES_BANDEAU_NOIR = [("--blanc", "--noir", 4.5), ("--texte-doux", "--noir", 4.5), ("--trait-fort", "--noir", 3)]
 

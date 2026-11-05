@@ -42,7 +42,7 @@ def ouvrir_maj(page):
     return dialogue(page)
 
 
-def connecter_premier(page, cloud, nom="Surface"):
+def connecter_premier(page, cloud, nom="PC du responsable"):
     """Met la mise à jour en place depuis cet appareil, avec le code de secours (premier responsable)."""
     ouvrir_maj(page).locator("#btn-premier-appareil").click()
     d = dialogue(page)
@@ -116,6 +116,23 @@ def attendre_sans_forfait(page, ref):
     expect(carte(page, ref)).to_have_count(0, timeout=20000)
 
 
+def ttc_de(page, ref):
+    """Le TTC affiché sur la carte d'un forfait."""
+    c = page.locator(".carte", has=page.locator(".carte-ref", has_text=re.compile(f"^{re.escape(ref)}$")))
+    return c.locator(".prix-ttc .prix-montant")
+
+
+def revenir_a_la_version_precedente(page):
+    """Menu → Mise à jour → Revenir à une version, puis la plus récente de la liste (la version
+    actuelle, elle, n'a pas de bouton)."""
+    ouvrir_maj(page).locator("#maj-versions").click()
+    liste = dialogue(page).locator("#maj-liste-versions")
+    expect(liste.locator("button[data-revenir]").first).to_be_visible(timeout=20000)
+    liste.locator("button[data-revenir]").first.click()
+    dialogue(page).get_by_role("button", name="Revenir", exact=True).click()
+    expect(page.locator("#toast")).to_contain_text("revenus à la version", timeout=20000)
+
+
 def sonde(cloud):
     """Lit le cloud comme un responsable de plus : version et paquet chiffré, jamais la clé."""
     statut, rep = appel_cloud(cloud, "/api/initialiser", "POST", {"code_secours": CODE_SECOURS, "nom": "Sonde"})
@@ -154,6 +171,24 @@ def test_le_cloud_refuse_l_ecriture_a_un_appareil_de_consultation(cloud_vide):
     blob = base64.b64encode(b"x" * 48).decode()
     statut, rep = appel_cloud(cloud_vide, "/api/donnees", "PUT", {"version_precedente": 0, "blob": blob}, vendeur["jeton"])
     assert statut == 401 and rep["raison"] == "lecture seule"
+
+
+def test_retirer_un_appareil_annule_les_liens_qu_il_a_emis(cloud_vide):
+    """Téléphone perdu : le retirer doit fermer la porte. Un lien d'appairage qu'il avait émis (jusqu'à
+    20 usages pendant 24 h) le laissait revenir avec un jeton responsable neuf et un autre identifiant,
+    sans que personne ne le voie passer dans la liste des appareils."""
+    _, patron = appel_cloud(cloud_vide, "/api/initialiser", "POST", {"code_secours": CODE_SECOURS})
+    _, inv = appel_cloud(cloud_vide, "/api/invitation", "POST", {"role": "responsable"}, patron["jeton"])
+    _, perdu = appel_cloud(cloud_vide, "/api/appairage", "POST", {"code": inv["code"], "nom": "Portable"})
+    _, garde = appel_cloud(
+        cloud_vide, "/api/invitation", "POST", {"role": "responsable", "usages": 20, "minutes": 1440}, perdu["jeton"]
+    )
+    assert appel_cloud(cloud_vide, "/api/appareils/" + perdu["id"], "DELETE", jeton=patron["jeton"])[0] == 200
+    statut, _ = appel_cloud(cloud_vide, "/api/appairage", "POST", {"code": garde["code"]})
+    assert statut == 401, "le lien émis par l'appareil retiré marche encore"
+    # Et les liens des appareils encore en place n'ont pas été emportés au passage.
+    _, autre = appel_cloud(cloud_vide, "/api/invitation", "POST", {"role": "consultation"}, patron["jeton"])
+    assert appel_cloud(cloud_vide, "/api/appairage", "POST", {"code": autre["code"]})[0] == 200
 
 
 def test_le_cloud_garde_dix_versions_et_pas_plus(cloud_vide):
@@ -268,7 +303,7 @@ def test_les_forfaits_de_l_equipe_remplacent_ceux_d_un_appareil_de_consultation(
 def test_deux_responsables_qui_envoient_en_meme_temps_ne_perdent_rien(cloud_vide, appareils_maj):
     """Le cloud refuse un envoi parti d'une version périmée : l'appli relit, fusionne et renvoie."""
     patron = appareils_maj()
-    connecter_premier(patron.page, cloud_vide, "Surface")
+    connecter_premier(patron.page, cloud_vide, "PC du responsable")
     second = appareils_maj(tolerer=BRUIT_409)  # le 409 refusé par le cloud est le cœur du test
     connecter_avec_lien(second.page, creer_lien(patron.page, role="Responsable"), "Portable")
 
@@ -349,6 +384,83 @@ def test_revenir_a_une_version_annule_une_fausse_manoeuvre(cloud_vide, appareils
     attendre_forfait(patron.page, "RETOUR-1")
 
 
+def test_un_retour_arriere_tient_face_a_un_second_responsable(cloud_vide, appareils_maj):
+    """L'ancienne version porte des dates plus anciennes que la fausse manœuvre : sans réhorodatage,
+    le second responsable ne fusionnerait pas, renverrait la fausse manœuvre et annulerait le retour.
+    La fenêtre promet « les forfaits de TOUS les appareils » : c'est ce que ce test vérifie."""
+    patron = appareils_maj()
+    connecter_premier(patron.page, cloud_vide)
+    activer_modif(patron.page)
+    ajouter_forfait(patron.page, "TENIR-1")
+    attendre_envoi(patron.page)
+
+    second = appareils_maj()
+    connecter_avec_lien(second.page, creer_lien(patron.page, role="Responsable"), "Portable")
+    attendre_forfait(second.page, "TENIR-1")
+
+    # La fausse manœuvre vient du SECOND responsable : c'est lui qui a encore le forfait en trop
+    # dans ses données quand le retour arrière arrive.
+    activer_modif(second.page)
+    ajouter_forfait(second.page, "ERREUR-1")
+    attendre_envoi(second.page)
+    verifier_maintenant(patron.page)
+    attendre_forfait(patron.page, "ERREUR-1")
+
+    # Le premier revient à la version d'avant la fausse manœuvre.
+    revenir_a_la_version_precedente(patron.page)
+    attendre_sans_forfait(patron.page, "ERREUR-1")
+    attendre_forfait(patron.page, "TENIR-1")
+    # Le retour est renvoyé au cloud, sinon il ne tiendrait que sur cet appareil.
+    expect(patron.page.locator("#etat-donnees")).to_contain_text(A_JOUR, timeout=25000)
+    version_apres_retour = sonde(cloud_vide)["version"]
+
+    # Le second accepte le retour au lieu de renvoyer la fausse manœuvre.
+    verifier_maintenant(second.page)
+    attendre_sans_forfait(second.page, "ERREUR-1")
+    attendre_forfait(second.page, "TENIR-1")
+    assert sonde(cloud_vide)["version"] == version_apres_retour, "le second responsable a renvoyé quelque chose"
+
+    # Et le premier ne voit pas la fausse manœuvre revenir.
+    verifier_maintenant(patron.page)
+    attendre_sans_forfait(patron.page, "ERREUR-1")
+
+
+def test_un_retour_arriere_annule_aussi_la_modification_d_un_exemple(cloud_vide, appareils_maj):
+    """Un exemple modifié porte une date, alors que la version d'avant le porte à 0. Rendu tel quel
+    par le retour arrière, l'autre appareil responsable gardait sa modification (plus récente que 0)
+    et la renvoyait : le retour échouait précisément sur l'enregistrement qu'il devait annuler."""
+    exemple = "EX-T2-3Q"  # forfait d'exemple de l'outil, à 840,00 TTC, jamais retouché (maj 0)
+    patron = appareils_maj()
+    connecter_premier(patron.page, cloud_vide)
+
+    second = appareils_maj()
+    connecter_avec_lien(second.page, creer_lien(patron.page, role="Responsable"), "Portable")
+    attendre_forfait(second.page, exemple)
+
+    # La fausse manœuvre vient du SECOND : c'est lui qui garde encore la modification en mémoire
+    # quand le retour arrière arrive.
+    activer_modif(second.page)
+    modifier(second.page, exemple)
+    remplir(second.page, ht="800,00", ttc="960,00")  # TTC cohérent avec le HT : sinon le formulaire fait confirmer l'écart de TVA
+    attendre_envoi(second.page)
+    verifier_maintenant(patron.page)
+    attendre_forfait(patron.page, exemple)
+    expect(ttc_de(patron.page, exemple)).to_contain_text("960,")
+
+    revenir_a_la_version_precedente(patron.page)
+    attendre_forfait(patron.page, exemple)
+    expect(ttc_de(patron.page, exemple)).to_contain_text("840,")
+    # Le retour est renvoyé au cloud, sinon il ne tiendrait que sur cet appareil.
+    expect(patron.page.locator("#etat-donnees")).to_contain_text(A_JOUR, timeout=25000)
+    version_apres_retour = sonde(cloud_vide)["version"]
+
+    # Le second accepte le retour au lieu de renvoyer sa modification.
+    verifier_maintenant(second.page)
+    attendre_forfait(second.page, exemple)
+    expect(ttc_de(second.page, exemple)).to_contain_text("840,")
+    assert sonde(cloud_vide)["version"] == version_apres_retour, "le second responsable a renvoyé sa modification"
+
+
 def test_une_heure_fausse_empeche_l_envoi(cloud_vide, appareils_maj):
     """La fusion se fie aux dates de l'appareil : une horloge fausse écraserait les autres en silence."""
     patron = appareils_maj()
@@ -424,6 +536,20 @@ def test_le_cloud_ne_voit_jamais_les_forfaits_en_clair(cloud_vide, appareils_maj
     assert len(paquet) > 200
     for secret in (b"ZORBA", b"SECRET", b"123450", b"forfaits-comptoir"):
         assert secret not in paquet, f"{secret!r} lisible dans le paquet envoyé au cloud"
+
+
+def test_un_lien_refuse_ne_laisse_pas_la_cle_dans_l_adresse(appareils_maj):
+    """La clé de l'équipe voyage dans le « # » du lien. Un lien ouvert puis refusé (coupé en route par
+    la messagerie, ou cloud d'un autre compte) laissait cette clé dans la barre d'adresse et dans
+    l'historique du navigateur, sans un mot : qui lit l'historique du PC du magasin déchiffre tous
+    les prix du paquet gardé dans le cloud."""
+    vendeur = appareils_maj()
+    faux = "#maj=pirate.autre-compte.workers.dev&inv=" + "a" * 22 + "&cle=" + "b" * 43
+    vendeur.page.goto(vendeur.page.url + faux)
+    vendeur.page.reload()
+    expect(dialogue(vendeur.page)).to_contain_text("Lien inutilisable", timeout=20000)
+    assert "cle=" not in vendeur.page.evaluate("location.href"), "la clé est restée dans l'adresse"
+    assert vendeur.page.evaluate("location.hash") == ""
 
 
 def test_un_lien_vers_un_autre_cloud_est_refuse(appareils_maj):

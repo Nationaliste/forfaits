@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-L0/8BL0LpxiipuLazvPqgvMiERmiNGbPptH/gDj3Rd4='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6FLd+q3irnerdIHSNPbpF0ocUTsBFBfZgfoOE9N0jtE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -828,6 +828,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     for (const cle of ['familles', 'elements', 'forfaits']) {
       if (!Array.isArray(obj[cle])) echec(`Fichier incomplet (« ${cle} » manquant).`);
     }
+    // Chaque enregistrement est borné, mais pas leur NOMBRE : un fichier à 45 000 forfaits passait
+    // tous les contrôles, s'enregistrait, puis figeait l'appli à chaque ouverture (une carte par
+    // forfait), menu compris — donc plus aucune réparation depuis l'outil. L'import de tableau,
+    // lui, est déjà plafonné (LIGNES_TABLEAU_MAX).
+    if (obj.forfaits.length > 20000 || obj.elements.length > 20000 || obj.familles.length > 500) {
+      echec("Ce fichier contient beaucoup trop d'enregistrements pour être un fichier de forfaits.");
+    }
     const motifId = /^[a-z]{2,6}-[a-z0-9-]{1,64}$/;
     const vus = new Set();
     const id = (v) => {
@@ -987,6 +994,28 @@ textarea.champ { resize: vertical; min-height: 90px; }
         if (!actuel || x.maj > actuel.maj) parId.set(x.id, x);
       }
       resultat[cle] = [...parId.values()];
+    }
+    return resultat;
+  }
+
+  // Un retour arrière doit GAGNER la fusion sur tous les appareils. Or l'ancienne version porte des
+  // « maj » plus anciens que la fausse manœuvre qu'elle doit effacer : sans réhorodatage, un autre
+  // appareil responsable ne fusionnerait pas et renverrait la fausse manœuvre, annulant le retour.
+  function pourRetourArriere(actuel, cible, maintenant) {
+    const resultat = {};
+    for (const cle of ['familles', 'elements', 'forfaits']) {
+      const dansCible = new Set(cible[cle].map((x) => x.id));
+      const actuels = new Map(actuel[cle].map((x) => [x.id, x]));
+      // Réhorodater seulement ce que le retour CHANGE (même id et même « maj » = même écriture).
+      // Un enregistrement inchangé garde sa date, donc un exemple jamais touché garde sa maj 0 et
+      // « Supprimer les exemples » continue de le balayer. Mais un exemple MODIFIÉ depuis la
+      // version choisie doit, lui, être réhorodaté : sinon l'autre appareil responsable garderait
+      // sa modification (plus récente que maj 0) et la renverrait, annulant le retour arrière
+      // précisément là où il servait.
+      const liste = cible[cle].map((x) => (actuels.get(x.id)?.maj === x.maj ? x : { ...x, maj: maintenant }));
+      // Créé après la version choisie : le retour doit l'effacer, et une suppression est une marque.
+      for (const x of actuel[cle]) if (!dansCible.has(x.id)) liste.push({ ...x, supprime: true, maj: maintenant });
+      resultat[cle] = liste;
     }
     return resultat;
   }
@@ -2967,6 +2996,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // d'appairage ne peut donc pas détourner cet appareil vers un autre cloud. Le NOM du Worker, lui,
   // n'est pas ici (il arrive par le lien) : le dépôt est public.
   const COMPTE_CLOUD = 'a-remplir';
+  // Tant que le sous-domaine du compte n'est pas renseigné, aucune adresse https n'est acceptée
+  // (voir adresseCloudOk) : les fenêtres le disent au lieu de laisser essayer pour rien.
+  const cloudPasConfigure = COMPTE_CLOUD === 'a-remplir' && location.protocol === 'https:';
   const INTERVALLE_SYNCHRO = 5 * 60 * 1000; // vérification toutes les 5 min quand la page est affichée
   const DELAI_ENVOI = 2000;                 // envoi 2 s après la dernière modification
   const DELAI_APPEL = 20000;
@@ -2997,6 +3029,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
     try { url = new URL(a); } catch { return false; }
     if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return false;
     if (url.protocol === 'http:') return ['127.0.0.1', 'localhost'].includes(url.hostname);
+    // Tant que le sous-domaine du compte n'est pas renseigné, n'importe qui pourrait réclamer
+    // « a-remplir.workers.dev » et envoyer un lien que la page accepterait : rien n'est accepté.
+    if (COMPTE_CLOUD === 'a-remplir') return false;
     return url.protocol === 'https:' && url.hostname.endsWith('.' + COMPTE_CLOUD + '.workers.dev');
   }
   const adresseDeHote = (hote) => (/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(hote) ? 'http://' : 'https://') + hote;
@@ -3281,18 +3316,35 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (r.status === 401) throw new Error('Ce lien a déjà servi ou a expiré : demande-en un nouveau au responsable.');
     if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
     const rep = await r.json();
+    // Ce que « chargerCloud » refuserait au prochain chargement est refusé TOUT DE SUITE : sinon
+    // l'appareil s'enregistre dans un état que la page rejette en silence au rechargement
+    // (« non connecté », forfaits figés), et tout le parc est à reconnecter un par un.
+    if (!ROLES_CLOUD.includes(rep?.role) || typeof rep?.jeton !== 'string' || rep.jeton.length < 20) {
+      throw new Error('Réponse inattendue du cloud : demande un nouveau lien au responsable.');
+    }
     cloud = { adresse: lien.adresse, jeton: rep.jeton, cle: lien.cle, role: rep.role, id: rep.id, version: null, derniereSynchro: 0, aEnvoyer: false };
     sauverCloud();
     if (cloud.role === 'consultation' && appareil.modeModif) { appareil.modeModif = false; sauverAppareil(); }
     await synchroniser();
   }
 
-  // Lien ouvert dans le navigateur (PC, Android) : on appaire puis on efface le « # » de la barre
-  // d'adresse, pour que la clé ne reste pas affichée ni dans l'historique de la page.
+  // Lien ouvert dans le navigateur (PC, Android). On efface le « # » AVANT de lire le lien : la
+  // clé de l'équipe y est en clair, et un lien refusé (coupé par la messagerie, sous-domaine pas
+  // encore renseigné) la laissait affichée, dans l'historique du navigateur et sur les captures,
+  // sans un mot. Et on le dit, au lieu de ne rien faire du tout.
   async function appairerDepuisAdresse() {
-    const lien = lireLien(location.href);
-    if (!lien) return;
-    history.replaceState(null, '', location.origin + location.pathname);
+    const brut = location.href;
+    const avaitLien = location.hash.includes('maj=');
+    if (avaitLien) history.replaceState(null, '', location.origin + location.pathname);
+    const lien = lireLien(brut);
+    if (!lien) {
+      if (avaitLien) {
+        await informer('Lien inutilisable', cloudPasConfigure
+          ? "Cette version de l'outil n'a pas encore l'adresse du cloud de l'équipe : ce lien ne peut pas servir. En attendant, Exporter et Importer font le partage."
+          : "Ce lien de mise à jour n'est pas valable, ou il a été coupé en route : demandes-en un nouveau au responsable.");
+      }
+      return;
+    }
     if (cloud) { toast('Cet appareil est déjà connecté à la mise à jour'); return; }
     try {
       await appairer(lien, '');
@@ -3311,6 +3363,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: [
         h('p', { class: 'dlg-message' }, "Les forfaits arrivent tout seuls sur cet appareil, dès qu'un responsable les change. Ils sont chiffrés avant de partir : le cloud ne peut pas les lire."),
         h('p', { class: 'dlg-message' }, 'Pour connecter cet appareil, demande un lien à un responsable, puis colle-le ici.'),
+        cloudPasConfigure ? h('p', { class: 'msg-erreur', role: 'alert' }, "Cette version de l'outil n'a pas encore l'adresse du cloud de l'équipe : la mise à jour automatique ne peut rien contacter. En attendant, Exporter et Importer font le partage.") : null,
       ],
       pied: [
         h('button', { type: 'button', class: 'btn btn-rouge', id: 'btn-coller-lien', onclick: () => { dlg.close(); ouvrirConnexion(); } }, 'Coller un lien'),
@@ -3324,7 +3377,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function ouvrirConnexion() {
     const champLien = champCloud('maj-lien', { type: 'text', inputmode: 'url', placeholder: 'https://…#maj=…' });
-    const champNom = champCloud('maj-nom', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du comptoir, téléphone de…' });
+    const champNom = champCloud('maj-nom', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du comptoir, téléphone du magasin…' });
     const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
     const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 'maj-connecter' }, 'Connecter');
     const dlg = ouvrirDialogue({
@@ -3349,7 +3402,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: [
         h('p', { class: 'dlg-message' }, 'Colle le lien donné par un responsable. Un lien ne sert que quelques minutes.'),
         groupeCloud('Lien de mise à jour', champLien),
-        groupeCloud('Nom de cet appareil (facultatif)', champNom, "Pour le reconnaître dans la liste des appareils."),
+        groupeCloud('Nom de cet appareil (facultatif)', champNom, "Pour le reconnaître dans la liste des appareils. Ce nom-là n'est pas chiffré : mets un nom de poste, pas un prénom."),
         msgErreur,
       ],
       pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler')],
@@ -3363,7 +3416,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function ouvrirPremierAppareil() {
     const champAdresse = champCloud('maj-adresse', { type: 'text', inputmode: 'url', placeholder: 'xxxxx.' + COMPTE_CLOUD + '.workers.dev' });
     const champCode = champCloud('maj-code', { type: 'password' });
-    const champNom = champCloud('maj-nom1', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'Surface du responsable' });
+    const champNom = champCloud('maj-nom1', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du responsable' });
     const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
     const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 'maj-initialiser' }, 'Connecter');
     const dlg = ouvrirDialogue({
@@ -3400,8 +3453,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const r = await appelCloud(adresse, '/api/initialiser', { methode: 'POST', corps: { code_secours: code, nom } }).catch(() => null);
     if (!r) throw new Error("Cloud injoignable : vérifie l'adresse et le réseau.");
     if (r.status === 401) throw new Error('Code de secours incorrect.');
+    if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
     if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
     const rep = await r.json();
+    if (typeof rep?.jeton !== 'string' || rep.jeton.length < 20) {
+      throw new Error('Réponse inattendue du cloud : réessaie dans un instant.');
+    }
     // Le cloud garde-t-il déjà des forfaits ? Ils sont chiffrés avec une clé que cet appareil n'a
     // pas : on ne peut que repartir des forfaits d'ici, ce qui se demande avant de le faire.
     const lu = await appelCloud(adresse, '/api/donnees', { jeton: rep.jeton });
@@ -3550,7 +3607,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
       }, 'Partager'));
     }
     const dessinQr = qrCanvas(lien);
-    zone.replaceChildren(
+    // replaceChildren écrirait la chaîne « null » là où h() ignore un null : on filtre.
+    zone.replaceChildren(...[
       h('label', { for: champ.id }, lot ? `Lien pour ${LOT_MAX} appareils (24 h)` : `Lien pour 1 appareil (${MINUTES_LIEN} minutes)`),
       champ,
       h('div', { class: 'groupe-theme' }, ...boutons),
@@ -3558,7 +3616,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       h('p', { class: 'msg-champ aide-champ' }, dessinQr
         ? "PC et Android : scanne le QR. Sur iPhone, le QR ouvre Safari au lieu de l'appli installée : copie le lien et colle-le dans l'appli (Menu → Mise à jour automatique → Coller un lien)."
         : "Sur iPhone : colle le lien dans l'appli installée (Menu → Mise à jour automatique → Coller un lien), pas dans Safari."),
-    );
+    ].filter(Boolean));
     zone.hidden = false;
   }
 
@@ -3625,24 +3683,31 @@ textarea.champ { resize: vertical; min-height: 90px; }
                 boutons: [{ texte: 'Revenir', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
               });
               if (!ok) return;
+              const avant = donnees;
               const p = await appelCloud(cloud.adresse, '/api/revenir', { methode: 'POST', jeton: cloud.jeton, corps: { version: v.version } });
               if (!p.ok) { await informer('Impossible', `Le cloud a répondu ${p.status}.`); return; }
-              // Cette version remonte comme une nouvelle : on la relit et on remplace ce qu'on a.
+              // Cette version remonte comme une nouvelle : on la relit, on la réhorodate, puis on la
+              // renvoie. Sans ce renvoi, un autre appareil responsable ne fusionnerait pas (les « maj »
+              // de l'ancienne version sont plus anciens) et renverrait la fausse manœuvre.
               cloud.version = null;
               cloud.aEnvoyer = false;
               sauverCloud();
               const recu = await appelCloud(cloud.adresse, '/api/donnees', { jeton: cloud.jeton });
               const etat = recu.ok ? await recu.json() : null;
-              if (etat?.blob) {
-                donnees = valider(await dechiffrer(etat.blob, cloud.cle));
-                donneesIllisibles = false;
-                sauver();
-                cloud.version = etat.version;
-                sauverCloud();
-                rafraichir();
+              if (!etat?.blob) {
+                await informer('Impossible', "Le cloud a accepté le retour mais ne rend pas encore la version : réessaie dans un instant.");
+                return;
               }
+              donnees = pourRetourArriere(avant, valider(await dechiffrer(etat.blob, cloud.cle)), Date.now());
+              donneesIllisibles = false;
+              sauver();
+              cloud.version = etat.version;
+              cloud.aEnvoyer = true;
+              sauverCloud();
+              rafraichir();
               dlg.close();
               toast('Forfaits revenus à la version choisie');
+              synchroniser();
             },
           }, 'Revenir'))));
         if (!versions.length) liste.replaceChildren(h('p', { class: 'dlg-message' }, 'Aucune version enregistrée.'));
@@ -3671,6 +3736,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         try {
           const r = await appelCloud(cloud.adresse, '/api/tout', { methode: 'DELETE', jeton: cloud.jeton, codeSecours: champCode.value });
           if (r.status === 401) throw new Error('Code de secours incorrect.');
+          if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
           if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
           cloud = null;
           etatSynchro = erreurSynchro = '';

@@ -15,7 +15,7 @@ Il n'y a pas encore de lien : l'adresse et le code de secours se tapent à la ma
 1. Ouvre l'outil → **Menu** → **Mise à jour automatique** → **Premier appareil**.
 2. **Adresse** : `<nom-du-worker>.<compte>.workers.dev` (sans `https://`).
 3. **Code de secours** : celui choisi au déploiement.
-4. **Nom de cet appareil** : par exemple « Surface du responsable ».
+4. **Nom de cet appareil** : par exemple « PC du responsable ».
 5. **Connecter**. Le menu affiche alors « Mise à jour automatique (connectée) ».
 
 À ce moment-là, le cloud est vide. **Importe ton tableau maintenant, sur cet appareil seulement**

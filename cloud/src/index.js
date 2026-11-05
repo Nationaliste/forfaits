@@ -13,9 +13,15 @@ const MINUTES_MAX = 1440;
 const PAUSE_REFUS = 250; // ms : ralentit les essais au hasard
 const SEAU_CAPACITE = 30; // requêtes sans jeton valable d'affilée (de quoi équiper 20 appareils en une séance)...
 const SEAU_PAR_MINUTE = 10; // ...puis 10 par minute : un inconnu ne peut plus brûler le quota de stockage du compte
+const SEAU_LARGE_CAPACITE = 120; // frein de tout appelant, jeton valable compris (20 appareils qui se synchronisent passent)
+const SEAU_LARGE_PAR_MINUTE = 60;
+const SOURCES_MAX = 200; // seaux gardés en mémoire : au-delà on repart à neuf
+const CORPS_COURT = 4096; // appairage et secours : deux champs courts, jamais un paquet de forfaits
 const VU_INTERVALLE = 3_600_000; // « vu le » noté une fois par heure au plus (économise les écritures)
 const TOMBE_MS = 90 * 86_400_000; // on se souvient 90 jours d'un appareil retiré, pour qu'il s'efface
 const ROLES = ['responsable', 'consultation'];
+const LIMITE_CORPS = MAX_CORPS + 4096; // marge pour l'enveloppe JSON autour du paquet
+const CODE_SECOURS_MIN = 12; // le minimum de la page ne protège pas : un attaquant n'exécute pas la page
 
 /* ---------- petits outils ---------- */
 
@@ -56,6 +62,7 @@ function blobValide(blob) {
   return (
     typeof blob === 'string' &&
     blob.length <= MAX_CORPS &&
+    blob.length % 4 === 0 && // « atob » refuserait : un paquet pareil mettrait toute l'équipe en erreur
     /^[A-Za-z0-9+/]+={0,2}$/.test(blob) &&
     tailleBase64(blob) >= MIN_CHIFFRE
   );
@@ -63,9 +70,34 @@ function blobValide(blob) {
 
 const nomPropre = (v) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40) : '');
 
-async function lireJson(request) {
+// L'en-tête Content-Length n'est qu'un premier filtre : une requête « chunked » n'en a pas, et
+// « request.json() » avalerait alors un corps de taille illimitée. On lit donc par morceaux en
+// comptant les octets, et on abandonne dès que la limite est franchie. Les morceaux sont assemblés
+// une seule fois à la fin (pas de concaténation dans la boucle : 10 ms de processeur par requête).
+async function lireJson(request, max = LIMITE_CORPS) {
+  if (Number(request.headers.get('Content-Length') || 0) > max) return null;
+  if (!request.body) return null;
+  const lecteur = request.body.getReader();
   try {
-    return await request.json();
+    const morceaux = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        await lecteur.cancel(); // on libère le flux : le reste du corps n'est pas lu
+        return null;
+      }
+      morceaux.push(value);
+    }
+    const tout = new Uint8Array(total);
+    let position = 0;
+    for (const m of morceaux) {
+      tout.set(m, position);
+      position += m.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(tout));
   } catch {
     return null;
   }
@@ -134,7 +166,7 @@ export default {
     }
     if (!url.pathname.startsWith('/api/')) return avecCors(new Response('Rien ici.', { status: 404 }), origine);
     if (!origine) return avecCors(json(403, { erreur: 'origine refusee' }), null);
-    if (Number(request.headers.get('Content-Length') || 0) > MAX_CORPS + 4096) {
+    if (Number(request.headers.get('Content-Length') || 0) > LIMITE_CORPS) {
       return avecCors(json(413, { erreur: 'donnees trop grosses' }), origine);
     }
     return avecCors(await objetEquipe(env).fetch(request), origine);
@@ -146,28 +178,37 @@ export default {
    hist          : [versions gardées]        hist:<n>     : { blob, date, par }
    app:<id>      : { emp, role, nom, cree, vu }
    jeton:<emp>   : <id>                      retire:<emp> : date (pour que l'appareil s'efface)
-   inv:<emp>     : { role, usages, expire, nom }                                             */
+   inv:<emp>     : { role, usages, expire, nom, par } (par = l'appareil qui l'a émise)        */
 
 export class Equipe {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
-    this.seau = { jetons: SEAU_CAPACITE, dernier: Date.now() };
+    // Une source -> ses seaux. Un seul seau partagé fermait l'appairage de TOUTE l'équipe, et la
+    // récupération par code de secours avec, dès qu'un inconnu inondait.
+    this.seaux = new Map();
   }
 
-  // Limite de débit pour les requêtes sans jeton valable : un inconnu qui inonde ne gêne que les
-  // inconnus. Compteur en mémoire : perdu si l'objet s'endort, ce qui est sans conséquence pour un
-  // frein, et surtout : zéro écriture (le gratuit en compte 100 000 par jour).
-  freine() {
+  // Limite de débit par source. Compteurs en mémoire : perdus si l'objet s'endort, ce qui est sans
+  // conséquence pour un frein, et surtout zéro écriture (le gratuit en compte 100 000 par jour).
+  // Derrière le NAT du magasin tous les appareils partagent une source : les seaux sont donc
+  // dimensionnés pour l'équipe entière. Sans en-tête de source (wrangler dev), tout le monde
+  // partage un seau, comme avant : jamais plus permissif que l'ancien comportement.
+  freine(request, capacite, parMinute, nom) {
+    const source = request.headers.get('CF-Connecting-IP') || 'sans-source';
+    // Un attaquant qui change d'adresse ne doit pas nous remplir la mémoire. Repartir à neuf ne
+    // profite qu'aux appelants honnêtes (leur seau revient plein).
+    if (this.seaux.size > SOURCES_MAX) this.seaux.clear();
+    const siens = this.seaux.get(source) || {};
+    const seau = siens[nom] || { jetons: capacite, dernier: Date.now() };
     const maintenant = Date.now();
-    this.seau.jetons = Math.min(
-      SEAU_CAPACITE,
-      this.seau.jetons + ((maintenant - this.seau.dernier) * SEAU_PAR_MINUTE) / 60_000,
-    );
-    this.seau.dernier = maintenant;
-    if (this.seau.jetons < 1) return true;
-    this.seau.jetons -= 1;
-    return false;
+    seau.jetons = Math.min(capacite, seau.jetons + ((maintenant - seau.dernier) * parMinute) / 60_000);
+    seau.dernier = maintenant;
+    const trop = seau.jetons < 1;
+    if (!trop) seau.jetons -= 1;
+    siens[nom] = seau;
+    this.seaux.set(source, siens);
+    return trop;
   }
 
   async appareilDe(request) {
@@ -186,9 +227,23 @@ export class Equipe {
     await this.ctx.storage.put('app:' + id, { ...app, vu: Date.now() });
   }
 
-  async refus(raison) {
-    await dodo(PAUSE_REFUS);
+  // pause : ralentit la devinette d'un secret (invitation, code de secours). Un refus « lecture
+  // seule » n'en est pas une (l'appelant a déjà un jeton valable et le refus ne lui apprend rien) :
+  // garder la pause offrirait 250 ms de Durable Object facturées par requête à qui inonde avec un
+  // jeton de consultation.
+  async refus(raison, pause = true) {
+    if (pause) await dodo(PAUSE_REFUS);
     return json(401, { erreur: 'acces refuse', raison });
+  }
+
+  // Le code de secours donne un jeton « responsable » complet : s'il est court, le seul frein
+  // contre les essais au hasard est le seau en mémoire. C'est une erreur de configuration du
+  // Worker (pas une intrusion) : 503, sans pause ni « acces refuse », et sans rien qui aide à
+  // deviner le secret réel.
+  codeSecoursInvalide() {
+    const code = this.env.CODE_SECOURS;
+    if (typeof code === 'string' && code.length >= CODE_SECOURS_MIN) return null;
+    return json(503, { erreur: 'configuration du serveur', raison: 'le code de secours du Worker est trop court' });
   }
 
   async etat() {
@@ -227,14 +282,22 @@ export class Equipe {
   async fetch(request) {
     const chemin = new URL(request.url).pathname;
     const methode = request.method;
+    // Frein par source avant la moindre lecture de stockage : un jeton bidon ne doit pas faire
+    // travailler le Durable Object, et un porteur de jeton n'était freiné par rien du tout.
+    if (this.freine(request, SEAU_LARGE_CAPACITE, SEAU_LARGE_PAR_MINUTE, 'large')) {
+      return json(429, { erreur: 'trop de requetes' });
+    }
     const qui = await this.appareilDe(request);
-    if (qui.statut !== 'ok' && this.freine()) return json(429, { erreur: 'trop de requetes' });
+    // Sans jeton valable, un second frein plus serré : c'est le chemin qui mène à un jeton.
+    if (qui.statut !== 'ok' && this.freine(request, SEAU_CAPACITE, SEAU_PAR_MINUTE, 'serre')) {
+      return json(429, { erreur: 'trop de requetes' });
+    }
     if (qui.statut === 'retire') return this.refus('retire'); // sur ce motif, l'appli efface ses forfaits
 
     /* --- sans jeton : appairage et secours --- */
 
     if (chemin === '/api/appairage' && methode === 'POST') {
-      const demande = await lireJson(request);
+      const demande = await lireJson(request, CORPS_COURT);
       if (typeof demande?.code !== 'string' || demande.code.length < 16) return json(400, { erreur: 'code illisible' });
       const cle = 'inv:' + (await empreinte(demande.code));
       const inv = await this.ctx.storage.get(cle);
@@ -249,7 +312,9 @@ export class Equipe {
     }
 
     if (chemin === '/api/initialiser' && methode === 'POST') {
-      const demande = await lireJson(request);
+      const mal = this.codeSecoursInvalide();
+      if (mal) return mal;
+      const demande = await lireJson(request, CORPS_COURT);
       if (!(await memeSecret(demande?.code_secours, this.env.CODE_SECOURS))) return this.refus('code de secours incorrect');
       return json(200, await this.creerAppareil('responsable', nomPropre(demande.nom) || 'Responsable'));
     }
@@ -271,7 +336,7 @@ export class Equipe {
     }
 
     if (chemin === '/api/donnees' && methode === 'PUT') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const demande = await lireJson(request);
       if (!Number.isInteger(demande?.version_precedente) || demande.version_precedente < 0) {
         return json(400, { erreur: 'demande illisible' });
@@ -285,7 +350,7 @@ export class Equipe {
     }
 
     if (chemin === '/api/versions' && methode === 'GET') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const hist = (await this.ctx.storage.get('hist')) || [];
       const lignes = [];
       for (const v of [...hist].reverse()) {
@@ -296,7 +361,7 @@ export class Equipe {
     }
 
     if (chemin === '/api/revenir' && methode === 'POST') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const demande = await lireJson(request);
       const h = Number.isInteger(demande?.version) ? await this.ctx.storage.get('hist:' + demande.version) : null;
       if (!h) return json(404, { erreur: 'version introuvable' });
@@ -306,7 +371,7 @@ export class Equipe {
     }
 
     if (chemin === '/api/invitation' && methode === 'POST') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const demande = await lireJson(request);
       const role = ROLES.includes(demande?.role) ? demande.role : 'consultation';
       const usages = Number.isInteger(demande?.usages) ? Math.min(Math.max(demande.usages, 1), USAGES_MAX) : 1;
@@ -318,12 +383,13 @@ export class Equipe {
         usages,
         expire,
         nom: nomPropre(demande?.nom),
+        par: id, // pour que retirer cet appareil annule les liens qu'il a émis
       });
       return json(200, { code, expire, role, usages });
     }
 
     if (chemin === '/api/appareils' && methode === 'GET') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const apps = await this.ctx.storage.list({ prefix: 'app:' });
       const liste = [];
       for (const [cle, a] of apps) {
@@ -334,7 +400,7 @@ export class Equipe {
     }
 
     if (chemin.startsWith('/api/appareils/') && methode === 'DELETE') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
       const cible = chemin.slice('/api/appareils/'.length);
       const a = await this.ctx.storage.get('app:' + cible);
       if (!a) return json(404, { erreur: 'appareil introuvable' });
@@ -342,6 +408,13 @@ export class Equipe {
       if (a.role === 'responsable' && (await this.responsablesRestants(cible)) === 0) {
         return json(409, { erreur: 'dernier responsable' });
       }
+      // Retirer un appareil doit AUSSI annuler les liens d'appairage qu'il a créés : sinon un
+      // téléphone perdu reste une porte d'entrée pendant 24 h (un lien en lot vaut 20 jetons),
+      // et l'appareil retiré revient avec un nouvel id, donc sans que personne ne le voie.
+      const invs = await this.ctx.storage.list({ prefix: 'inv:' });
+      const mortes = [];
+      for (const [cle, inv] of invs) if (inv.par === cible) mortes.push(cle);
+      if (mortes.length) await this.ctx.storage.delete(mortes);
       await this.ctx.storage.delete(['app:' + cible, 'jeton:' + a.emp]);
       await this.ctx.storage.put('retire:' + a.emp, Date.now());
       // Ménage plus tard : la trace ne doit pas rester pour toujours.
@@ -350,12 +423,14 @@ export class Equipe {
     }
 
     if (chemin === '/api/tout' && methode === 'DELETE') {
-      if (!patron) return this.refus('lecture seule');
+      if (!patron) return this.refus('lecture seule', false);
+      const mal = this.codeSecoursInvalide();
+      if (mal) return mal;
       if (!(await memeSecret(request.headers.get('X-Code-Secours'), this.env.CODE_SECOURS))) {
         return this.refus('code de secours incorrect');
       }
       await this.ctx.storage.deleteAll();
-      this.seau = { jetons: SEAU_CAPACITE, dernier: Date.now() }; // le frein fait partie de « tout »
+      this.seaux.clear(); // le frein fait partie de « tout »
       return json(200, { efface: true });
     }
 

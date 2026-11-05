@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-55Cl8PYm3q+a2iF25//2n/gtngEUrurLKI41ERkef7k='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6FLd+q3irnerdIHSNPbpF0ocUTsBFBfZgfoOE9N0jtE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -491,6 +491,7 @@ body.avec-total main { padding-bottom: 230px; }
 textarea.champ { resize: vertical; min-height: 90px; }
 .ligne-prix { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .grille-familles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
+.qr { display: block; margin: 10px auto 0; width: min(240px, 100%); height: auto; border-radius: 8px; }
 .msg-champ { margin: 0; font-size: 14px; font-weight: 600; }
 .msg-champ.erreur, .msg-erreur { color: var(--rouge-vif); }
 .msg-champ.attention { color: var(--ambre); }
@@ -827,6 +828,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
     for (const cle of ['familles', 'elements', 'forfaits']) {
       if (!Array.isArray(obj[cle])) echec(`Fichier incomplet (« ${cle} » manquant).`);
     }
+    // Chaque enregistrement est borné, mais pas leur NOMBRE : un fichier à 45 000 forfaits passait
+    // tous les contrôles, s'enregistrait, puis figeait l'appli à chaque ouverture (une carte par
+    // forfait), menu compris — donc plus aucune réparation depuis l'outil. L'import de tableau,
+    // lui, est déjà plafonné (LIGNES_TABLEAU_MAX).
+    if (obj.forfaits.length > 20000 || obj.elements.length > 20000 || obj.familles.length > 500) {
+      echec("Ce fichier contient beaucoup trop d'enregistrements pour être un fichier de forfaits.");
+    }
     const motifId = /^[a-z]{2,6}-[a-z0-9-]{1,64}$/;
     const vus = new Set();
     const id = (v) => {
@@ -964,6 +972,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     appareil.modifsEnAttente += 1;
     sauverAppareil();
     demanderStockageDurable();
+    planifierEnvoi();
   }
 
   // Demande au navigateur de ne pas effacer les données de lui-même. Firefox pose alors une
@@ -985,6 +994,28 @@ textarea.champ { resize: vertical; min-height: 90px; }
         if (!actuel || x.maj > actuel.maj) parId.set(x.id, x);
       }
       resultat[cle] = [...parId.values()];
+    }
+    return resultat;
+  }
+
+  // Un retour arrière doit GAGNER la fusion sur tous les appareils. Or l'ancienne version porte des
+  // « maj » plus anciens que la fausse manœuvre qu'elle doit effacer : sans réhorodatage, un autre
+  // appareil responsable ne fusionnerait pas et renverrait la fausse manœuvre, annulant le retour.
+  function pourRetourArriere(actuel, cible, maintenant) {
+    const resultat = {};
+    for (const cle of ['familles', 'elements', 'forfaits']) {
+      const dansCible = new Set(cible[cle].map((x) => x.id));
+      const actuels = new Map(actuel[cle].map((x) => [x.id, x]));
+      // Réhorodater seulement ce que le retour CHANGE (même id et même « maj » = même écriture).
+      // Un enregistrement inchangé garde sa date, donc un exemple jamais touché garde sa maj 0 et
+      // « Supprimer les exemples » continue de le balayer. Mais un exemple MODIFIÉ depuis la
+      // version choisie doit, lui, être réhorodaté : sinon l'autre appareil responsable garderait
+      // sa modification (plus récente que maj 0) et la renverrait, annulant le retour arrière
+      // précisément là où il servait.
+      const liste = cible[cle].map((x) => (actuels.get(x.id)?.maj === x.maj ? x : { ...x, maj: maintenant }));
+      // Créé après la version choisie : le retour doit l'effacer, et une suppression est une marque.
+      for (const x of actuel[cle]) if (!dansCible.has(x.id)) liste.push({ ...x, supprime: true, maj: maintenant });
+      resultat[cle] = liste;
     }
     return resultat;
   }
@@ -1247,7 +1278,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreEntete() {
     const derniere = derniereModif(donnees);
-    $('etat-donnees').textContent = derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple";
+    $('etat-donnees').textContent = (derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple") + texteSynchro();
     $('barre-modif').hidden = !appareil.modeModif;
   }
 
@@ -1261,15 +1292,22 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer'), true));
     // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
     if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
+    // Mise à jour automatique : un seul bandeau à la fois, le plus grave d'abord.
+    if (etatSynchro === 'retire' || etatSynchro === 'horloge') liste.push(bandeau(erreurSynchro, null, true));
+    else if (etatSynchro === 'refus') liste.push(bandeau(erreurSynchro, h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-bandeau-maj', onclick: ouvrirMaj }, 'Mise à jour'), true));
+    else if (cloud && cloud.derniereSynchro) {
+      const jours = Math.floor((Date.now() - cloud.derniereSynchro) / 86400000);
+      if (jours >= JOURS_ALERTE_SYNCHRO) liste.push(bandeau(`Pas de mise à jour depuis ${pluriel(jours, 'jour')} : le cloud ne répond pas. Préviens le responsable.`, null, true));
+    }
     const exemples = index.forfaits.some((f) => f.exemple);
     if (exemples) {
       liste.push(bandeau(
         'Les forfaits marqués EXEMPLE sont faux (références et prix inventés).',
         appareil.modeModif
           ? h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-suppr-exemples', onclick: supprimerExemples }, 'Supprimer les exemples')
-          : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le vrai fichier'),
+          : cloud ? null : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le vrai fichier'),
       ));
-    } else if (!appareil.modeModif && appareil.dernierImport) {
+    } else if (!cloud && !appareil.modeModif && appareil.dernierImport) {
       const jours = Math.floor((Date.now() - appareil.dernierImport) / 86400000);
       if (jours >= JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer')));
     }
@@ -2676,6 +2714,1052 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   /* =====================================================================
+     QR DU LIEN D'APPAIRAGE
+     Encodeur complet (mode octets, correction M, versions 1 à 10) : la page n'a aucune dépendance,
+     et un QR faux ne se verrait qu'au magasin. tests/test_qr.py compare chaque matrice à celle de
+     segno (bibliothèque de référence), les 8 masques et le masque retenu.
+     ===================================================================== */
+
+  // Par version (1 à 10), correction M : octets de correction par bloc, puis (nombre de blocs,
+  // octets de données par bloc) du premier groupe, puis du second.
+  const QR_M = [
+    [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+    [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37], [26, 4, 43, 1, 44],
+  ];
+  // Centres des motifs d'alignement, par version.
+  const QR_ALIGNEMENTS = [
+    [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50],
+  ];
+  const QR_MASQUES = [
+    (l, c) => (l + c) % 2 === 0,
+    (l) => l % 2 === 0,
+    (l, c) => c % 3 === 0,
+    (l, c) => (l + c) % 3 === 0,
+    (l, c) => (Math.floor(l / 2) + Math.floor(c / 3)) % 2 === 0,
+    (l, c) => ((l * c) % 2) + ((l * c) % 3) === 0,
+    (l, c) => (((l * c) % 2) + ((l * c) % 3)) % 2 === 0,
+    (l, c) => (((l + c) % 2) + ((l * c) % 3)) % 2 === 0,
+  ];
+
+  // Corps fini GF(256), polynôme 0x11D : exponentielles et logarithmes, calculés une fois.
+  const QR_EXP = new Uint8Array(512);
+  const QR_LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i++) {
+    QR_EXP[i] = x;
+    QR_LOG[x] = i;
+    x = (x << 1) ^ (x & 0x80 ? 0x11d : 0);
+  }
+  for (let i = 255; i < 512; i++) QR_EXP[i] = QR_EXP[i - 255];
+  const qrMul = (a, b) => (a && b ? QR_EXP[QR_LOG[a] + QR_LOG[b]] : 0);
+
+  // Polynôme générateur de n octets de correction : (x + α⁰)(x + α¹)…(x + α^(n-1)).
+  function qrGenerateur(n) {
+    let g = [1];
+    for (let i = 0; i < n; i++) {
+      const suivant = new Array(g.length + 1).fill(0);
+      for (let j = 0; j < g.length; j++) {
+        suivant[j] ^= g[j];
+        suivant[j + 1] ^= qrMul(g[j], QR_EXP[i]);
+      }
+      g = suivant;
+    }
+    return g;
+  }
+
+  // Reste de la division polynomiale : les octets de correction du bloc.
+  function qrCorrection(donnees, n) {
+    const g = qrGenerateur(n);
+    const reste = new Uint8Array(n);
+    for (const octet of donnees) {
+      const facteur = octet ^ reste[0];
+      reste.copyWithin(0, 1);
+      reste[n - 1] = 0;
+      if (facteur) for (let j = 0; j < n; j++) reste[j] ^= qrMul(g[j + 1], facteur);
+    }
+    return reste;
+  }
+
+  // Texte → version choisie et octets prêts à poser (données et correction entrelacées par bloc).
+  function qrOctets(texte) {
+    const donnees = utf8.encode(texte);
+    let version = 0;
+    for (let v = 1; v <= QR_M.length; v++) {
+      const [, n1, d1, n2, d2] = QR_M[v - 1];
+      if (Math.floor(((n1 * d1 + n2 * d2) * 8 - 4 - (v >= 10 ? 16 : 8)) / 8) >= donnees.length) { version = v; break; }
+    }
+    if (!version) return null; // texte trop long : pas de QR (le lien se colle de toute façon)
+
+    const [ecParBloc, n1, d1, n2, d2] = QR_M[version - 1];
+    const total = n1 * d1 + n2 * d2;
+    const bits = [];
+    const pousser = (valeur, n) => { for (let i = n - 1; i >= 0; i--) bits.push((valeur >> i) & 1); };
+    pousser(0b0100, 4); // mode octets
+    pousser(donnees.length, version >= 10 ? 16 : 8);
+    for (const o of donnees) pousser(o, 8);
+    for (let i = 0; i < 4 && bits.length < total * 8; i++) bits.push(0); // terminateur
+    while (bits.length % 8) bits.push(0);
+    const mots = [];
+    for (let i = 0; i < bits.length; i += 8) mots.push(bits.slice(i, i + 8).reduce((a, b) => (a << 1) | b, 0));
+    for (let i = 0; mots.length < total; i++) mots.push(i % 2 ? 0x11 : 0xec); // remplissage normalisé
+
+    const blocs = [];
+    let pos = 0;
+    for (const [nb, taille] of [[n1, d1], [n2, d2]]) {
+      for (let b = 0; b < nb; b++) {
+        const part = mots.slice(pos, pos + taille);
+        pos += taille;
+        blocs.push({ donnees: part, correction: qrCorrection(part, ecParBloc) });
+      }
+    }
+    const sortie = [];
+    for (let i = 0; i < Math.max(d1, d2); i++) for (const b of blocs) if (i < b.donnees.length) sortie.push(b.donnees[i]);
+    for (let i = 0; i < ecParBloc; i++) for (const b of blocs) sortie.push(b.correction[i]);
+    return { version, mots: sortie };
+  }
+
+  // Codes correcteurs des informations de format (15 bits) et de version (18 bits).
+  function qrBch(donnees, decalage, generateur, hauteur, ou) {
+    let v = donnees << decalage;
+    for (let i = hauteur; i >= 0; i--) if (v & (1 << (i + decalage))) v ^= generateur << i;
+    return ((donnees << decalage) | v) ^ ou;
+  }
+  const qrFormat = (masque) => qrBch(masque, 10, 0x537, 4, 0x5412); // correction M = 00
+  const qrVersion = (version) => qrBch(version, 12, 0x1f25, 5, 0);
+
+  // Emplacements des 15 bits de format, du plus fort au plus faible, dans leurs deux copies.
+  const qrPlacesFormat = (t) => [
+    [[8, 0], [t - 1, 8]], [[8, 1], [t - 2, 8]], [[8, 2], [t - 3, 8]], [[8, 3], [t - 4, 8]],
+    [[8, 4], [t - 5, 8]], [[8, 5], [t - 6, 8]], [[8, 7], [t - 7, 8]], [[8, 8], [8, t - 8]],
+    [[7, 8], [8, t - 7]], [[5, 8], [8, t - 6]], [[4, 8], [8, t - 5]], [[3, 8], [8, t - 4]],
+    [[2, 8], [8, t - 3]], [[1, 8], [8, t - 2]], [[0, 8], [8, t - 1]],
+  ];
+
+  // Les 4 pénalités du standard : plus le total est bas, plus le QR se lit vite.
+  function qrPenalite(m) {
+    const taille = m.length;
+    let total = 0;
+    // 1. Suites de 5 modules ou plus de la même couleur, en ligne et en colonne.
+    for (let i = 0; i < taille; i++) {
+      for (const parLigne of [true, false]) {
+        let suite = 1;
+        for (let j = 1; j < taille; j++) {
+          const egal = parLigne ? m[i][j] === m[i][j - 1] : m[j][i] === m[j - 1][i];
+          suite = egal ? suite + 1 : 1;
+          if (suite === 5) total += 3;
+          else if (suite > 5) total += 1;
+        }
+      }
+    }
+    // 2. Chaque carré de 2×2 d'une seule couleur.
+    for (let l = 0; l < taille - 1; l++) {
+      for (let c = 0; c < taille - 1; c++) {
+        if (m[l][c] === m[l][c + 1] && m[l][c] === m[l + 1][c] && m[l][c] === m[l + 1][c + 1]) total += 3;
+      }
+    }
+    // 3. Le motif 1:1:3:1:1 bordé de 4 modules clairs, qui imite une cible d'angle.
+    for (let i = 0; i < taille; i++) {
+      let ligne = '';
+      let colonne = '';
+      for (let j = 0; j < taille; j++) { ligne += m[i][j]; colonne += m[j][i]; }
+      for (const texte of [ligne, colonne]) {
+        for (const motif of ['10111010000', '00001011101']) {
+          for (let p = texte.indexOf(motif); p !== -1; p = texte.indexOf(motif, p + 1)) total += 40;
+        }
+      }
+    }
+    // 4. Écart à 50 % de modules sombres.
+    let sombres = 0;
+    for (const ligne of m) for (const v of ligne) sombres += v;
+    total += Math.floor(Math.abs((sombres * 100) / (taille * taille) - 50) / 5) * 10;
+    return total;
+  }
+
+  // Matrice finale (0 clair, 1 sombre). masqueImpose sert aux tests ; sinon le masque est choisi.
+  function qrMatrice(texte, masqueImpose) {
+    const code = qrOctets(texte);
+    if (!code) return null;
+    const { version, mots } = code;
+    const taille = 17 + 4 * version;
+    const m = Array.from({ length: taille }, () => new Uint8Array(taille));
+    const fixe = Array.from({ length: taille }, () => new Uint8Array(taille));
+    const poser = (l, c, v) => {
+      if (l < 0 || c < 0 || l >= taille || c >= taille) return;
+      m[l][c] = v;
+      fixe[l][c] = 1;
+    };
+
+    // Cibles d'angle et leurs séparateurs.
+    for (const [L, C] of [[0, 0], [0, taille - 7], [taille - 7, 0]]) {
+      for (let l = -1; l <= 7; l++) {
+        for (let c = -1; c <= 7; c++) {
+          const bord = l === -1 || l === 7 || c === -1 || c === 7;
+          poser(L + l, C + c, bord || Math.max(Math.abs(l - 3), Math.abs(c - 3)) === 2 ? 0 : 1);
+        }
+      }
+    }
+    // Lignes de synchronisation.
+    for (let i = 8; i < taille - 8; i++) {
+      poser(6, i, i % 2 === 0 ? 1 : 0);
+      poser(i, 6, i % 2 === 0 ? 1 : 0);
+    }
+    // Motifs d'alignement, sauf ceux qui tomberaient sur une cible d'angle.
+    const centres = QR_ALIGNEMENTS[version - 1];
+    for (const l of centres) {
+      for (const c of centres) {
+        if ((l === 6 && (c === 6 || c === taille - 7)) || (l === taille - 7 && c === 6)) continue;
+        for (let dl = -2; dl <= 2; dl++) {
+          for (let dc = -2; dc <= 2; dc++) poser(l + dl, c + dc, Math.max(Math.abs(dl), Math.abs(dc)) === 1 ? 0 : 1);
+        }
+      }
+    }
+    // Places réservées : format, module sombre, et version à partir de la 7.
+    for (const [a, b] of qrPlacesFormat(taille)) { poser(...a, 0); poser(...b, 0); }
+    poser(taille - 8, 8, 1);
+    if (version >= 7) {
+      const bitsVersion = qrVersion(version);
+      for (let i = 0; i < 18; i++) {
+        const bit = (bitsVersion >> i) & 1;
+        poser(taille - 11 + (i % 3), Math.floor(i / 3), bit);
+        poser(Math.floor(i / 3), taille - 11 + (i % 3), bit);
+      }
+    }
+
+    // Les données en zigzag, deux colonnes à la fois, depuis le coin bas droit.
+    let bit = 0;
+    const total = mots.length * 8;
+    let versLeHaut = true;
+    for (let c = taille - 1; c > 0; c -= 2) {
+      if (c === 6) c = 5; // la colonne de synchronisation ne porte rien
+      for (let i = 0; i < taille; i++) {
+        const l = versLeHaut ? taille - 1 - i : i;
+        for (const cc of [c, c - 1]) {
+          if (fixe[l][cc]) continue;
+          m[l][cc] = bit < total ? (mots[bit >> 3] >> (7 - (bit & 7))) & 1 : 0;
+          bit += 1;
+        }
+      }
+      versLeHaut = !versLeHaut;
+    }
+
+    // Masque : on garde celui qui pénalise le moins (ou celui qu'on impose, pour les tests).
+    const essai = (masque) => {
+      const sortie = m.map((ligne, l) => ligne.map((v, c) => (fixe[l][c] ? v : v ^ (QR_MASQUES[masque](l, c) ? 1 : 0))));
+      const bits = qrFormat(masque);
+      qrPlacesFormat(taille).forEach(([a, b], i) => {
+        const v = (bits >> (14 - i)) & 1;
+        sortie[a[0]][a[1]] = v;
+        sortie[b[0]][b[1]] = v;
+      });
+      return sortie;
+    };
+    if (masqueImpose !== undefined) return essai(masqueImpose).map((l) => Array.from(l));
+    let meilleur = null;
+    let note = Infinity;
+    for (let masque = 0; masque < 8; masque++) {
+      const candidat = essai(masque);
+      const p = qrPenalite(candidat);
+      if (p < note) { note = p; meilleur = candidat; }
+    }
+    return meilleur.map((l) => Array.from(l));
+  }
+  window.qrMatrice = qrMatrice; // lu par tests/test_qr.py, qui le compare module par module à une référence
+
+  // Le QR dessiné. Noir sur blanc en dur : un QR inversé ne se lit pas sur tous les téléphones.
+  function qrCanvas(texte, cote = 6) {
+    const m = qrMatrice(texte);
+    if (!m) return null;
+    const marge = 4;
+    const pixels = (m.length + marge * 2) * cote;
+    const canvas = h('canvas', {
+      class: 'qr', width: pixels, height: pixels, role: 'img',
+      'aria-label': 'QR code du lien de mise à jour, à scanner avec l’appareil à connecter',
+    });
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, pixels, pixels);
+    ctx.fillStyle = '#000000';
+    m.forEach((ligne, l) => ligne.forEach((v, c) => {
+      if (v) ctx.fillRect((c + marge) * cote, (l + marge) * cote, cote, cote);
+    }));
+    return canvas;
+  }
+  window.qrCanvas = qrCanvas; // lu par tests/test_qr.py : couleurs et marge du dessin
+
+  /* =====================================================================
+     MISE À JOUR AUTOMATIQUE (facultatif)
+     Les forfaits sont chiffrés ICI, sur l'appareil, avant de partir : le cloud n'en voit jamais
+     un seul. La clé de l'équipe voyage dans la partie « # » du lien d'appairage, que le navigateur
+     n'envoie à aucun serveur. Chaque appareil a son propre jeton, retirable seul.
+     ===================================================================== */
+  const CLE_CLOUD = 'forfaits.cloud.v1';
+  // Sous-domaine du compte Cloudflare. La CSP de la page (connect-src) porte le même : un faux lien
+  // d'appairage ne peut donc pas détourner cet appareil vers un autre cloud. Le NOM du Worker, lui,
+  // n'est pas ici (il arrive par le lien) : le dépôt est public.
+  const COMPTE_CLOUD = 'a-remplir';
+  // Tant que le sous-domaine du compte n'est pas renseigné, aucune adresse https n'est acceptée
+  // (voir adresseCloudOk) : les fenêtres le disent au lieu de laisser essayer pour rien.
+  const cloudPasConfigure = COMPTE_CLOUD === 'a-remplir' && location.protocol === 'https:';
+  const INTERVALLE_SYNCHRO = 5 * 60 * 1000; // vérification toutes les 5 min quand la page est affichée
+  const DELAI_ENVOI = 2000;                 // envoi 2 s après la dernière modification
+  const DELAI_APPEL = 20000;
+  const JOURS_ALERTE_SYNCHRO = 3;
+  const ECART_HORLOGE_MAX = 5 * 60 * 1000;  // au-delà, l'heure de l'appareil est fausse : on n'envoie pas
+  const LOT_MAX = 20;                       // appareils équipés avec un même lien
+  const MINUTES_LIEN = 10;
+  const MINUTES_LOT = 1440;
+  const ROLES_CLOUD = ['responsable', 'consultation'];
+
+  const fmtHeure = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const utf8 = new TextEncoder();
+  const DONNEES_CHIFFREES = utf8.encode(FORMAT); // lie le chiffré à cet outil : un autre blob est refusé
+  const depuisB64url = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  const enB64url = (o) => enBase64(o).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const depuisBase64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+  function enBase64(octets) {
+    let texte = '';
+    for (let i = 0; i < octets.length; i += 0x8000) texte += String.fromCharCode(...octets.subarray(i, i + 0x8000));
+    return btoa(texte);
+  }
+
+  // Adresse acceptée : le cloud du compte de l'équipe, en https. L'exception locale sert aux essais
+  // (un inconnu ne peut rien faire tourner sur la machine de l'utilisateur) et la CSP la refuse en ligne.
+  function adresseCloudOk(a) {
+    if (typeof a !== 'string') return false;
+    let url;
+    try { url = new URL(a); } catch { return false; }
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return false;
+    if (url.protocol === 'http:') return ['127.0.0.1', 'localhost'].includes(url.hostname);
+    // Tant que le sous-domaine du compte n'est pas renseigné, n'importe qui pourrait réclamer
+    // « a-remplir.workers.dev » et envoyer un lien que la page accepterait : rien n'est accepté.
+    if (COMPTE_CLOUD === 'a-remplir') return false;
+    return url.protocol === 'https:' && url.hostname.endsWith('.' + COMPTE_CLOUD + '.workers.dev');
+  }
+  const adresseDeHote = (hote) => (/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(hote) ? 'http://' : 'https://') + hote;
+  const hoteDeAdresse = (a) => a.replace(/^https?:\/\//, '');
+
+  // Réglages du cloud sur CET appareil : adresse, son jeton à lui, la clé de l'équipe.
+  function chargerCloud() {
+    try {
+      const c = JSON.parse(localStorage.getItem(CLE_CLOUD) || 'null');
+      if (!c || !adresseCloudOk(c.adresse) || typeof c.jeton !== 'string' || c.jeton.length < 20) return null;
+      if (!/^[A-Za-z0-9_-]{43}$/.test(c.cle) || !ROLES_CLOUD.includes(c.role)) return null;
+      return {
+        adresse: c.adresse, jeton: c.jeton, cle: c.cle, role: c.role,
+        id: typeof c.id === 'string' ? c.id.slice(0, 40) : '',
+        version: Number.isInteger(c.version) ? c.version : null, // dernière version reçue du cloud
+        derniereSynchro: Number.isFinite(c.derniereSynchro) ? c.derniereSynchro : 0,
+        aEnvoyer: c.aEnvoyer === true,                            // modifications pas encore envoyées
+      };
+    } catch {
+      return null;
+    }
+  }
+  function sauverCloud() {
+    try {
+      if (cloud) localStorage.setItem(CLE_CLOUD, JSON.stringify(cloud));
+      else localStorage.removeItem(CLE_CLOUD);
+    } catch {
+      stockageOk = false;
+    }
+  }
+
+  let cloud = chargerCloud();
+  let etatSynchro = '';     // '', 'encours', 'ok', 'horsligne', 'refus', 'erreur', 'retire', 'horloge'
+  let erreurSynchro = '';
+  let synchroEnCours = null;
+  let synchroARefaire = false;
+  let minuteurEnvoi = 0;
+  let ecartHorloge = 0;     // horloge de cet appareil moins celle du cloud
+
+  // AES-256-GCM : 12 octets tirés au hasard (IV) + données chiffrées et scellées (toute retouche est vue).
+  async function cleAes(cle, usage) {
+    return crypto.subtle.importKey('raw', depuisB64url(cle), 'AES-GCM', false, [usage]);
+  }
+  async function chiffrer(objet, cle) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const chiffre = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: DONNEES_CHIFFREES }, await cleAes(cle, 'encrypt'), utf8.encode(JSON.stringify(objet)),
+    );
+    const tout = new Uint8Array(12 + chiffre.byteLength);
+    tout.set(iv);
+    tout.set(new Uint8Array(chiffre), 12);
+    return enBase64(tout);
+  }
+  async function dechiffrer(blob, cle) {
+    const octets = depuisBase64(blob);
+    const clair = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: octets.subarray(0, 12), additionalData: DONNEES_CHIFFREES }, await cleAes(cle, 'decrypt'), octets.subarray(12),
+    );
+    return JSON.parse(new TextDecoder().decode(clair));
+  }
+
+  function appelCloud(adresse, chemin, { methode = 'GET', corps, version, jeton, codeSecours } = {}) {
+    const entetes = {};
+    if (jeton) entetes.Authorization = 'Bearer ' + jeton;
+    if (corps) entetes['Content-Type'] = 'application/json';
+    if (codeSecours) entetes['X-Code-Secours'] = codeSecours;
+    if (version !== undefined && version !== null) entetes['If-None-Match'] = `"${version}"`; // « rien de neuf ? »
+    // Minuteur à la main : AbortSignal.timeout n'existe pas sur les iPhone d'avant iOS 16.
+    const arret = new AbortController();
+    const minuteur = setTimeout(() => arret.abort(), DELAI_APPEL);
+    let fini = false;
+    return fetch(adresse + chemin, {
+      method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined,
+      cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', signal: arret.signal,
+    }).then(
+      (r) => { fini = true; clearTimeout(minuteur); noterHorloge(r); return r; },
+      (e) => { clearTimeout(minuteur); throw fini ? e : Object.assign(e, { reseau: true }); },
+    );
+  }
+
+  // Le cloud dit son heure à chaque réponse (même sur un « rien de neuf »). La fusion se fie aux
+  // dates des modifications, donc à l'horloge de l'appareil : un PC réglé deux jours en avance
+  // gagnerait toutes les fusions, en silence. On le voit ici et on refuse d'envoyer.
+  function noterHorloge(r) {
+    const h = Number(r.headers.get('X-Heure'));
+    if (Number.isFinite(h) && h > 0) ecartHorloge = Date.now() - h;
+  }
+  const horlogeFausse = () => Math.abs(ecartHorloge) > ECART_HORLOGE_MAX;
+
+  // Vrai si « a » contient quelque chose de plus récent que « b » (ou d'absent de b).
+  // Les données d'exemple jamais touchées (maj 0) ne comptent pas : tous les appareils les ont.
+  function apporte(a, b) {
+    return ['familles', 'elements', 'forfaits'].some((cle) => {
+      const dansB = new Map(b[cle].map((x) => [x.id, x]));
+      return a[cle].some((x) => (dansB.has(x.id) ? x.maj > dansB.get(x.id).maj : x.maj > 0));
+    });
+  }
+
+  // Une seule synchronisation à la fois ; une demande pendant qu'elle tourne la fait refaire ensuite.
+  function synchroniser() {
+    if (!cloud) return Promise.resolve();
+    if (synchroEnCours) { synchroARefaire = true; return synchroEnCours; }
+    synchroEnCours = (async () => {
+      do { synchroARefaire = false; await uneSynchro(); } while (synchroARefaire && cloud);
+    })().finally(() => { synchroEnCours = null; });
+    return synchroEnCours;
+  }
+
+  async function uneSynchro() {
+    const c = cloud;
+    etatSynchro = 'encours';
+    rendreEntete();
+    try {
+      for (let essai = 0; essai < 3; essai++) {
+        // 1. Récupérer la version du cloud, seulement si elle a changé.
+        const r = await appelCloud(c.adresse, '/api/donnees', { jeton: c.jeton, version: c.version });
+        if (r.status === 401) { await refusDeLecture(r); return; }
+        if (r.status === 200) {
+          const etat = await r.json();
+          const distant = etat.blob ? valider(await dechiffrer(etat.blob, c.cle)) : { familles: [], elements: [], forfaits: [] };
+          if (cloud !== c) return; // déconnecté pendant l'échange
+          majRole(c, etat.role);
+          if (c.role === 'consultation') {
+            // Appareil de consultation : les données de l'équipe remplacent les siennes. Il ne peut
+            // rien modifier, donc il n'a rien à garder — et un PC à l'heure fausse ne peut plus
+            // conserver un vieux prix pour toujours.
+            if (etat.blob) remplacerParEquipe(distant);
+          } else if (apporte(distant, donnees)) {
+            const bilan = bilanFusion(distant);
+            donnees = fusionner(donnees, distant);
+            donneesIllisibles = false;
+            sauver();
+            rafraichir();
+            const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
+            toast(changes ? `Forfaits mis à jour : ${pluriel(changes, 'changement')}` : 'Listes mises à jour');
+          }
+          if (c.role === 'responsable' && apporte(donnees, distant)) c.aEnvoyer = true;
+          c.version = etat.version;
+        } else if (r.status !== 304) {
+          throw new Error(`Le cloud a répondu ${r.status}.`);
+        }
+
+        // 2. Envoyer nos modifications (responsables seulement).
+        if (c.role !== 'responsable' || !c.aEnvoyer) break;
+        if (horlogeFausse()) throw Object.assign(new Error(texteHorloge()), { horloge: true });
+        // Remis à faux AVANT l'envoi : une modification faite pendant l'envoi le remet à vrai, et repartira.
+        c.aEnvoyer = false;
+        let p, reponse;
+        try {
+          const blob = await chiffrer({ format: FORMAT, version: VERSION_FORMAT, ...donnees }, c.cle);
+          p = await appelCloud(c.adresse, '/api/donnees', { methode: 'PUT', jeton: c.jeton, corps: { version_precedente: c.version ?? 0, blob } });
+          if (p.ok) reponse = await p.json();
+        } finally {
+          if (!reponse) c.aEnvoyer = true; // pas arrivé : on réessaiera
+        }
+        // Un autre responsable a envoyé entre-temps : on relit tout, on fusionne, on renvoie.
+        if (p.status === 409) { c.version = null; continue; }
+        if (p.status === 401) { await refusDeLecture(p); return; }
+        if (!p.ok) throw new Error(p.status === 413 ? 'Trop de forfaits pour le cloud.' : `Le cloud a répondu ${p.status}.`);
+        c.version = reponse.version;
+        if (c.aEnvoyer) continue; // modifié pendant l'envoi : on renvoie tout de suite
+        appareil.modifsEnAttente = 0; // le cloud garde maintenant ces modifications
+        sauverAppareil();
+        rendreRappel();
+        break;
+      }
+      c.derniereSynchro = Date.now();
+      etatSynchro = 'ok';
+      erreurSynchro = '';
+    } catch (err) {
+      const reseau = err?.reseau === true || err instanceof TypeError || err?.name === 'AbortError';
+      etatSynchro = err?.horloge ? 'horloge' : reseau ? 'horsligne' : 'erreur';
+      erreurSynchro = err?.horloge ? err.message
+        : reseau ? "Mise à jour injoignable : pas de réseau, ou le wifi du magasin la bloque."
+        : err?.name === 'OperationError' ? "Les données du cloud sont illisibles avec la clé de cet appareil : demande un nouveau lien au responsable."
+        : err?.message || String(err);
+    } finally {
+      if (cloud === c) sauverCloud();
+      rendreEntete();
+      rendreBandeaux();
+    }
+  }
+
+  function texteHorloge() {
+    const minutes = Math.round(Math.abs(ecartHorloge) / 60000);
+    return `L'heure de cet appareil est fausse d'environ ${pluriel(minutes, 'minute')} : corrige-la (réglages de l'appareil), sinon tes modifications écraseraient celles des autres. Rien n'a été envoyé.`;
+  }
+
+  function majRole(c, role) {
+    if (!ROLES_CLOUD.includes(role) || role === c.role) return;
+    c.role = role;
+    if (role === 'consultation' && appareil.modeModif) { appareil.modeModif = false; sauverAppareil(); }
+  }
+
+  function remplacerParEquipe(distant) {
+    if (!apporte(distant, donnees) && !apporte(donnees, distant)) return;
+    const bilan = bilanFusion(distant);
+    donnees = distant;
+    donneesIllisibles = false;
+    appareil.modifsEnAttente = 0;
+    sauver();
+    sauverAppareil();
+    rafraichir();
+    const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
+    toast(changes ? `Forfaits mis à jour : ${pluriel(changes, 'changement')}` : 'Forfaits mis à jour');
+  }
+
+  // Un 401 veut dire deux choses très différentes : « retiré » (volontaire, l'appareil s'efface) ou
+  // « inconnu » (le jeton a été perdu, ex. PC qui nettoie les sites : il faut un nouveau lien).
+  async function refusDeLecture(r) {
+    const raison = await r.json().then((x) => x.raison).catch(() => '');
+    if (raison === 'retire') { retirerCetAppareil(); return; }
+    etatSynchro = 'refus';
+    erreurSynchro = "Cet appareil n'est plus connecté à la mise à jour : demande un nouveau lien au responsable.";
+  }
+
+  // Appareil retiré par un responsable (téléphone perdu, départ) : il efface sa copie. Seulement sur
+  // ce motif explicite du cloud, jamais sur une panne : une coupure de réseau n'efface rien.
+  function retirerCetAppareil() {
+    cloud = null;
+    sauverCloud();
+    donnees = { familles: [], elements: [], forfaits: [] };
+    sauver();
+    appareil.modeModif = false;
+    appareil.modifsEnAttente = 0;
+    appareil.favoris = [];
+    appareil.recents = [];
+    appareil.total = [];
+    appareil.surnoms = {};
+    sauverAppareil();
+    etatSynchro = 'retire';
+    erreurSynchro = 'Cet appareil a été retiré de la mise à jour : ses forfaits ont été effacés.';
+    rafraichir();
+  }
+
+  // Appelée après chaque modification : envoi automatique, regroupé si on enchaîne les changements.
+  function planifierEnvoi() {
+    if (cloud?.role !== 'responsable') return;
+    cloud.aEnvoyer = true;
+    sauverCloud();
+    rendreEntete();
+    clearTimeout(minuteurEnvoi);
+    minuteurEnvoi = setTimeout(synchroniser, DELAI_ENVOI);
+  }
+
+  function texteSynchro() {
+    if (!cloud) return '';
+    if (etatSynchro === 'encours') return ' · mise à jour…';
+    if (etatSynchro === 'refus' || etatSynchro === 'retire') return ' · déconnecté';
+    if (etatSynchro === 'horloge') return ' · heure fausse';
+    // Les ennuis d'abord : « envoi en attente » tout seul laisserait croire que le cloud répond.
+    if (etatSynchro === 'horsligne' || etatSynchro === 'erreur') return cloud.aEnvoyer ? ' · hors ligne, envoi en attente' : ' · hors ligne';
+    if (cloud.aEnvoyer) return ' · envoi en attente';
+    if (!cloud.derniereSynchro) return '';
+    const d = new Date(cloud.derniereSynchro);
+    return ` · à jour ${d.toDateString() === new Date().toDateString() ? fmtHeure.format(d) : dateCourte(d)}`;
+  }
+
+  /* ---------- Appairage ---------- */
+
+  function lireLien(texte) {
+    let hash;
+    try { hash = new URL(String(texte).trim(), location.href).hash; } catch { return null; }
+    const p = new URLSearchParams(hash.replace(/^#/, ''));
+    const hote = p.get('maj');
+    const inv = p.get('inv');
+    const cle = p.get('cle');
+    if (!hote || !inv || !cle) return null;
+    const adresse = adresseDeHote(hote);
+    if (!adresseCloudOk(adresse) || inv.length < 16 || !/^[A-Za-z0-9_-]{43}$/.test(cle)) return null;
+    return { adresse, inv, cle };
+  }
+
+  function fabriquerLien(adresse, inv, cle) {
+    const base = location.protocol.startsWith('http') ? location.origin + location.pathname : 'https://nationaliste.github.io/forfaits/';
+    return `${base}#maj=${hoteDeAdresse(adresse)}&inv=${inv}&cle=${cle}`;
+  }
+
+  async function appairer(lien, nom) {
+    const r = await appelCloud(lien.adresse, '/api/appairage', { methode: 'POST', corps: { code: lien.inv, nom } }).catch(() => null);
+    if (!r) throw new Error("Cloud injoignable : vérifie le réseau. Si le wifi du magasin le bloque, essaie en 4G.");
+    if (r.status === 401) throw new Error('Ce lien a déjà servi ou a expiré : demande-en un nouveau au responsable.');
+    if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+    const rep = await r.json();
+    // Ce que « chargerCloud » refuserait au prochain chargement est refusé TOUT DE SUITE : sinon
+    // l'appareil s'enregistre dans un état que la page rejette en silence au rechargement
+    // (« non connecté », forfaits figés), et tout le parc est à reconnecter un par un.
+    if (!ROLES_CLOUD.includes(rep?.role) || typeof rep?.jeton !== 'string' || rep.jeton.length < 20) {
+      throw new Error('Réponse inattendue du cloud : demande un nouveau lien au responsable.');
+    }
+    cloud = { adresse: lien.adresse, jeton: rep.jeton, cle: lien.cle, role: rep.role, id: rep.id, version: null, derniereSynchro: 0, aEnvoyer: false };
+    sauverCloud();
+    if (cloud.role === 'consultation' && appareil.modeModif) { appareil.modeModif = false; sauverAppareil(); }
+    await synchroniser();
+  }
+
+  // Lien ouvert dans le navigateur (PC, Android). On efface le « # » AVANT de lire le lien : la
+  // clé de l'équipe y est en clair, et un lien refusé (coupé par la messagerie, sous-domaine pas
+  // encore renseigné) la laissait affichée, dans l'historique du navigateur et sur les captures,
+  // sans un mot. Et on le dit, au lieu de ne rien faire du tout.
+  async function appairerDepuisAdresse() {
+    const brut = location.href;
+    const avaitLien = location.hash.includes('maj=');
+    if (avaitLien) history.replaceState(null, '', location.origin + location.pathname);
+    const lien = lireLien(brut);
+    if (!lien) {
+      if (avaitLien) {
+        await informer('Lien inutilisable', cloudPasConfigure
+          ? "Cette version de l'outil n'a pas encore l'adresse du cloud de l'équipe : ce lien ne peut pas servir. En attendant, Exporter et Importer font le partage."
+          : "Ce lien de mise à jour n'est pas valable, ou il a été coupé en route : demandes-en un nouveau au responsable.");
+      }
+      return;
+    }
+    if (cloud) { toast('Cet appareil est déjà connecté à la mise à jour'); return; }
+    try {
+      await appairer(lien, '');
+      toast(cloud?.role === 'responsable' ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
+    } catch (err) {
+      await informer('Connexion impossible', err.message);
+    }
+  }
+
+  /* ---------- Fenêtres ---------- */
+
+  function ouvrirMaj() {
+    if (cloud) { ouvrirEtatMaj(); return; }
+    const dlg = ouvrirDialogue({
+      titre: 'Mise à jour automatique',
+      corps: [
+        h('p', { class: 'dlg-message' }, "Les forfaits arrivent tout seuls sur cet appareil, dès qu'un responsable les change. Ils sont chiffrés avant de partir : le cloud ne peut pas les lire."),
+        h('p', { class: 'dlg-message' }, 'Pour connecter cet appareil, demande un lien à un responsable, puis colle-le ici.'),
+        cloudPasConfigure ? h('p', { class: 'msg-erreur', role: 'alert' }, "Cette version de l'outil n'a pas encore l'adresse du cloud de l'équipe : la mise à jour automatique ne peut rien contacter. En attendant, Exporter et Importer font le partage.") : null,
+      ],
+      pied: [
+        h('button', { type: 'button', class: 'btn btn-rouge', id: 'btn-coller-lien', onclick: () => { dlg.close(); ouvrirConnexion(); } }, 'Coller un lien'),
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-premier-appareil', onclick: () => { dlg.close(); ouvrirPremierAppareil(); } }, 'Premier appareil'),
+      ],
+    });
+  }
+
+  const champCloud = (id, attributs) => h('input', { id, class: 'champ', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', ...attributs });
+  const groupeCloud = (label, c, aide) => h('div', { class: 'champ-groupe' }, h('label', { for: c.id }, label), c, aide ? h('p', { class: 'msg-champ aide-champ' }, aide) : null);
+
+  function ouvrirConnexion() {
+    const champLien = champCloud('maj-lien', { type: 'text', inputmode: 'url', placeholder: 'https://…#maj=…' });
+    const champNom = champCloud('maj-nom', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du comptoir, téléphone du magasin…' });
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+    const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 'maj-connecter' }, 'Connecter');
+    const dlg = ouvrirDialogue({
+      titre: 'Connecter cet appareil',
+      surEnvoi: async () => {
+        msgErreur.textContent = '';
+        const lien = lireLien(champLien.value);
+        if (!lien) { msgErreur.textContent = "Ce n'est pas un lien de mise à jour valable : copie-le en entier."; return; }
+        bouton.disabled = true;
+        bouton.textContent = 'Connexion…';
+        try {
+          await appairer(lien, champNom.value);
+          dlg.close();
+          if (etatSynchro !== 'ok') toast(`Connecté, mais la première mise à jour a échoué : ${erreurSynchro}`, true);
+          else toast(cloud?.role === 'responsable' ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
+        } catch (err) {
+          msgErreur.textContent = err.message;
+          bouton.disabled = false;
+          bouton.textContent = 'Connecter';
+        }
+      },
+      corps: [
+        h('p', { class: 'dlg-message' }, 'Colle le lien donné par un responsable. Un lien ne sert que quelques minutes.'),
+        groupeCloud('Lien de mise à jour', champLien),
+        groupeCloud('Nom de cet appareil (facultatif)', champNom, "Pour le reconnaître dans la liste des appareils. Ce nom-là n'est pas chiffré : mets un nom de poste, pas un prénom."),
+        msgErreur,
+      ],
+      pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler')],
+    });
+    champLien.focus();
+  }
+
+  // Tout premier appareil de l'équipe : il n'y a pas encore de lien, donc l'adresse du cloud et le
+  // code de secours se saisissent à la main. C'est aussi la porte de secours si tous les appareils
+  // responsables sont perdus.
+  function ouvrirPremierAppareil() {
+    const champAdresse = champCloud('maj-adresse', { type: 'text', inputmode: 'url', placeholder: 'xxxxx.' + COMPTE_CLOUD + '.workers.dev' });
+    const champCode = champCloud('maj-code', { type: 'password' });
+    const champNom = champCloud('maj-nom1', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du responsable' });
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+    const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 'maj-initialiser' }, 'Connecter');
+    const dlg = ouvrirDialogue({
+      titre: 'Premier appareil',
+      surEnvoi: async () => {
+        msgErreur.textContent = '';
+        bouton.disabled = true;
+        bouton.textContent = 'Connexion…';
+        try {
+          await premierAppareil(champAdresse.value, champCode.value, champNom.value);
+          dlg.close();
+        } catch (err) {
+          msgErreur.textContent = err.message;
+          bouton.disabled = false;
+          bouton.textContent = 'Connecter';
+        }
+      },
+      corps: [
+        h('p', { class: 'dlg-message' }, "Réservé au responsable qui met en place la mise à jour, ou qui la reprend si tous les appareils responsables sont perdus. Les autres appareils se connectent avec un lien."),
+        groupeCloud('Adresse du cloud', champAdresse),
+        groupeCloud('Code de secours', champCode),
+        groupeCloud('Nom de cet appareil (facultatif)', champNom),
+        msgErreur,
+      ],
+      pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler')],
+    });
+    champAdresse.focus();
+  }
+
+  async function premierAppareil(saisieAdresse, code, nom) {
+    const adresse = adresseDeHote(String(saisieAdresse).trim().replace(/^https?:\/\//, '').replace(/\/+$/, ''));
+    if (!adresseCloudOk(adresse)) throw new Error(`Adresse invalide : elle se termine par .${COMPTE_CLOUD}.workers.dev`);
+    if (code.length < 12) throw new Error('Code de secours trop court (12 caractères minimum).');
+    const r = await appelCloud(adresse, '/api/initialiser', { methode: 'POST', corps: { code_secours: code, nom } }).catch(() => null);
+    if (!r) throw new Error("Cloud injoignable : vérifie l'adresse et le réseau.");
+    if (r.status === 401) throw new Error('Code de secours incorrect.');
+    if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
+    if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+    const rep = await r.json();
+    if (typeof rep?.jeton !== 'string' || rep.jeton.length < 20) {
+      throw new Error('Réponse inattendue du cloud : réessaie dans un instant.');
+    }
+    // Le cloud garde-t-il déjà des forfaits ? Ils sont chiffrés avec une clé que cet appareil n'a
+    // pas : on ne peut que repartir des forfaits d'ici, ce qui se demande avant de le faire.
+    const lu = await appelCloud(adresse, '/api/donnees', { jeton: rep.jeton });
+    const etat = lu.ok ? await lu.json() : { blob: null, version: 0 };
+    if (etat.blob) {
+      const ok = await demander({
+        titre: 'Le cloud contient déjà des forfaits',
+        message: "Ils sont chiffrés avec une clé que cet appareil n'a pas : impossible de les lire. Les forfaits de CET appareil peuvent les remplacer — les autres appareils devront alors être reconnectés avec un nouveau lien.",
+        boutons: [{ texte: 'Remplacer', valeur: true, classe: 'btn-danger' }, { texte: 'Annuler', valeur: false }],
+      });
+      if (!ok) throw new Error('Connexion annulée. Pour lire ces forfaits, connecte cet appareil avec un lien venu d’un appareil déjà connecté.');
+    }
+    // Nouvelle clé d'équipe, tirée au hasard ici. Elle ne partira jamais vers le cloud.
+    const cle = enB64url(crypto.getRandomValues(new Uint8Array(32)));
+    cloud = { adresse, jeton: rep.jeton, cle, role: 'responsable', id: rep.id, version: etat.version, derniereSynchro: 0, aEnvoyer: true };
+    sauverCloud();
+    await synchroniser();
+    if (etatSynchro !== 'ok') toast(`Connecté, mais le premier envoi a échoué : ${erreurSynchro}`, true);
+    else toast('Mise à jour en place : les forfaits de cet appareil sont dans le cloud');
+  }
+
+  function ouvrirEtatMaj() {
+    const etat = h('p', { class: 'dlg-message', id: 'maj-etat' });
+    const majEtat = () => {
+      etat.textContent = etatSynchro === 'encours' ? 'Mise à jour en cours…'
+        : erreurSynchro ? erreurSynchro
+        : cloud?.derniereSynchro ? `À jour : dernière vérification le ${fmtDateHeure.format(new Date(cloud.derniereSynchro))}.`
+        : '';
+    };
+    majEtat();
+    const patron = cloud.role === 'responsable';
+    const fermerPuis = (action) => () => { dlg.close(); action(); };
+    const dlg = ouvrirDialogue({
+      titre: 'Mise à jour automatique',
+      corps: [
+        h('ul', { class: 'dlg-liste' },
+          h('li', {}, 'Cloud : ', h('strong', {}, hoteDeAdresse(cloud.adresse))),
+          h('li', {}, patron ? 'Responsable : tes modifications partent toutes seules.' : 'Consultation : les mises à jour arrivent toutes seules, cet appareil ne modifie rien.')),
+        etat,
+        patron ? h('div', { class: 'menu-liste' },
+          h('button', { type: 'button', class: 'btn btn-bord', id: 'maj-ajouter', onclick: fermerPuis(ouvrirAjoutAppareil) }, 'Ajouter un appareil'),
+          h('button', { type: 'button', class: 'btn btn-bord', id: 'maj-appareils', onclick: fermerPuis(ouvrirAppareils) }, 'Appareils connectés'),
+          h('button', { type: 'button', class: 'btn btn-bord', id: 'maj-versions', onclick: fermerPuis(ouvrirVersions) }, 'Revenir à une version'),
+          h('button', { type: 'button', class: 'btn btn-danger', id: 'maj-effacer', onclick: fermerPuis(ouvrirEffacerCloud) }, 'Tout effacer du cloud')) : null,
+      ],
+      pied: [
+        h('button', {
+          type: 'button', class: 'btn btn-rouge', id: 'maj-maintenant',
+          onclick: async () => { etat.textContent = 'Mise à jour en cours…'; await synchroniser(); majEtat(); },
+        }, 'Vérifier maintenant'),
+        h('button', {
+          type: 'button', class: 'btn btn-bord', id: 'maj-deconnecter',
+          onclick: async () => {
+            const ok = await demander({
+              titre: 'Déconnecter cet appareil ?',
+              message: cloud?.aEnvoyer
+                ? 'Des modifications ne sont pas encore envoyées : elles resteront seulement sur cet appareil.'
+                : 'Les forfaits restent sur cet appareil, mais ne se mettront plus à jour tout seuls.',
+              boutons: [{ texte: 'Déconnecter', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+            });
+            if (!ok) return;
+            cloud = null;
+            etatSynchro = erreurSynchro = '';
+            sauverCloud();
+            dlg.close();
+            rafraichir();
+          },
+        }, 'Déconnecter'),
+      ],
+    });
+  }
+
+  function ouvrirAjoutAppareil() {
+    let role = 'consultation';
+    let lot = false;
+    const champNom = champCloud('maj-nom-appareil', { type: 'text', maxlength: '40', autocapitalize: 'sentences', placeholder: 'PC du comptoir' });
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+    const zoneLien = h('div', { class: 'champ-groupe', id: 'maj-zone-lien', hidden: true });
+    const bouton = h('button', { type: 'submit', class: 'btn btn-rouge', id: 'maj-creer-lien' }, 'Créer le lien');
+
+    const choix = (valeurs, lire, ecrire, libelle) => {
+      const boutons = valeurs.map(({ valeur, texte }) => h('button', { type: 'button', 'data-choix': String(valeur), onclick: () => { ecrire(valeur); marquer(); } }, texte));
+      const marquer = () => boutons.forEach((b) => {
+        const actif = b.dataset.choix === String(lire());
+        b.className = 'btn ' + (actif ? 'btn-rouge' : 'btn-bord');
+        b.setAttribute('aria-pressed', String(actif));
+      });
+      marquer();
+      return h('div', { class: 'groupe-theme', role: 'group', 'aria-label': libelle }, ...boutons);
+    };
+
+    const dlg = ouvrirDialogue({
+      titre: 'Ajouter un appareil',
+      surEnvoi: async () => {
+        msgErreur.textContent = '';
+        bouton.disabled = true;
+        bouton.textContent = 'Création…';
+        try {
+          const r = await appelCloud(cloud.adresse, '/api/invitation', {
+            methode: 'POST', jeton: cloud.jeton,
+            corps: { role, nom: champNom.value, usages: lot ? LOT_MAX : 1, minutes: lot ? MINUTES_LOT : MINUTES_LIEN },
+          });
+          if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+          const inv = await r.json();
+          montrerLien(zoneLien, fabriquerLien(cloud.adresse, inv.code, cloud.cle), lot);
+          bouton.hidden = true;
+        } catch (err) {
+          msgErreur.textContent = err?.reseau ? 'Cloud injoignable : vérifie le réseau.' : err.message;
+          bouton.disabled = false;
+          bouton.textContent = 'Créer le lien';
+        }
+      },
+      corps: [
+        h('p', { class: 'dlg-message' }, "Le lien contient la clé de lecture de l'équipe : donne-le de la main à la main, ou par un message que tu effaces ensuite."),
+        groupeCloud("Rôle de l'appareil", choix(
+          [{ valeur: 'consultation', texte: 'Consultation' }, { valeur: 'responsable', texte: 'Responsable' }],
+          () => role, (v) => { role = v; }, "Rôle de l'appareil",
+        ), 'Consultation : cherche les forfaits et reçoit les mises à jour. Responsable : peut aussi les modifier.'),
+        groupeCloud('Combien d’appareils', choix(
+          [{ valeur: false, texte: '1 appareil' }, { valeur: true, texte: `Jusqu’à ${LOT_MAX}` }],
+          () => lot, (v) => { lot = v; }, 'Combien d’appareils',
+        ), `Un seul appareil : le lien vaut ${MINUTES_LIEN} minutes. Plusieurs : 24 h, pour équiper l’équipe en une séance. Chaque appareil reçoit malgré tout son propre accès, retirable seul.`),
+        groupeCloud('Nom (facultatif)', champNom),
+        zoneLien,
+        msgErreur,
+      ],
+      pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Fermer')],
+    });
+    champNom.focus();
+  }
+
+  // Affiche le lien d'appairage : à lire, à copier, à partager (et le QR, s'il est disponible).
+  function montrerLien(zone, lien, lot) {
+    const champ = champCloud('maj-lien-cree', { type: 'text', readonly: true, value: lien });
+    const boutons = [h('button', {
+      type: 'button', class: 'btn btn-rouge', id: 'maj-copier-lien',
+      onclick: async () => {
+        try { await navigator.clipboard.writeText(lien); toast('Lien copié'); }
+        catch { champ.select(); toast('Copie refusée par le navigateur : le lien est sélectionné, fais Ctrl+C', true); }
+      },
+    }, 'Copier le lien')];
+    if (navigator.share) {
+      boutons.push(h('button', {
+        type: 'button', class: 'btn btn-bord', id: 'maj-partager-lien',
+        onclick: () => navigator.share({ title: 'Mise à jour des forfaits', url: lien }).catch(() => {}),
+      }, 'Partager'));
+    }
+    const dessinQr = qrCanvas(lien);
+    // replaceChildren écrirait la chaîne « null » là où h() ignore un null : on filtre.
+    zone.replaceChildren(...[
+      h('label', { for: champ.id }, lot ? `Lien pour ${LOT_MAX} appareils (24 h)` : `Lien pour 1 appareil (${MINUTES_LIEN} minutes)`),
+      champ,
+      h('div', { class: 'groupe-theme' }, ...boutons),
+      dessinQr,
+      h('p', { class: 'msg-champ aide-champ' }, dessinQr
+        ? "PC et Android : scanne le QR. Sur iPhone, le QR ouvre Safari au lieu de l'appli installée : copie le lien et colle-le dans l'appli (Menu → Mise à jour automatique → Coller un lien)."
+        : "Sur iPhone : colle le lien dans l'appli installée (Menu → Mise à jour automatique → Coller un lien), pas dans Safari."),
+    ].filter(Boolean));
+    zone.hidden = false;
+  }
+
+  function ouvrirAppareils() {
+    const liste = h('div', { class: 'menu-liste', id: 'maj-liste-appareils' }, h('p', { class: 'dlg-message' }, 'Chargement…'));
+    const charge = async () => {
+      try {
+        const r = await appelCloud(cloud.adresse, '/api/appareils', { jeton: cloud.jeton });
+        if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+        const { appareils } = await r.json();
+        liste.replaceChildren(...appareils.map((a) => h('div', { class: 'menu-mode' },
+          h('div', {},
+            h('strong', {}, a.nom + (a.moi ? ' (cet appareil)' : '')),
+            h('p', {}, `${a.role === 'responsable' ? 'Responsable' : 'Consultation'} · vu ${a.vu ? dateCourte(a.vu) : 'jamais'}`)),
+          h('button', {
+            type: 'button', class: 'btn btn-danger', 'data-retirer': a.id,
+            onclick: async () => {
+              const ok = await demander({
+                titre: `Retirer « ${a.nom} » ?`,
+                message: a.moi
+                  ? "C'est CET appareil : il perdra la mise à jour et effacera ses forfaits."
+                  : "Cet appareil ne recevra plus rien, et effacera ses forfaits à sa prochaine ouverture avec du réseau.",
+                boutons: [{ texte: 'Retirer', valeur: true, classe: 'btn-danger' }, { texte: 'Annuler', valeur: false }],
+              });
+              if (!ok) return;
+              const d = await appelCloud(cloud.adresse, '/api/appareils/' + encodeURIComponent(a.id), { methode: 'DELETE', jeton: cloud.jeton });
+              if (d.status === 409) { await informer('Impossible', "C'est le dernier appareil responsable : connecte-en un autre avant de retirer celui-ci, sinon personne ne pourra plus modifier les forfaits."); return; }
+              if (!d.ok) { await informer('Impossible', `Le cloud a répondu ${d.status}.`); return; }
+              toast(`« ${a.nom} » retiré`);
+              if (a.moi) { retirerCetAppareil(); dlg.close(); return; }
+              charge();
+            },
+          }, 'Retirer'))));
+        if (!appareils.length) liste.replaceChildren(h('p', { class: 'dlg-message' }, 'Aucun appareil.'));
+      } catch (err) {
+        liste.replaceChildren(h('p', { class: 'msg-erreur', role: 'alert' }, err?.reseau ? 'Cloud injoignable : vérifie le réseau.' : err.message));
+      }
+    };
+    const dlg = ouvrirDialogue({
+      titre: 'Appareils connectés',
+      corps: [h('p', { class: 'dlg-message' }, 'Retirer un appareil coupe son accès tout de suite. Sa copie des forfaits s’efface à sa prochaine ouverture avec du réseau.'), liste],
+      pied: [h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Fermer')],
+    });
+    charge();
+  }
+
+  function ouvrirVersions() {
+    const liste = h('div', { class: 'menu-liste', id: 'maj-liste-versions' }, h('p', { class: 'dlg-message' }, 'Chargement…'));
+    const charge = async () => {
+      try {
+        const r = await appelCloud(cloud.adresse, '/api/versions', { jeton: cloud.jeton });
+        if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+        const { versions, version } = await r.json();
+        liste.replaceChildren(...versions.map((v) => h('div', { class: 'menu-mode' },
+          h('div', {},
+            h('strong', {}, v.version === version ? 'Version actuelle' : `Version du ${fmtDateHeure.format(new Date(v.date))}`),
+            h('p', {}, `Envoyée par ${v.par || 'un responsable'}${v.version === version ? '' : ` le ${fmtDateHeure.format(new Date(v.date))}`}`)),
+          v.version === version ? null : h('button', {
+            type: 'button', class: 'btn btn-bord', 'data-revenir': v.version,
+            onclick: async () => {
+              const ok = await demander({
+                titre: 'Revenir à cette version ?',
+                message: `Les forfaits de tous les appareils reviendront à leur état du ${fmtDateHeure.format(new Date(v.date))}. La version actuelle reste dans l'historique, donc ce retour s'annule aussi.`,
+                boutons: [{ texte: 'Revenir', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+              });
+              if (!ok) return;
+              const avant = donnees;
+              const p = await appelCloud(cloud.adresse, '/api/revenir', { methode: 'POST', jeton: cloud.jeton, corps: { version: v.version } });
+              if (!p.ok) { await informer('Impossible', `Le cloud a répondu ${p.status}.`); return; }
+              // Cette version remonte comme une nouvelle : on la relit, on la réhorodate, puis on la
+              // renvoie. Sans ce renvoi, un autre appareil responsable ne fusionnerait pas (les « maj »
+              // de l'ancienne version sont plus anciens) et renverrait la fausse manœuvre.
+              cloud.version = null;
+              cloud.aEnvoyer = false;
+              sauverCloud();
+              const recu = await appelCloud(cloud.adresse, '/api/donnees', { jeton: cloud.jeton });
+              const etat = recu.ok ? await recu.json() : null;
+              if (!etat?.blob) {
+                await informer('Impossible', "Le cloud a accepté le retour mais ne rend pas encore la version : réessaie dans un instant.");
+                return;
+              }
+              donnees = pourRetourArriere(avant, valider(await dechiffrer(etat.blob, cloud.cle)), Date.now());
+              donneesIllisibles = false;
+              sauver();
+              cloud.version = etat.version;
+              cloud.aEnvoyer = true;
+              sauverCloud();
+              rafraichir();
+              dlg.close();
+              toast('Forfaits revenus à la version choisie');
+              synchroniser();
+            },
+          }, 'Revenir'))));
+        if (!versions.length) liste.replaceChildren(h('p', { class: 'dlg-message' }, 'Aucune version enregistrée.'));
+      } catch (err) {
+        liste.replaceChildren(h('p', { class: 'msg-erreur', role: 'alert' }, err?.reseau ? 'Cloud injoignable : vérifie le réseau.' : err.message));
+      }
+    };
+    const dlg = ouvrirDialogue({
+      titre: 'Revenir à une version',
+      corps: [h('p', { class: 'dlg-message' }, 'Le cloud garde les 10 derniers envois. Utile si une fausse manœuvre a touché tous les appareils.'), liste],
+      pied: [h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Fermer')],
+    });
+    charge();
+  }
+
+  // Bouton d'arrêt : le patron dit non, ou l'outil s'arrête. Demande le code de secours.
+  function ouvrirEffacerCloud() {
+    const champCode = champCloud('maj-code-effacer', { type: 'password' });
+    const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
+    const bouton = h('button', { type: 'submit', class: 'btn btn-danger', id: 'maj-confirmer-effacer' }, 'Tout effacer');
+    const dlg = ouvrirDialogue({
+      titre: 'Tout effacer du cloud',
+      surEnvoi: async () => {
+        msgErreur.textContent = '';
+        bouton.disabled = true;
+        try {
+          const r = await appelCloud(cloud.adresse, '/api/tout', { methode: 'DELETE', jeton: cloud.jeton, codeSecours: champCode.value });
+          if (r.status === 401) throw new Error('Code de secours incorrect.');
+          if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
+          if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
+          cloud = null;
+          etatSynchro = erreurSynchro = '';
+          sauverCloud();
+          dlg.close();
+          rafraichir();
+          await informer('Cloud effacé', "Il ne reste rien dans le cloud. Les forfaits sont toujours sur chaque appareil, et le partage repasse par Exporter / Importer. Les autres appareils se déconnecteront d'eux-mêmes.");
+        } catch (err) {
+          msgErreur.textContent = err?.reseau ? 'Cloud injoignable : vérifie le réseau.' : err.message;
+          bouton.disabled = false;
+        }
+      },
+      corps: [
+        h('p', { class: 'dlg-message' }, "Efface du cloud les forfaits et tous les accès des appareils. Les forfaits déjà sur chaque appareil ne sont pas touchés : ils restent lisibles et exportables."),
+        groupeCloud('Code de secours', champCode),
+        msgErreur,
+      ],
+      pied: [bouton, h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler')],
+    });
+    champCode.focus();
+  }
+
+  /* =====================================================================
      MENU, MODE MODIFICATION, AIDE
      ===================================================================== */
   function ouvrirMenu() {
@@ -2686,6 +3770,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       corps: h('div', { class: 'menu-liste' },
         // Ce qu'on utilise tous les jours d'abord ; ce qui sert aux responsables ensuite.
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(lancerImport) }, 'Importer (sauvegarde ou tableau Excel)'),
+        h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-maj', onclick: fermerPuis(ouvrirMaj) }, cloud ? 'Mise à jour automatique (connectée)' : 'Mise à jour automatique'),
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-mes-surnoms', onclick: fermerPuis(ouvrirMesSurnoms) }, 'Mes surnoms (perso, sur cet appareil)'),
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Apparence'), h('p', {}, "« Auto » suit le réglage de l'appareil.")),
@@ -2696,12 +3781,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
         index.fams.length > 1 ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-ordre-filtres', onclick: fermerPuis(ouvrirOrdreFiltres) }, 'Ordre des filtres (sur cet appareil)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
-        h('div', { class: 'menu-mode' },
-          h('div', {}, h('strong', {}, 'Mode modification'), h('p', {}, appareil.modeModif ? 'Activé sur cet appareil.' : 'Pour ajouter, modifier, supprimer.')),
-          h('button', {
-            type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-bord' : 'btn-rouge'),
-            title: appareil.modeModif ? 'Mode modification : activé' : 'Mode modification : désactivé', onclick: fermerPuis(basculerModeModif),
-          }, appareil.modeModif ? 'Désactiver' : 'Activer')),
+        cloud?.role === 'consultation'
+          ? h('p', { class: 'menu-info', id: 'menu-consultation' }, 'Cet appareil est en consultation : il reçoit les forfaits, il ne les modifie pas.')
+          : h('div', { class: 'menu-mode' },
+            h('div', {}, h('strong', {}, 'Mode modification'), h('p', {}, appareil.modeModif ? 'Activé sur cet appareil.' : 'Pour ajouter, modifier, supprimer.')),
+            h('button', {
+              type: 'button', id: 'btn-mode-modif', class: 'btn ' + (appareil.modeModif ? 'btn-bord' : 'btn-rouge'),
+              title: appareil.modeModif ? 'Mode modification : activé' : 'Mode modification : désactivé', onclick: fermerPuis(basculerModeModif),
+            }, appareil.modeModif ? 'Désactiver' : 'Activer')),
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(() => ouvrirFormulaire(null)) }, '+ Ajouter un forfait') : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-listes', onclick: fermerPuis(ouvrirListes) }, 'Listes des éléments (taximètres, boîtiers…)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
@@ -2729,6 +3816,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   async function basculerModeModif() {
+    if (cloud?.role === 'consultation') {
+      await informer('Appareil en consultation', "Cet appareil reçoit les mises à jour mais ne modifie pas les forfaits. Pour qu'il puisse le faire, demande un lien « Responsable » à un responsable.");
+      return;
+    }
     if (!appareil.modeModif) {
       const ok = await demander({
         titre: 'Activer le mode modification ?',
@@ -2756,7 +3847,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Mon surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
         h('li', {}, h('strong', {}, 'Boutons de filtre : '), `les ${FILTRES_VISIBLES} premières familles sont des boutons, les autres sont dans « Autres ». Pour les ranger dans ton ordre : Menu → Ordre des filtres. C'est propre à cet appareil, personne d'autre n'est touché.`),
         h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
-        h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
+        h('li', {}, h('strong', {}, 'Être à jour : '), "quand la mise à jour automatique est branchée (Menu → Mise à jour automatique), il n'y a rien à faire : les forfaits arrivent tout seuls. Sinon, bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour."),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
         h('li', {}, h('strong', {}, 'Sauvegarde : '), "le fichier dans OneDrive est la vraie sauvegarde. Le navigateur peut être vidé : ne compte pas sur lui.")),
@@ -2807,6 +3898,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   window.addEventListener('storage', (ev) => {
     if (ev.key === CLE_DONNEES) donnees = charger();
     else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerApparence(); }
+    else if (ev.key === CLE_CLOUD) cloud = chargerCloud();
     else return;
     rafraichir();
   });
@@ -2817,6 +3909,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   rafraichir();
   if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
+
+  // Mise à jour automatique : un lien d'appairage dans l'adresse d'abord, puis à l'ouverture, au
+  // retour sur la page, au retour du réseau, et toutes les 5 minutes tant que la page est affichée.
+  appairerDepuisAdresse().then(synchroniser);
+  setInterval(() => { if (document.visibilityState === 'visible') synchroniser(); }, INTERVALLE_SYNCHRO);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && cloud && Date.now() - cloud.derniereSynchro > 60000) synchroniser();
+  });
+  window.addEventListener('online', () => synchroniser());
 
   // Mode hors ligne (seulement quand la page vient d'une adresse web). Le service worker prévient
   // quand il a téléchargé une page plus récente : on propose « Recharger » au lieu d'attendre

@@ -10,8 +10,17 @@ forfaits-*.json
 .env*
 
 # Fichiers de travail
+# Rapports des agents : dépôt PUBLIC, un rapport de sécurité y serait une carte des failles.
+.claude/reports/
+
 captures/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+
+# Cloud de synchro : le nom reel du Worker ne va jamais dans le depot public.
+cloud/wrangler.toml
+cloud/.dev.vars
+cloud/node_modules/
+cloud/.wrangler/

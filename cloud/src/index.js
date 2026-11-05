@@ -355,6 +355,7 @@ export class Equipe {
         return this.refus('code de secours incorrect');
       }
       await this.ctx.storage.deleteAll();
+      this.seau = { jetons: SEAU_CAPACITE, dernier: Date.now() }; // le frein fait partie de « tout »
       return json(200, { efface: true });
     }
 

@@ -1428,7 +1428,7 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
 
 
 def test_cartes_repliees_par_defaut_puis_deroulees(navigateur, appareils):
-    """Au départ : le nom et le TTC. Le reste au premier appui ; « Cartes entières » reste sur l'appareil."""
+    """Au départ : le nom et le TTC. Le reste au premier appui ; le réglage du Menu reste sur l'appareil."""
     page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
     carte = page.locator("#resultats .carte").first
     expect(carte).to_have_class(re.compile(r"\bcarte-compacte\b"))
@@ -1449,9 +1449,14 @@ def test_cartes_repliees_par_defaut_puis_deroulees(navigateur, appareils):
     ouvrir.click()  # un deuxième appui referme
     expect(carte.locator(".carte-elements")).to_be_hidden()
 
-    page.click("#btn-compact")
+    # Le réglage est dans le Menu : la barre de résultats tenait sur deux lignes au téléphone.
+    page.click("#btn-menu")
+    groupe = dialogue(page).get_by_role("group", name="Cartes")
+    expect(groupe.get_by_role("button", name="Repliées")).to_have_attribute("aria-pressed", "true")
+    groupe.get_by_role("button", name="Entières").click()
     expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
-    expect(page.locator("#btn-compact")).to_have_text("Liste compacte")
+    expect(groupe.get_by_role("button", name="Entières")).to_have_attribute("aria-pressed", "true")
+    dialogue(page).get_by_role("button", name="Fermer").click()
     expect(page.locator("#resultats .carte").first.locator(".btn-copier")).to_be_visible()
     page.reload()  # gardé sur l'appareil
     expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
@@ -1481,6 +1486,7 @@ def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
     carte.locator(".carte-ouvrir").click()
     chercher(page, "3Q")  # une recherche, puis on revient à la liste complète
     chercher(page, "")
+    page.click("#btn-recents")  # repliée par défaut : un appui l'ouvre
     recent = page.locator("#resultats .recent")
     expect(recent).to_have_count(1)
     expect(recent).to_contain_text("Taximètre T2 + imprimante 3Q")
@@ -1490,8 +1496,8 @@ def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
     expect(page.locator("#resultats .carte")).to_have_class(re.compile(r"\bcarte-ouverte\b"))
 
 
-def test_la_rangee_des_derniers_consultes_se_replie(appareils):
-    """Sur un petit écran la rangée mange une ligne : on doit pouvoir la rendre aux forfaits."""
+def test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme(appareils):
+    """Repliée par défaut pour laisser la place aux forfaits : un appui l'ouvre, l'appareil s'en souvient."""
     page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
     carte = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text="EX-T2-3Q"))
     carte.locator(".carte-ouvrir").click()
@@ -1500,24 +1506,25 @@ def test_la_rangee_des_derniers_consultes_se_replie(appareils):
     expect(page.locator("#resultats .recent")).to_have_count(1)
 
     bouton = page.locator("#btn-recents")
-    expect(bouton).to_have_attribute("aria-expanded", "true")
+    expect(bouton).to_have_attribute("aria-expanded", "false")
+    expect(page.locator("#resultats .recent")).to_be_hidden()
     # Mesure depuis le haut du document : la page peut être défilée, ce qui fausserait bounding_box.
     haut_premiere_carte = "document.querySelector('#resultats .carte').offsetTop"
-    haut_avant = page.evaluate(haut_premiere_carte)
+    haut_replie = page.evaluate(haut_premiere_carte)
 
     bouton.click()
-    expect(page.locator("#resultats .recent")).to_be_hidden()
-    expect(bouton).to_have_attribute("aria-expanded", "false")
-    haut_apres = page.evaluate(haut_premiere_carte)
-    assert haut_apres < haut_avant, (haut_avant, haut_apres)  # la place est rendue aux forfaits
+    expect(page.locator("#resultats .recent").first).to_be_visible()
+    expect(bouton).to_have_attribute("aria-expanded", "true")
+    assert page.evaluate(haut_premiere_carte) > haut_replie  # ouverte, la rangée pousse les forfaits
 
-    # Réglage de cet appareil : il tient au rechargement, et on peut la rouvrir.
+    # Réglage de cet appareil : il tient au rechargement, et on peut la refermer.
     page.reload()
     page.wait_for_selector("#resultats .carte")
-    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "false")
-    expect(page.locator("#resultats .recent")).to_be_hidden()
-    page.locator("#btn-recents").click()
+    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "true")
     expect(page.locator("#resultats .recent").first).to_be_visible()
+    page.locator("#btn-recents").click()
+    expect(page.locator("#resultats .recent")).to_be_hidden()
+    assert page.evaluate(haut_premiere_carte) == haut_replie  # la place est rendue aux forfaits
 
 
 def test_grands_caracteres_grossissent_tout_sans_deborder(appareils):
@@ -1646,20 +1653,32 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
     dialogue(page).get_by_role("button", name="Clair", exact=True).click()
     page.screenshot(path=f"{prefixe}-1-menu.png")
     page.keyboard.press("Escape")
-    chercher(page, "3Q")
+
+    def toucher(selecteur):
+        """Au doigt sur le téléphone, à la souris sur le PC : le dernier geste change l'affichage
+        (au doigt, la rangée des familles se replie dès qu'il y a du texte)."""
+        if "has_touch" in options:
+            page.tap(selecteur)
+        else:
+            page.click(selecteur)
+
+    # On ouvre un filtre avant de chercher : au doigt, la rangée se replie dès qu'il y a du texte.
     ouvrir_filtre(page, "Taximètre")
     page.screenshot(path=f"{prefixe}-2-filtre.png")
     page.keyboard.press("Escape")
+    toucher("#recherche")
+    page.keyboard.type("3Q")
+    page.screenshot(path=f"{prefixe}-3-recherche.png")
     page.locator("#recherche").fill("")
-    page.click("#recherche")
+    toucher("#recherche")
     page.keyboard.type("zor")
     expect(page.locator("#suggestions")).to_be_visible()
-    page.screenshot(path=f"{prefixe}-3-suggestions.png")
+    page.screenshot(path=f"{prefixe}-4-suggestions.png")
     page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
     activer_modif(page)
     ouvrir_ajout(page)
     assert page.evaluate("document.documentElement.scrollWidth") <= largeur
-    page.screenshot(path=f"{prefixe}-4-formulaire.png")
+    page.screenshot(path=f"{prefixe}-5-formulaire.png")
 
 
 def test_marche_sans_internet(navigateur):
@@ -2134,3 +2153,51 @@ def test_menu_les_actions_de_tous_les_jours_avant_celles_des_responsables(page):
     activer_modif(page)
     page.click("#btn-menu")
     expect(dialogue(page).locator("#btn-mode-modif")).to_have_text("Désactiver")
+
+
+def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur, appareils):
+    """Clavier ouvert, la rangée des familles mangeait les deux seules cartes visibles : elle se
+    replie donc dès que la recherche contient du texte. Mais seulement quand on vient de toucher
+    l'écran : sur un PC à dalle tactile, « pointer: coarse » et « hover: none » répondent « tactile »
+    même avec une souris branchée, et la rangée disparaîtrait pour rien."""
+    options = {"viewport": {"width": 375, "height": 812}, "has_touch": True, "compact": True}
+    if navigateur.nom != "firefox":  # Firefox ne gère pas is_mobile
+        options |= {"is_mobile": True, "device_scale_factor": 2}
+    page = appareils(**options).page
+    rangee = page.locator("#filtres")
+    expect(rangee).to_be_visible()
+    assert page.evaluate("document.documentElement.dataset.geste") == "doigt"
+
+    page.tap("#recherche")
+    page.keyboard.type("3Q")
+    expect(rangee).to_be_hidden()
+
+    # Et l'appui suivant doit être PRIS : replier la rangée sur le focus du champ la faisait
+    # revenir dès que le doigt touchait une carte, le contenu redescendait de 116 px et plus
+    # aucune carte ne s'ouvrait.
+    carte = page.locator(".carte-ouvrir").first
+    carte.tap()
+    expect(carte).to_have_attribute("aria-expanded", "true")
+
+    # La croix du champ efface le texte : la rangée revient (et elle est au-dessus de la croix,
+    # donc rien ne bouge sous le doigt).
+    page.tap("#btn-vider")
+    expect(rangee).to_be_visible()
+
+    # Sur un PC, la rangée reste quoi qu'il arrive : un vendeur ne perd pas ses filtres en tapant.
+    pc = appareils(viewport={"width": 1280, "height": 800}).page
+    assert pc.evaluate("document.documentElement.dataset.geste") == "souris"
+    chercher(pc, "3Q")
+    expect(pc.locator("#filtres")).to_be_visible()
+
+    # Appareil hybride (dalle tactile + souris) : la souris qui bouge ramène la rangée, sans
+    # attendre un clic. Pas vérifiable sous Firefox : dès que Playwright allume l'émulation
+    # tactile, son Firefox n'envoie plus aucun événement de pointeur pour la souris (mesuré) ;
+    # hors émulation, le vrai Firefox envoie bien « pointermove: mouse ».
+    if navigateur.nom != "firefox":
+        page.tap("#recherche")
+        page.keyboard.type("3Q")
+        expect(rangee).to_be_hidden()
+        page.mouse.move(180, 400)
+        assert page.evaluate("document.documentElement.dataset.geste") == "souris"
+        expect(rangee).to_be_visible()

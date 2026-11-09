@@ -35,3 +35,21 @@
 - Bug : les exemples ont changé d'identifiants (renommage) ; la fusion propage les suppressions par identifiant, donc un appareil neuf qui importait le fichier de l'équipe gardait ses exemples.
 - À garder : après la fusion, un fichier qui a des exemples supprimés et aucun exemple actif lance `marquerExemplesSupprimes(true)` (éléments marqués exemple seulement : un élément d’un fichier sans date a aussi maj 0).
 - Test : `test_fichier_sans_exemples_retire_ceux_d_une_autre_version`.
+
+## 2026-11-09 — Survol resté allumé après un appui du doigt
+- Où : `index.html`, les 20 règles `:hover` de la feuille.
+- Bug : au doigt, l'effet de survol restait appliqué jusqu'au prochain appui ailleurs (mesuré sur Chromium, WebKit et Firefox : `transform` et `border-color` persistaient après l'appui).
+- À garder : chaque règle de survol s'écrit `:where(html[data-geste=souris]) …:hover`, sur sa propre ligne et à sa place dans la feuille (`:where()` n'ajoute aucune spécificité). Le retour d'un appui vient de `:active` sous `:where(html[data-geste=doigt])`.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media`.
+
+## 2026-11-09 — « @media (pointer: coarse) » répond tactile sur un PC
+- Où : `index.html`, tout ce qui dépend du geste (survol, repli des filtres, focus du champ de recherche).
+- Bug : sur un PC Windows à dalle tactile avec une souris branchée, Firefox et Chrome répondent `pointer: coarse` et `hover: none`. Conséquences mesurées : le champ de recherche ne recevait pas le focus à l'ouverture, et une règle de survol sous `@media (hover: hover)` aurait disparu sur ce PC.
+- À garder : `data-geste` sur `<html>`, posé par le `pointerType` de `pointerdown`/`pointermove` et au démarrage par `(any-pointer: fine)`. Jamais `@media (hover: …)` ni `(pointer: …)` pour décider du geste.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (3e partie : la souris qui bouge ramène la rangée).
+
+## 2026-11-09 — Appui avalé quand le contenu bouge entre le doigt qui touche et le doigt qui part
+- Où : `index.html`, repli de la rangée des familles (`.zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres`).
+- Bug : replier la rangée sur le **focus** du champ la faisait revenir dès que le doigt touchait une carte ; le contenu redescendait de 116 px et plus aucune carte ne s'ouvrait (mesuré sur les 3 moteurs).
+- À garder : le déclencheur est le TEXTE du champ, jamais son focus ni un événement de pointeur. Plus généralement : rien qui déplace le contenu ne doit réagir au focus ou au `touchstart`.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (l'appui sur une carte reste pris).

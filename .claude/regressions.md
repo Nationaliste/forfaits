@@ -65,3 +65,26 @@
 - Bug : un seul seau à jetons, en mémoire du Durable Object, partagé par tous les appelants sans jeton valable. N'importe qui connaissant l'adresse du Worker le gardait vide (10 requêtes par minute suffisent) : l'appairage d'un nouvel appareil ET la récupération par code de secours renvoyaient 429 AVANT même la lecture de l'invitation. L'équipe se retrouvait dehors sans recours. Les porteurs de jeton, à l'inverse, n'étaient freinés par rien.
 - À garder : un seau par source (`CF-Connecting-IP`), deux seaux par source — large pour tout appelant, appliqué avant la moindre lecture de stockage, et serré en plus pour les requêtes sans jeton valable. Sans en-tête de source (wrangler dev), tout le monde partage un seau : jamais plus permissif qu'avant. `DELETE /api/tout` vide les seaux.
 - Test : pas de test (inonder le Worker en test coûterait des minutes pour prouver une limite de débit) ; la lecture du code et `test_le_cloud_refuse_l_ecriture_a_un_appareil_de_consultation` couvrent le chemin.
+## 2026-11-09 — Survol resté allumé après un appui du doigt
+- Où : `index.html`, les 20 règles `:hover` de la feuille.
+- Bug : au doigt, l'effet de survol restait appliqué jusqu'au prochain appui ailleurs (mesuré sur Chromium, WebKit et Firefox : `transform` et `border-color` persistaient après l'appui).
+- À garder : chaque règle de survol s'écrit `:where(html[data-geste=souris]) …:hover`, sur sa propre ligne et à sa place dans la feuille (`:where()` n'ajoute aucune spécificité). Le retour d'un appui vient de `:active` sous `:where(html[data-geste=doigt])`.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media`.
+
+## 2026-11-09 — « @media (pointer: coarse) » répond tactile sur un PC
+- Où : `index.html`, tout ce qui dépend du geste (survol, repli des filtres, focus du champ de recherche).
+- Bug : sur un PC Windows à dalle tactile avec une souris branchée, Firefox et Chrome répondent `pointer: coarse` et `hover: none`. Conséquences mesurées : le champ de recherche ne recevait pas le focus à l'ouverture, et une règle de survol sous `@media (hover: hover)` aurait disparu sur ce PC.
+- À garder : `data-geste` sur `<html>`, posé par le `pointerType` de `pointerdown`/`pointermove` et au démarrage par `(any-pointer: fine)`. Jamais `@media (hover: …)` ni `(pointer: …)` pour décider du geste.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (3e partie : après un mouvement de souris, `data-geste` repasse à `souris` ; la rangée, elle, reste repliée — c'est voulu, voir l'entrée suivante).
+
+## 2026-11-09 — Appui avalé quand le contenu bouge entre le doigt qui touche et le doigt qui part
+- Où : `index.html`, repli de la rangée des familles (`:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres`).
+- Bug : replier la rangée sur le **focus** du champ la faisait revenir dès que le doigt touchait une carte ; le contenu redescendait de 116 px et plus aucune carte ne s'ouvrait (mesuré sur les 3 moteurs).
+- À garder : le déclencheur est le TEXTE du champ, jamais son focus ni un événement de pointeur. Plus généralement : rien qui déplace le contenu ne doit réagir au focus ou au `touchstart`.
+- Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (l'appui sur une carte reste pris).
+
+## 2026-11-09 — Nouveau défaut d'un réglage d'appareil jamais appliqué aux appareils en service
+- Où : `index.html`, `chargerAppareil` et `sauverAppareil` (réglage `recentsOuverts`).
+- Bug : la rangée « Derniers consultés » devait devenir repliée par défaut. La lecture faisait `lu.recentsPlies !== false`, mais `sauverAppareil()` réécrit TOUT l'objet `appareil` : un appareil déjà en service avait déjà `recentsPlies: false` enregistré en clair, donc il gardait l'ancien défaut (vérifié en ouvrant l'ancienne version puis la nouvelle sur le même navigateur). Seul un appareil neuf voyait le changement.
+- À garder : changer un défaut de `forfaits.appareil.v1` demande une NOUVELLE clé, jamais une lecture inversée. Ici `recentsPlies` est devenue `recentsOuverts` (sens inverse) et l'ancienne clé est ignorée.
+- Test : `test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme` (il injecte l'ancienne forme enregistrée avant de recharger).

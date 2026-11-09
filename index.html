@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-6FLd+q3irnerdIHSNPbpF0ocUTsBFBfZgfoOE9N0jtE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-g+WOfNAFGgNmcXvoUxSysoMKm6ecvCa03NOwkf9FHEs='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -18,7 +18,7 @@
    ils reprennent donc cette palette même quand la page est en clair. */
 :root, .entete, .dlg-tete {
   --fond: #000000;          /* fond de page, barre de recherche, champs */
-  --noir: #000000;          /* noir de la marque : en-tête, damier (ne change jamais) */
+  --noir: #000000;          /* en-tête et damier : ce noir ne change jamais, dans aucun thème */
   --surface: #151515;       /* cartes, fenêtres */
   --surface-2: #232323;     /* puces, encadrés, survols */
   --trait: #333333;         /* bordures discrètes */
@@ -34,7 +34,7 @@
   --encre: #121212;         /* texte sur la barre de recherche, toujours blanche */
   --encre-douce: #5f5f5f;
   --gris-clair: #ececec;
-  --rouge: #e30613;         /* rouge de la marque : fonds rouges, texte blanc dessus */
+  --rouge: #e30613;         /* rouge d'accent : fonds rouges, texte blanc dessus */
   --rouge-fonce: #b3040f;
   --rouge-vif: #ff4d5e;     /* texte rouge sur fond noir (assez contrasté pour être lu) */
   --rouge-voile: rgb(227 6 19 / 0.22);
@@ -63,7 +63,7 @@
   --inverse: #121212;
   --inverse-texte: #ffffff;
   --inverse-survol: #3a3a3a;
-  --rouge-vif: #cc0511;     /* le rouge de la marque, un peu plus foncé pour rester lisible sur le gris clair */
+  --rouge-vif: #cc0511;     /* le rouge d'accent, un peu plus foncé pour rester lisible sur le gris clair */
   --rouge-voile: rgb(227 6 19 / 0.1);
   --ambre: #8a5a00;
   --voile: rgb(0 0 0 / 0.55);
@@ -108,28 +108,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: center;
   transition: transform .12s ease, background-color .12s ease, border-color .12s ease, color .12s ease;
 }
-.btn:hover { transform: translateY(-1px); }
+:where(html[data-geste=souris]) .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(0) scale(.98); }
 .btn:disabled { opacity: .35; cursor: default; transform: none; }
+/* Au doigt, le survol est éteint (il restait allumé après l'appui), donc le seul retour d'un appui
+   est « :active ». Sans lui, on ne sait pas s'il a été pris. Les « .btn » ont déjà le leur ; ceux-ci
+   n'en avaient aucun. « :is() » garde la spécificité d'une classe, comme la liste d'origine. */
+:where(html[data-geste=doigt]) :is(.btn-lien, .btn-icone, .filtre, .etiquette, .recent,
+  .recents-titre, .carte-ouvrir, .suggestion, .choix):active { opacity: .55; }
 .btn-rouge { background: var(--rouge); color: var(--blanc); }
-.btn-rouge:hover { background: var(--rouge-fonce); }
+:where(html[data-geste=souris]) .btn-rouge:hover { background: var(--rouge-fonce); }
 /* « blanc » en sombre, noir en clair : le nom est resté, il est partagé avec la branche du serveur. */
 .btn-blanc { background: var(--inverse); color: var(--inverse-texte); }
-.btn-blanc:hover { background: var(--inverse-survol); }
+:where(html[data-geste=souris]) .btn-blanc:hover { background: var(--inverse-survol); }
 .btn-bord { background: transparent; color: var(--texte); border-color: var(--trait-fort); }
-.btn-bord:hover { border-color: var(--texte-fort); }
+:where(html[data-geste=souris]) .btn-bord:hover { border-color: var(--texte-fort); }
 .btn-danger { background: transparent; color: var(--rouge-vif); border-color: var(--rouge); }
-.btn-danger:hover { background: var(--rouge-voile); }
+:where(html[data-geste=souris]) .btn-danger:hover { background: var(--rouge-voile); }
 .btn-carre { width: var(--tactile); min-width: var(--tactile); padding: 0; }
 /* Actions secondaires : un cadre, pas un texte souligné. Souligné, on les lisait comme des liens
    et on ne voyait pas qu'elles s'appuient (remarque de l'utilisateur sur son téléphone). */
 .btn-lien {
   background: var(--surface-2); border: 2px solid var(--trait-fort); border-radius: 8px;
-  padding: 6px 12px; min-height: 36px;
+  padding: 6px 12px; min-height: 44px;
   color: var(--rouge-vif); cursor: pointer; font-size: 14px; font-weight: 600;
   transition: color .12s ease, border-color .12s ease;
 }
-.btn-lien:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
+:where(html[data-geste=souris]) .btn-lien:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
 .btn-icone {
   width: var(--tactile); height: var(--tactile); flex-shrink: 0;
   display: grid; place-items: center;
@@ -168,7 +173,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .etat { margin: 4px 0 0; font-size: 13px; color: var(--texte-doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entete-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .entete .btn-icone { color: var(--blanc); border: 2px solid var(--trait-fort); }
-.entete .btn-icone:hover { border-color: var(--blanc); }
+:where(html[data-geste=souris]) .entete .btn-icone:hover { border-color: var(--blanc); }
 /* Bande en damier, clin d'œil aux taxis */
 .damier {
   height: 12px;
@@ -217,7 +222,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #recherche::placeholder { color: var(--encre-douce); opacity: 1; }
 #recherche::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 #btn-vider { color: var(--encre-douce); margin-right: 4px; }
-#btn-vider:hover { background: var(--gris-clair); }
+:where(html[data-geste=souris]) #btn-vider:hover { background: var(--gris-clair); }
 .suggestions {
   position: absolute; left: 0; right: 0; top: calc(100% + 10px); z-index: 30;
   margin: 0; padding: 6px; list-style: none;
@@ -229,10 +234,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   min-height: var(--tactile); padding: 8px 12px; border-radius: 8px; cursor: pointer;
 }
-.suggestion:hover, .suggestion[aria-selected="true"] { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--rouge); }
+.suggestion[aria-selected="true"] { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--rouge); }
+:where(html[data-geste=souris]) .suggestion:hover { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--rouge); }
 .suggestion-nom { font-weight: 700; font-size: 18px; }
 .suggestion-famille { font-size: 13px; color: var(--texte-doux); }
 .etiquettes, .filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* Téléphone (écran tactile) : dès qu'une recherche est tapée, les familles cèdent leurs deux
+   lignes aux forfaits — clavier ouvert, on n'en voyait plus qu'un. Les filtres posés restent
+   visibles dans « .etiquettes ». Le déclencheur est le texte du champ et NON son focus : sur le
+   focus, la rangée revenait entre le doigt qui touche et le doigt qui part, le contenu
+   redescendait de 116 px et l'appui sur la carte était perdu (mesuré sur les 3 moteurs).
+   La croix du champ efface le texte : la rangée revient, et elle est au-dessus, donc rien ne bouge
+   sous le doigt. Un navigateur sans « :has() » garde simplement la rangée.
+   `data-recherche` et non `data-geste` : voir `rendreResultats`. */
+:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres { display: none; }
 /* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) couperait sinon le mot
    nulle part et ferait défiler toute la page en largeur : 24 caractères y suffisent sur un
    téléphone. L'étiquette et le bouton de filtre portent tous deux ce nom. */
@@ -244,7 +259,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 0; border-radius: 999px; font-weight: 600; cursor: pointer;
   transition: transform .12s ease;
 }
-.etiquette:hover { transform: translateY(-1px); }
+:where(html[data-geste=souris]) .etiquette:hover { transform: translateY(-1px); }
 .croix { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--rouge); color: var(--blanc); font-size: 14px; }
 .filtre {
   min-height: var(--tactile); padding: 8px 14px;
@@ -252,13 +267,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface); color: var(--texte); font-weight: 600; cursor: pointer;
   transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
 }
-.filtre:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
+:where(html[data-geste=souris]) .filtre:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
 .filtre[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
 
 /* ============ Résultats ============ */
 main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 #compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
 .tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
 .tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
@@ -273,21 +288,21 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
    pour que le repli ne coûte pas la place qu'il fait gagner. */
 .recents-titre {
   display: inline-flex; align-items: center; gap: 6px;
-  margin: 0; padding: 6px 12px; min-height: 40px;
+  margin: 0; padding: 6px 12px; min-height: 44px;
   background: none; border: 2px solid var(--trait-fort); border-radius: 8px;
   color: var(--texte-doux); font: inherit; font-size: 14px;
   text-align: left; cursor: pointer; transition: color .12s ease, border-color .12s ease;
 }
-.recents-titre:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
+:where(html[data-geste=souris]) .recents-titre:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
 .recents-liste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .recents:not(.recents-plies) .recents-titre .chevron { transform: rotate(180deg); }
 .recent {
-  max-width: 100%; min-height: 40px; padding: 6px 12px;
+  max-width: 100%; min-height: 44px; padding: 6px 12px;
   background: var(--surface-2); border: 2px solid var(--trait-fort); border-radius: 999px;
   color: var(--texte); font-size: 14px; text-align: left; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.recent:hover { border-color: var(--texte-fort); color: var(--texte-fort); }
+:where(html[data-geste=souris]) .recent:hover { border-color: var(--texte-fort); color: var(--texte-fort); }
 .titre-groupe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 17px; }
 .titre-groupe-compte { font-size: 14px; font-weight: 400; color: var(--texte-doux); }
 .vide p { margin: 0 0 12px; font-size: 18px; }
@@ -307,13 +322,21 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
   margin: 0; padding: 8px 12px 8px 14px; min-height: var(--tactile);
   background: none; border: 0; border-radius: 12px; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.carte-ouvrir:hover { background: var(--surface-2); }
+:where(html[data-geste=souris]) .carte-ouvrir:hover { background: var(--surface-2); }
 .carte-ouvrir .carte-tete { flex: 1 1 auto; min-width: 0; }
-/* Repliée, le badge reste sur la ligne du nom : une carte = une ligne ou deux. */
-.carte-ouvrir .carte-nom { flex: 1 1 auto; min-width: 0; font-size: 17px; -webkit-line-clamp: 2; }
+/* Repliée, le badge reste sur la ligne du nom. Trois lignes au maximum : une désignation monte
+   jusqu'à une soixantaine de caractères, et deux lignes en coupaient une sur trois — un nom coupé
+   est la première chose que lit un vendeur. Les noms courts tiennent sur une ligne : la carte ne
+   grandit que quand il le faut (61 px, 82 px pour un nom long). */
+.carte-ouvrir .carte-nom { flex: 1 1 auto; min-width: 0; font-size: 17px; -webkit-line-clamp: 3; }
 /* Le badge EXEMPLE passe au-dessus du nom quand il ne reste pas la place (données réelles : pas de badge). */
 .carte-ouvrir .badge-exemple { font-size: 11px; padding: 0 5px; }
+/* Repliée, « TTC » passe SOUS le montant : à côté, il prenait 30 px sur la largeur du nom, et sans
+   ces 30 px une désignation de 62 caractères ne tenait pas en 3 lignes. La carte ne grandit pas
+   (le montant seul fait déjà la hauteur), et le prix garde le rouge et sa taille. */
+.carte-ouvrir .prix-ttc { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
 .carte-ouvrir .prix-ttc .prix-montant { font-size: 20px; }
+.carte-ouvrir .prix-ttc .prix-type { font-size: 11px; }
 .chevron {
   flex-shrink: 0; width: 0; height: 0; margin-right: 2px;
   border: 6px solid transparent; border-top: 7px solid var(--texte-doux); border-bottom: 0;
@@ -337,13 +360,13 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 }
 /* Prix à gauche, actions à droite : une seule rangée au lieu de deux. */
 .carte-bas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: auto; }
-.carte-boutons { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
+.carte-boutons { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
 .carte-boutons .btn { min-height: var(--tactile); } /* boutons plus petits, zone de toucher gardée */
-.btn-favori { padding: 4px 11px; font-size: 20px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait-fort); }
-.btn-favori:hover { border-color: var(--ambre); }
+.btn-favori { min-width: 44px; padding: 4px 11px; font-size: 20px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait-fort); }
+:where(html[data-geste=souris]) .btn-favori:hover { border-color: var(--ambre); }
 .btn-favori[aria-pressed="true"] { color: var(--ambre); }
 .btn-copier { flex-shrink: 0; padding: 6px 12px; background: var(--surface-2); color: var(--texte); border-color: var(--trait-fort); }
-.btn-copier:hover { border-color: var(--rouge); }
+:where(html[data-geste=souris]) .btn-copier:hover { border-color: var(--rouge); }
 .btn-copier.copie { background: var(--vert); border-color: var(--vert); color: var(--blanc); }
 .icone-copier { position: relative; width: 17px; height: 17px; flex-shrink: 0; }
 .icone-copier::before, .icone-copier::after {
@@ -426,7 +449,7 @@ body.avec-total .rappel { bottom: 96px; } /* la barre peut passer sur 2 lignes :
 body.avec-total .toast { bottom: 170px; }
 body.avec-total main { padding-bottom: 230px; }
 .btn-total { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait-fort); }
-.btn-total:hover { border-color: var(--rouge); }
+:where(html[data-geste=souris]) .btn-total:hover { border-color: var(--rouge); }
 .total-ligne { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--trait); }
 .total-ligne-nom { font-weight: 700; overflow-wrap: anywhere; }
 .total-ligne-prix { text-align: right; font-weight: 700; white-space: nowrap; }
@@ -466,7 +489,7 @@ body.avec-total main { padding-bottom: 230px; }
 }
 .dlg-tete h2 { margin: 0; font-family: var(--police-titre); font-size: 22px; overflow-wrap: anywhere; }
 .dlg-tete .btn-icone { color: var(--blanc); }
-.dlg-tete .btn-icone:hover { background: var(--surface-2); }
+:where(html[data-geste=souris]) .dlg-tete .btn-icone:hover { background: var(--surface-2); }
 /* flex: 1 seul vaut « base 0 » : Safari écrase alors le corps à sa marge dans une fenêtre sans hauteur fixée. */
 .dlg-corps { padding: 16px 20px; overflow: auto; flex: 1 1 auto; min-height: 0; }
 .dlg-pied { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--trait); }
@@ -485,7 +508,7 @@ body.avec-total main { padding-bottom: 230px; }
   background: var(--fond); color: var(--texte); font-size: 17px;
   transition: border-color .12s ease, box-shadow .12s ease;
 }
-.champ:hover { border-color: var(--texte-doux); }
+:where(html[data-geste=souris]) .champ:hover { border-color: var(--texte-doux); }
 .champ:focus { border-color: var(--rouge-vif); box-shadow: 0 0 0 3px var(--rouge-voile); outline: none; }
 .champ::placeholder { color: var(--texte-pale); opacity: 1; }
 textarea.champ { resize: vertical; min-height: 90px; }
@@ -510,7 +533,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   background: var(--surface-2); font-weight: 700; font-size: 17px; cursor: pointer;
   transition: transform .12s ease, border-color .12s ease;
 }
-.choix:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
+:where(html[data-geste=souris]) .choix:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
 .choix[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
 
 /* Menu */
@@ -618,7 +641,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   <div class="barre-resultats">
     <div class="barre-resultats-gauche">
       <p id="compte" aria-live="polite"></p>
-      <button type="button" class="btn-lien" id="btn-tout-effacer" hidden>Effacer la recherche</button>
+      <button type="button" class="btn-lien" id="btn-tout-effacer" title="Effacer la recherche et les filtres" hidden>Tout effacer</button>
       <label class="tri" id="zone-tri" hidden>Trier
         <select id="tri" class="champ">
           <option value="ref">par référence</option>
@@ -626,7 +649,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
           <option value="prix-decroissant">prix décroissant</option>
         </select>
       </label>
-      <button type="button" class="btn-lien" id="btn-compact" hidden>Cartes entières</button>
     </div>
     <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+ Ajouter un forfait</button>
   </div>
@@ -654,6 +676,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
   const TAILLES = [{ valeur: 'normal', libelle: 'Normal' }, { valeur: 'grand', libelle: 'Grand' }, { valeur: 'tres-grand', libelle: 'Très grand' }];
+  const CARTES = [{ valeur: 'repliees', libelle: 'Repliées' }, { valeur: 'entieres', libelle: 'Entières' }];
   const RECENTS_MAX = 4;           // derniers forfaits consultés (par appareil, jamais exporté)
   const FILTRES_VISIBLES = 3;      // familles en boutons de filtre ; les suivantes vont dans « Autres »
   const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
@@ -909,7 +932,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsPlies: false, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsOuverts: false, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -934,7 +957,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
         texte: TAILLES.some((t) => t.valeur === lu.texte) ? lu.texte : 'normal',
         compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
-        recentsPlies: lu.recentsPlies === true, // vrai = rangée « Derniers consultés » repliée ; dépliée tant que l'appareil n'a rien choisi
+        // Repliée tant que CET appareil ne l'a pas ouverte : la place va aux forfaits. Nouvelle
+        // clé, et l'ancienne (`recentsPlies`) est ignorée exprès : `sauverAppareil()` réécrit
+        // tout l'objet, donc tout appareil déjà en service avait déjà enregistré l'ancien
+        // défaut — le relire aurait gardé la rangée dépliée partout.
+        recentsOuverts: lu.recentsOuverts === true,
       };
     } catch {
       return defaut;
@@ -1035,6 +1062,24 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // Le CSS n'a que deux palettes : « auto » est résolu ici d'après le réglage de l'appareil.
   // La taille du texte est posée de la même façon, sur <html>.
   const themeSysteme = window.matchMedia('(prefers-color-scheme: light)');
+  // Aucune requête média ne distingue le doigt de la souris sur un appareil qui a les deux : sur un
+  // PC à dalle tactile, Firefox et Chrome répondent « pointer: coarse » et « hover: none » même
+  // avec une souris branchée (mesuré sur Windows). On suit donc le DERNIER geste : `data-geste`
+  // vaut 'souris' ou 'doigt' sur <html>, et le CSS s'y accroche par `:where(…)`, qui n'ajoute
+  // aucune spécificité — les égalités entre règles restent celles d'avant.
+  const racine = document.documentElement;
+  const auDoigt = () => racine.dataset.geste === 'doigt';
+  function noterGeste(type) {
+    const valeur = type === 'touch' ? 'doigt' : 'souris';
+    if (racine.dataset.geste !== valeur) racine.dataset.geste = valeur;
+  }
+  // Au démarrage, faute de geste : un appareil qui n'a aucun pointeur fin est un téléphone.
+  noterGeste(matchMedia('(any-pointer: fine)').matches ? 'mouse' : 'touch');
+  addEventListener('pointerdown', (ev) => noterGeste(ev.pointerType), { capture: true, passive: true });
+  // La souris qui bouge suffit : sur un PC hybride, le survol revient sans attendre un clic.
+  addEventListener('pointermove', (ev) => { if (ev.pointerType === 'mouse') noterGeste('mouse'); },
+    { capture: true, passive: true });
+
   function appliquerApparence() {
     const clair = appareil.theme === 'clair' || (appareil.theme === 'auto' && themeSysteme.matches);
     document.documentElement.dataset.theme = clair ? 'clair' : 'sombre';
@@ -1412,7 +1457,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // à l'écran (la liste complète est longue, celui qu'on vient de regarder revient souvent).
   // Le titre replie la rangée pour rendre la place aux forfaits : réglage de cet appareil.
   function rangeeRecents(liste) {
-    const plies = appareil.recentsPlies;
+    const plies = !appareil.recentsOuverts;
     const pastilles = h('div', { class: 'recents-liste', hidden: plies },
       ...liste.map((f) => h('button', {
         type: 'button', class: 'recent', title: f.designation || f.ref,
@@ -1428,8 +1473,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         type: 'button', class: 'recents-titre', id: 'btn-recents',
         'aria-expanded': String(!plies),
         onclick: (ev) => {
-          const plie = !appareil.recentsPlies;
-          appareil.recentsPlies = plie;
+          const plie = appareil.recentsOuverts;
+          appareil.recentsOuverts = !plie;
           sauverAppareil();
           // Tout de suite, sans tout redessiner : la rangée est au-dessus des forfaits, on voit la place rendue.
           ev.currentTarget.setAttribute('aria-expanded', String(!plie));
@@ -1442,6 +1487,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreResultats() {
     const texte = $('recherche').value;
+    // Le repli de la rangée des familles se décide au moment où le champ passe de vide à rempli,
+    // puis ne bouge plus. S'il suivait `data-geste`, un appui du doigt après un mouvement de
+    // souris replierait la rangée AU CONTACT : le contenu monterait de 116 px et l'appui serait
+    // perdu (mesuré sur Chromium et WebKit). Rien ne doit bouger entre le doigt qui touche et le
+    // doigt qui part.
+    if (!texte.trim()) racine.removeAttribute('data-recherche');
+    else if (!racine.dataset.recherche) racine.dataset.recherche = auDoigt() ? 'doigt' : 'souris';
     const analyse = analyserRecherche(texte);
     const total = index.forfaits.length;
     const resultats = index.forfaits.filter((f) => correspond(f, analyse.contraintes));
@@ -1460,10 +1512,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('compte').textContent = total === 0 ? '' : groupes.length ? 'Aucun forfait ne contient tout'
       : resultats.length === 0 ? 'Aucun forfait ne correspond'
       : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
-    $('btn-tout-effacer').hidden = !actif;
+    // Avec une recherche seule, la croix du champ efface déjà : le bouton ne sort que pour les
+    // filtres, sinon la barre passait sur deux lignes et mangeait une carte sur un téléphone.
+    $('btn-tout-effacer').hidden = etatUi.filtres.size === 0;
     $('zone-tri').hidden = total < 2;
-    $('btn-compact').hidden = total < 2;
-    $('btn-compact').textContent = appareil.compact ? 'Cartes entières' : 'Liste compacte';
     $('btn-ajouter').hidden = !appareil.modeModif;
     $('btn-vider').hidden = texte === '';
 
@@ -3778,6 +3830,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Taille du texte'), h('p', {}, 'Tout grossit, sur cet appareil seulement.')),
           choixReglage('texte', TAILLES, 'Taille du texte')),
+        h('div', { class: 'menu-mode' },
+          h('div', {}, h('strong', {}, 'Cartes'), h('p', {}, "Repliées : plus de forfaits à l'écran.")),
+          choixReglage('compact', CARTES, 'Cartes', {
+            lire: (v) => (v ? 'repliees' : 'entieres'),
+            ecrire: (v) => v === 'repliees',
+            apres: () => { etatUi.ouvertes.clear(); rendreResultats(); },
+          })),
         index.fams.length > 1 ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-ordre-filtres', onclick: fermerPuis(ouvrirOrdreFiltres) }, 'Ordre des filtres (sur cet appareil)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
@@ -3799,15 +3858,17 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
   }
 
-  // Trois boutons (thème, taille du texte) ; le choix s'applique tout de suite et la fenêtre reste
-  // ouverte pour voir le résultat. Réglages de l'appareil : jamais exportés.
-  function choixReglage(cle, choix, libelleGroupe) {
+  // Deux ou trois boutons (thème, taille du texte, cartes) ; le choix s'applique tout de suite et la
+  // fenêtre reste ouverte pour voir le résultat (l'événement « close » d'un dialogue part en différé).
+  // Réglages de l'appareil : jamais exportés. `lire`/`écrire` servent au réglage des cartes, qui est un
+  // booléen et non une chaîne ; `après` remplace l'effet par défaut (thème et taille).
+  function choixReglage(cle, choix, libelleGroupe, { lire = (v) => v, ecrire = (v) => v, apres = appliquerApparence } = {}) {
     const boutons = choix.map(({ valeur, libelle }) => h('button', {
       type: 'button', 'data-choix': valeur,
-      onclick: () => { appareil[cle] = valeur; sauverAppareil(); appliquerApparence(); marquer(); },
+      onclick: () => { appareil[cle] = ecrire(valeur); sauverAppareil(); apres(); marquer(); },
     }, libelle));
     const marquer = () => boutons.forEach((b) => {
-      const actif = b.dataset.choix === appareil[cle];
+      const actif = b.dataset.choix === lire(appareil[cle]);
       b.className = 'btn ' + (actif ? 'btn-rouge' : 'btn-bord');
       b.setAttribute('aria-pressed', String(actif));
     });
@@ -3878,15 +3939,16 @@ textarea.champ { resize: vertical; min-height: 90px; }
       champ.removeAttribute('aria-activedescendant');
     }
   });
-  $('btn-vider').addEventListener('click', () => { champ.value = ''; champ.focus(); rendreResultats(); majSuggestions(); });
+  $('btn-vider').addEventListener('click', () => {
+    champ.value = '';
+    // À la souris on reste dans le champ pour retaper ; au doigt, redonner le focus ferait
+    // remonter le clavier sur les forfaits qu'on vient de rendre visibles.
+    if (!auDoigt()) champ.focus();
+    rendreResultats();
+    majSuggestions();
+  });
   $('btn-tout-effacer').addEventListener('click', toutEffacer);
   $('tri').addEventListener('change', rendreResultats);
-  $('btn-compact').addEventListener('click', () => {
-    appareil.compact = !appareil.compact;
-    sauverAppareil();
-    etatUi.ouvertes.clear();
-    rendreResultats();
-  });
   $('btn-ajouter').addEventListener('click', () => ouvrirFormulaire(null));
   $('btn-importer').addEventListener('click', lancerImport);
   $('btn-menu').addEventListener('click', ouvrirMenu);
@@ -3908,7 +3970,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   setInterval(rendreBandeaux, 3600000); // toutes les heures
 
   rafraichir();
-  if (window.matchMedia('(pointer: fine)').matches) champ.focus(); // PC : on peut taper tout de suite
+  if (!auDoigt()) champ.focus(); // PC : on peut taper tout de suite (un PC à dalle tactile dit « coarse » : il en était privé)
 
   // Mise à jour automatique : un lien d'appairage dans l'adresse d'abord, puis à l'ouverture, au
   // retour sur la page, au retour du réseau, et toutes les 5 minutes tant que la page est affichée.

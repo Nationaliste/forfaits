@@ -24,3 +24,6 @@ cloud/wrangler.toml
 cloud/.dev.vars
 cloud/node_modules/
 cloud/.wrangler/
+
+# Rapports d'agents : ils citent du code et des constats, et ce dépôt est public
+.claude/reports/

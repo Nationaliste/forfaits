@@ -50,9 +50,9 @@ Carte repliée (le réglage par défaut) : le nom n'a que **171 px** sur les 341
 bloc prix prend les 170 autres. Mesuré : **36 caractères passent, 40 sont coupés** (je n'ai pas
 mesuré entre les deux). Le badge EXEMPLE n'y change rien : la largeur vient du prix.
 
-Ton fichier de saisie (34 lignes, mesuré sur le `.csv` de ton dossier, longueurs seulement) :
-désignation la plus courte 19, médiane 33, moyenne 36, **la plus longue 62 caractères**, et
-**11 désignations sur 34 dépassent 40 caractères** (21 dépassent 28). Donc **au moins un tiers de
+Ton fichier de saisie (mesuré sur le `.csv` de ton dossier, longueurs seulement, aucun contenu) :
+la désignation médiane fait une trentaine de caractères, **la plus longue une soixantaine**, et
+**près d'un tiers dépassent 40 caractères**. Donc **au moins un tiers de
 tes forfaits s'affichent avec un nom coupé**, alors que c'est au nom que les techniciens les
 reconnaissent.
 
@@ -118,7 +118,7 @@ données**, aucun nouveau fichier, aucune dépendance.
 |---|---|---|
 | Forfaits entiers, au repos, 375 × 812 | 2 | **5** |
 | Forfaits entiers pendant la frappe (~450 px) | 0 | **2** |
-| Désignations coupées (sur tes 34) | au moins 11 | **0** |
+| Désignations coupées | près d'un tiers | **0** |
 | Cibles sous 44 px | 2 | 0 |
 | Survol collé après un appui | oui | non |
 
@@ -231,7 +231,7 @@ Scripts jetables du jour (dossier temporaire de la session, non versionnés) :
 
 Quatre points du plan étaient faux. Les corrections viennent de mesures faites sur Chromium, WebKit
 (moteur des iPhone) et Firefox, en 375 × 812 avec un écran tactile — et, pour le quatrième, sur ce
-PC Windows, qui a une dalle tactile *et* une souris.
+PC Windows, à dalle tactile *et* souris.
 
 ### a. Le repli des filtres sur le *focus* avalait l'appui suivant
 
@@ -274,7 +274,7 @@ supprimée, ce qui ne disait plus que le prix affiché était le TTC.
 ### d. « Écran tactile » n'existe pas : la requête média répondait tactile sur un PC
 
 Le plan reposait sur `@media (hover: none)` et `@media (pointer: coarse)` pour dire « on est au
-doigt ». **Mesuré sur ce PC** (Windows, souris branchée, dalle tactile) : Firefox répond
+doigt ». **Mesuré** (Windows, PC à dalle tactile, souris branchée) : Firefox répond
 `pointer: coarse` et `hover: none`, Chrome aussi quand il tourne avec son interface. Autrement dit,
 livré tel quel, le plan aurait **supprimé le survol** et **replié les filtres en tapant** sur un PC
 à écran tactile — l'inverse du but. Et il n'aurait rien fait pour le vrai problème de ces appareils
@@ -305,13 +305,32 @@ tactile, le champ de recherche ne recevait pas le focus à l'ouverture.
 | Cibles sous 44 px | 2 (+2 dans « Derniers consultés ») | **0** |
 | Survol resté allumé après un appui | oui, sur les 3 moteurs | **non, sur les 3 moteurs** |
 
+### e. Deux défauts trouvés par la relecture, après la mesure
+
+La relecture locale a trouvé deux choses que mes propres mesures avaient manquées. Les deux sont
+corrigées, et chacune a maintenant son test.
+
+**Le nouveau défaut « rangée repliée » n'atteignait aucun appareil déjà en service.** La fonction qui
+enregistre les réglages réécrit **tout** l'objet, donc un téléphone qui s'était servi de l'outil avait
+déjà l'ancien défaut écrit en clair dans son navigateur. Changer la lecture ne changeait rien pour
+lui : seul un appareil neuf aurait vu la rangée repliée. Vérifié en ouvrant la version d'avant, puis
+la nouvelle, sur le même navigateur. Corrigé par une **nouvelle clé** (`recentsOuverts`), l'ancienne
+étant ignorée. Re-vérifié de la même façon : la rangée est bien repliée après la mise à jour.
+
+**Sur un appareil hybride, l'appui du doigt était perdu.** Si le repli des filtres suit le geste, le
+geste bascule **au contact** du doigt : la rangée disparaissait pendant l'appui, le contenu montait de
+116 px, et la carte visée ne s'ouvrait pas (reproduit 3 fois sur 3, Chromium et WebKit). C'est
+exactement le défaut du point a, revenu par une autre porte. Corrigé : le repli se décide au moment où
+le champ passe de vide à rempli, puis ne bouge plus. Plus rien ne se déplace entre le doigt qui touche
+et le doigt qui part.
+
 ### Ce que je n'ai pas pu prouver
 
 - **Aucun vrai téléphone** : tout est émulé. La hauteur réelle du clavier peut différer des 450 px
   retenus (c'est une hypothèse, pas une mesure).
-- **Appareil hybride** (ton PC à dalle tactile) : traité, et c'est le point d qui l'a réglé. Ce qui
-  reste non prouvé : un geste **mélangé** très rapide (le doigt sur l'écran, puis la souris dans la
-  demi-seconde) peut laisser l'affichage sur le geste précédent le temps d'un mouvement de souris.
-  Sans conséquence : rien ne se perd, l'affichage suit au geste suivant.
+- **Appareil hybride** (PC à dalle tactile) : traité au point d. Ce qui reste : une fois la
+  recherche tapée au doigt, la rangée des familles ne revient pas si tu bouges la souris — il
+  faut effacer la recherche. C'est volontaire : si elle suivait le geste, l'appui du doigt
+  suivant la replierait **au contact** et serait perdu (mesuré, puis corrigé — voir le point e).
 - **Tes vraies données** ne sont pas chargées dans l'outil : les longueurs viennent de ton tableau,
   les textes affichés sont ceux, inventés, des exemples.

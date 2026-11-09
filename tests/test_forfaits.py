@@ -1517,7 +1517,20 @@ def test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme(appareils):
     expect(bouton).to_have_attribute("aria-expanded", "true")
     assert page.evaluate(haut_premiere_carte) > haut_replie  # ouverte, la rangée pousse les forfaits
 
+    # Un appareil déjà en service avait enregistré l'ancien réglage (rangée dépliée) : il ne doit
+    # pas le garder. `sauverAppareil()` réécrit tout l'objet, donc l'ancienne clé était déjà là.
+    page.evaluate(
+        "() => { const c = ['forfaits', 'appareil', 'v1'].join('.');"
+        " const r = JSON.parse(localStorage.getItem(c));"
+        " delete r.recentsOuverts; r.recentsPlies = false;"
+        " localStorage.setItem(c, JSON.stringify(r)); }"
+    )
+    page.reload()
+    page.wait_for_selector("#resultats .carte")
+    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "false")
+
     # Réglage de cet appareil : il tient au rechargement, et on peut la refermer.
+    page.locator("#btn-recents").click()
     page.reload()
     page.wait_for_selector("#resultats .carte")
     expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "true")
@@ -2190,14 +2203,25 @@ def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur
     chercher(pc, "3Q")
     expect(pc.locator("#filtres")).to_be_visible()
 
-    # Appareil hybride (dalle tactile + souris) : la souris qui bouge ramène la rangée, sans
-    # attendre un clic. Pas vérifiable sous Firefox : dès que Playwright allume l'émulation
-    # tactile, son Firefox n'envoie plus aucun événement de pointeur pour la souris (mesuré) ;
-    # hors émulation, le vrai Firefox envoie bien « pointermove: mouse ».
+    # Appareil hybride (dalle tactile + souris) : une fois la recherche tapée au doigt, la rangée
+    # NE revient PAS si la souris bouge. Elle reviendrait sous le curseur, et surtout : si elle
+    # suivait le geste, l'appui du doigt suivant la replierait AU CONTACT, le contenu monterait
+    # de 116 px et l'appui serait perdu (mesuré sur Chromium et WebKit).
+    # Pas vérifiable sous Firefox : dès que Playwright allume l'émulation tactile, son Firefox
+    # n'envoie plus aucun événement de pointeur pour la souris ; le vrai Firefox, si.
     if navigateur.nom != "firefox":
         page.tap("#recherche")
         page.keyboard.type("3Q")
         expect(rangee).to_be_hidden()
         page.mouse.move(180, 400)
         assert page.evaluate("document.documentElement.dataset.geste") == "souris"
-        expect(rangee).to_be_visible()
+        expect(rangee).to_be_hidden()
+        # Et l'appui du doigt au même endroit ouvre bien la carte visée : rien n'a bougé.
+        # Une poignée, pas un locator : « [aria-expanded=false] » désignerait une autre carte
+        # une fois celle-ci ouverte.
+        cible = page.locator('.carte-ouvrir[aria-expanded="false"]').first.element_handle()
+        boite = cible.bounding_box()
+        page.touchscreen.tap(boite["x"] + boite["width"] / 2, boite["y"] + boite["height"] / 2)
+        page.wait_for_function(
+            "(b) => b.getAttribute('aria-expanded') === 'true'", arg=cible, timeout=3000
+        )

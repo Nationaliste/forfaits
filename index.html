@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-WG9BBw1h+DUmNuaO/+EPWvk0NRSlBBhnRXe7yv4t9rA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-goxObEJR7gins/iSYL7gudYQzCdT/+PqEdy1Pe5DNiQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -245,8 +245,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
    focus, la rangée revenait entre le doigt qui touche et le doigt qui part, le contenu
    redescendait de 116 px et l'appui sur la carte était perdu (mesuré sur les 3 moteurs).
    La croix du champ efface le texte : la rangée revient, et elle est au-dessus, donc rien ne bouge
-   sous le doigt. Un navigateur sans « :has() » garde simplement la rangée. */
-:where(html[data-geste=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres { display: none; }
+   sous le doigt. Un navigateur sans « :has() » garde simplement la rangée.
+   `data-recherche` et non `data-geste` : voir `rendreResultats`. */
+:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres { display: none; }
 /* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) couperait sinon le mot
    nulle part et ferait défiler toute la page en largeur : 24 caractères y suffisent sur un
    téléphone. L'étiquette et le bouton de filtre portent tous deux ce nom. */
@@ -923,7 +924,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsPlies: true, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsOuverts: false, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -948,7 +949,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
         texte: TAILLES.some((t) => t.valeur === lu.texte) ? lu.texte : 'normal',
         compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
-        recentsPlies: lu.recentsPlies !== false, // vrai = repliée ; repliée tant que l'appareil n'a rien choisi : la place va aux forfaits
+        // Repliée tant que CET appareil ne l'a pas ouverte : la place va aux forfaits. Nouvelle
+        // clé, et l'ancienne (`recentsPlies`) est ignorée exprès : `sauverAppareil()` réécrit
+        // tout l'objet, donc tout appareil déjà en service avait déjà enregistré l'ancien
+        // défaut — le relire aurait gardé la rangée dépliée partout.
+        recentsOuverts: lu.recentsOuverts === true,
       };
     } catch {
       return defaut;
@@ -1414,7 +1419,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // à l'écran (la liste complète est longue, celui qu'on vient de regarder revient souvent).
   // Le titre replie la rangée pour rendre la place aux forfaits : réglage de cet appareil.
   function rangeeRecents(liste) {
-    const plies = appareil.recentsPlies;
+    const plies = !appareil.recentsOuverts;
     const pastilles = h('div', { class: 'recents-liste', hidden: plies },
       ...liste.map((f) => h('button', {
         type: 'button', class: 'recent', title: f.designation || f.ref,
@@ -1430,8 +1435,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         type: 'button', class: 'recents-titre', id: 'btn-recents',
         'aria-expanded': String(!plies),
         onclick: (ev) => {
-          const plie = !appareil.recentsPlies;
-          appareil.recentsPlies = plie;
+          const plie = appareil.recentsOuverts;
+          appareil.recentsOuverts = !plie;
           sauverAppareil();
           // Tout de suite, sans tout redessiner : la rangée est au-dessus des forfaits, on voit la place rendue.
           ev.currentTarget.setAttribute('aria-expanded', String(!plie));
@@ -1444,6 +1449,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreResultats() {
     const texte = $('recherche').value;
+    // Le repli de la rangée des familles se décide au moment où le champ passe de vide à rempli,
+    // puis ne bouge plus. S'il suivait `data-geste`, un appui du doigt après un mouvement de
+    // souris replierait la rangée AU CONTACT : le contenu monterait de 116 px et l'appui serait
+    // perdu (mesuré sur Chromium et WebKit). Rien ne doit bouger entre le doigt qui touche et le
+    // doigt qui part.
+    if (!texte.trim()) racine.removeAttribute('data-recherche');
+    else if (!racine.dataset.recherche) racine.dataset.recherche = auDoigt() ? 'doigt' : 'souris';
     const analyse = analyserRecherche(texte);
     const total = index.forfaits.length;
     const resultats = index.forfaits.filter((f) => correspond(f, analyse.contraintes));

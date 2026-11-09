@@ -49,7 +49,13 @@
 - Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (3e partie : la souris qui bouge ramène la rangée).
 
 ## 2026-11-09 — Appui avalé quand le contenu bouge entre le doigt qui touche et le doigt qui part
-- Où : `index.html`, repli de la rangée des familles (`.zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres`).
+- Où : `index.html`, repli de la rangée des familles (`:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres`).
 - Bug : replier la rangée sur le **focus** du champ la faisait revenir dès que le doigt touchait une carte ; le contenu redescendait de 116 px et plus aucune carte ne s'ouvrait (mesuré sur les 3 moteurs).
 - À garder : le déclencheur est le TEXTE du champ, jamais son focus ni un événement de pointeur. Plus généralement : rien qui déplace le contenu ne doit réagir au focus ou au `touchstart`.
 - Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (l'appui sur une carte reste pris).
+
+## 2026-11-09 — Nouveau défaut d'un réglage d'appareil jamais appliqué aux appareils en service
+- Où : `index.html`, `chargerAppareil` et `sauverAppareil` (réglage `recentsOuverts`).
+- Bug : la rangée « Derniers consultés » devait devenir repliée par défaut. La lecture faisait `lu.recentsPlies !== false`, mais `sauverAppareil()` réécrit TOUT l'objet `appareil` : un appareil déjà en service avait déjà `recentsPlies: false` enregistré en clair, donc il gardait l'ancien défaut (vérifié en ouvrant l'ancienne version puis la nouvelle sur le même navigateur). Seul un appareil neuf voyait le changement.
+- À garder : changer un défaut de `forfaits.appareil.v1` demande une NOUVELLE clé, jamais une lecture inversée. Ici `recentsPlies` est devenue `recentsOuverts` (sens inverse) et l'ancienne clé est ignorée.
+- Test : `test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme` (il injecte l'ancienne forme enregistrée avant de recharger).

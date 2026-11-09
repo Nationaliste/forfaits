@@ -1768,6 +1768,30 @@ def test_empreinte_de_securite_a_jour():
     assert f"script-src 'sha256-{empreinte}'" in html, "Lance : python outils/csp.py"
 
 
+def test_aucune_regle_de_survol_sans_le_garde_du_geste():
+    """Une règle `:hover` nue reste allumée après un appui du doigt (mesuré sur les 3 moteurs).
+
+    Les tests de navigateur ne rattrapent pas ça : ils liraient le survol d'une règle précise, pas
+    celle qu'on ajoutera dans six mois. On lit donc la feuille elle-même.
+    """
+    lignes = (RACINE / "index.html").read_text(encoding="utf-8").splitlines()
+    nues = [
+        f"{n}: {ligne.strip()}"
+        for n, ligne in enumerate(lignes, 1)
+        if ":hover" in ligne
+        and not ligne.strip().startswith(("/*", "*", "//"))
+        and ":where(html[data-geste=souris])" not in ligne
+    ]
+    assert not nues, "Règle(s) de survol sans le garde du geste : " + " | ".join(nues)
+
+    # Et aucune requête média ne doit décider du geste : sur un PC à dalle tactile, Firefox et
+    # Chrome répondent « pointer: coarse » et « hover: none » même avec une souris branchée.
+    html = (RACINE / "index.html").read_text(encoding="utf-8")
+    assert not re.findall(r"@media[^{]*(?:hover|any-hover|pointer)\s*:", html), (
+        "Une requête média décide du geste : voir le CLAUDE.md du projet"
+    )
+
+
 def test_icones_et_manifeste():
     manifeste = json.loads((RACINE / "manifest.webmanifest").read_text(encoding="utf-8"))
     for icone in manifeste["icons"]:

@@ -15,3 +15,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+
+# Rapports d'agents : ils citent du code et des constats, et ce dépôt est public
+.claude/reports/

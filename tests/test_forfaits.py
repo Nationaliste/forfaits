@@ -1495,6 +1495,58 @@ def test_telephone_tourne_garde_les_forfaits_visibles(navigateur, appareils):
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
 
 
+def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navigateur, appareils):
+    """Mode modification, rappel d'export et total à la fois : à eux trois ils couvraient tout le bas d'un téléphone."""
+    page = appareils(compact=True, viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "R-1", "100", "120")  # une modification à exporter : le rappel apparaît
+    premiere = page.locator("#resultats .carte").first
+    premiere.locator(".carte-ouvrir").click()
+    premiere.locator(".btn-total").click()
+    premiere.locator(".carte-ouvrir").click()
+    page.evaluate("window.scrollTo(0, 0)")
+    rappel, total, ajouter = page.locator("#rappel"), page.locator("#barre-total"), page.locator("#btn-ajouter")
+    expect(rappel).to_contain_text("1 modification pas encore exportée")
+    expect(page.locator(".rappel-suite")).to_be_hidden()  # la consigne de rangement est redite par la fenêtre d'export
+    assert rappel.bounding_box()["height"] <= 72, rappel.bounding_box()  # une ligne : il en prenait deux, 128 px
+    assert rappel.bounding_box()["y"] + rappel.bounding_box()["height"] <= total.bounding_box()["y"]
+    # « + » reste sur la ligne du compteur (il passait dessous : 58 px de plus), et garde son nom.
+    assert abs(ajouter.bounding_box()["y"] - page.locator("#compte").bounding_box()["y"]) < 30
+    assert ajouter.bounding_box()["width"] <= 60
+    expect(ajouter).to_have_accessible_name(re.compile("Ajouter un forfait"))
+    expect(page.get_by_role("combobox", name="Trier")).to_have_count(1)  # le mot est caché à l'écran, pas son nom
+    assert page.locator(".tri-mot").bounding_box()["width"] <= 2
+    carte = premiere.bounding_box()
+    assert carte["y"] + carte["height"] <= rappel.bounding_box()["y"], (carte, rappel.bounding_box())  # un forfait entier
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
+    CAPTURES.mkdir(exist_ok=True)
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-9-responsable.png")
+
+    # Texte en « Très grand » : rien ne déborde, et les deux barres du bas ne se chevauchent pas.
+    cle = ".".join(["forfaits", "appareil", "v1"])
+    page.evaluate(
+        "cle => localStorage.setItem(cle, JSON.stringify({ ...JSON.parse(localStorage.getItem(cle)), texte: 'tres-grand' }))", cle
+    )
+    page.reload()
+    assert page.evaluate("document.documentElement.scrollWidth") <= 375
+    assert rappel.bounding_box()["y"] + rappel.bounding_box()["height"] <= total.bounding_box()["y"] + 1
+    assert ajouter.bounding_box()["x"] + ajouter.bounding_box()["width"] <= 375
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-9-responsable-tres-grand.png")
+
+    # Entre deux (grand téléphone) : le bouton entier repassait sous le compteur jusqu'à 519 px de large.
+    page.set_viewport_size({"width": 480, "height": 812})
+    assert abs(ajouter.bounding_box()["y"] - page.locator("#compte").bounding_box()["y"]) < 30
+
+    # Sur un grand écran, rien ne change : la consigne et le bouton sont entiers.
+    page.set_viewport_size({"width": 1280, "height": 800})
+    expect(rappel).to_contain_text("exporte et range le fichier dans OneDrive")
+    expect(page.locator(".rappel-suite")).to_be_visible()
+    assert ajouter.bounding_box()["width"] > 150
+    assert ajouter.evaluate("b => getComputedStyle(b).columnGap") == "0px"  # pas d'écart ajouté entre « + » et le texte
+    assert page.locator(".tri-mot").bounding_box()["width"] > 20
+
+
 def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
     """La liste est longue : le forfait regardé il y a deux minutes revient en haut, en un appui."""
     page = appareils(compact=True, viewport={"width": 375, "height": 812}).page

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-wWY0yFiNFZajp4N9ogOwxO3l1obDAVy7xMBpr07IFms='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-R08EQprrE/rBH+HnjXsysmzfMqz3oh+PqLrPSKIA/mQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -274,6 +274,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+#btn-ajouter { gap: 0; } /* « + » et son texte sont deux morceaux (le texte se cache sur téléphone) : pas d'écart entre eux */
 #compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
 .tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
 .tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
@@ -577,6 +578,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
      Boutons un peu plus serrés pour qu'ils tiennent souvent sur une seule ligne ; la zone tactile
      de 44 px est gardée par min-height. */
   .filtre { padding: 8px 12px; font-size: 15px; }
+  /* Le rappel d'export tient sur une ligne. Sur deux, il couvrait 128 px du bas de l'écran : avec le total,
+     plus aucun forfait n'était visible sur le téléphone d'un responsable. La consigne cachée ici est redite
+     par la fenêtre d'export. */
+  .rappel { flex-wrap: nowrap; padding: 8px 8px 8px 14px; }
+  .rappel p { flex: 1 1 0; min-width: 0; line-height: 1.25; }
+  .rappel-suite { display: none; }
+}
+/* En mode modification, « + Ajouter un forfait » passait sous le compteur et prenait 58 px de haut (mesuré de
+   441 à 519 px de large, et en dessous) : il reste sur la même ligne, réduit à « + » (le texte reste lu par les
+   lecteurs d'écran, et le Menu a le bouton entier). Le mot « Trier » laisse sa place de la même façon. */
+@media (max-width: 540px) {
+  .barre-resultats { flex-wrap: nowrap; align-items: flex-start; }
+  .barre-resultats-gauche { flex: 1 1 0; min-width: 0; }
+  #btn-ajouter { flex-shrink: 0; width: var(--tactile); padding: 0; justify-content: center; font-size: 24px; }
+  .btn-ajouter-texte, .tri-mot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (max-width: 440px) {
   .ligne-prix { grid-template-columns: 1fr; }
@@ -642,7 +658,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     <div class="barre-resultats-gauche">
       <p id="compte" aria-live="polite"></p>
       <button type="button" class="btn-lien" id="btn-tout-effacer" title="Effacer la recherche et les filtres" hidden>Tout effacer</button>
-      <label class="tri" id="zone-tri" hidden>Trier
+      <label class="tri" id="zone-tri" hidden><span class="tri-mot">Trier</span>
         <select id="tri" class="champ">
           <option value="ref">par référence</option>
           <option value="prix-croissant">prix croissant</option>
@@ -650,7 +666,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         </select>
       </label>
     </div>
-    <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+ Ajouter un forfait</button>
+    <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+<span class="btn-ajouter-texte">&nbsp;Ajouter un forfait</span></button>
   </div>
   <div class="resultats" id="resultats"></div>
 </main>
@@ -1852,7 +1868,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
     $('rappel').hidden = n === 0 || donneesFutures;  // exporter est refusé sur une page en retard : pas de rappel
-    $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
+    // La consigne est à part : sur un téléphone elle est cachée (CSS), pour que le rappel tienne sur une ligne.
+    $('rappel-texte').replaceChildren(`${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'}`,
+      h('span', { class: 'rappel-suite' }, ' : exporte et range le fichier dans OneDrive.'));
   }
 
   /* ---------- Suggestions ---------- */

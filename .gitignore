@@ -16,5 +16,11 @@ __pycache__/
 .ruff_cache/
 .venv/
 
+# Cloud de synchro : le nom reel du Worker ne va jamais dans le depot public.
+cloud/wrangler.toml
+cloud/.dev.vars
+cloud/node_modules/
+cloud/.wrangler/
+
 # Rapports d'agents : ils citent du code et des constats, et ce dépôt est public
 .claude/reports/

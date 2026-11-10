@@ -2358,3 +2358,95 @@ def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur
         page.wait_for_function(
             "(b) => b.getAttribute('aria-expanded') === 'true'", arg=cible, timeout=3000
         )
+
+
+# Ce qu'une version plus récente de l'outil aurait enregistré sur l'appareil : les mêmes données,
+# le numéro de format suivant, et une liste que cette page ne connaît pas.
+VERSION_SUIVANTE = """() => {
+    const cle = 'forfaits.donnees.v1';
+    const d = JSON.parse(localStorage.getItem(cle));
+    d.version += 1;
+    d.packs = [{ id: 'pack-1', nom: 'Pack Kalpo' }];
+    localStorage.setItem(cle, JSON.stringify(d));
+    return localStorage.getItem(cle);
+}"""
+VERSION_DE_LA_PAGE = """() => {
+    const cle = 'forfaits.donnees.v1';
+    const d = JSON.parse(localStorage.getItem(cle));
+    d.version -= 1;
+    localStorage.setItem(cle, JSON.stringify(d));
+}"""
+STOCKAGE = "localStorage.getItem('forfaits.donnees.v1')"
+COPIES_DE_COTE = "Object.keys(localStorage).filter((cle) => cle.includes('.illisible.'))"
+
+
+def _un_vrai_forfait(page):
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "VRAI-1", "100", "120")
+    expect(page.locator("#toast")).to_contain_text("VRAI-1 ajouté")
+
+
+def _page_en_lecture_seule(page):
+    expect(page.locator("#bandeaux")).to_contain_text("ancienne version de l'outil")
+    expect(page.locator("#btn-recharger-futur")).to_be_visible()
+    expect(page.locator("#resultats .carte")).to_have_count(0)  # ni les exemples, ni des forfaits lus à moitié
+    expect(page.locator("#resultats")).to_contain_text("cette page doit être rechargée")
+    expect(page.locator("#etat-donnees")).to_have_text("Outil à mettre à jour")
+    expect(page.locator("dialog[open]")).to_have_count(0)  # une fenêtre restée ouverte cacherait le message
+    expect(page.locator("#rappel")).to_be_hidden()  # « exporte » : impossible ici, donc pas réclamé
+    assert page.evaluate(COPIES_DE_COTE) == []  # ces données ne sont pas abîmées : rien à mettre de côté
+
+
+def test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees(page):
+    """Prises pour des données abîmées, elles laissaient la place aux exemples, et le premier enregistrement les écrasait."""
+    _un_vrai_forfait(page)
+    ecrit = page.evaluate(VERSION_SUIVANTE)
+    page.reload()
+    _page_en_lecture_seule(page)
+
+    # Rien de ce qui écrit les données ou fabrique un fichier ne s'ouvre.
+    expect(page.locator("#btn-ajouter")).to_be_hidden()
+    for bouton in ("Importer", "+ Ajouter un forfait", "Listes des éléments", "Exporter"):
+        page.click("#btn-menu")
+        dialogue(page).get_by_role("button", name=re.compile("^" + re.escape(bouton))).click()
+        expect(page.locator("#toast")).to_contain_text("recharge la page")
+        expect(page.locator("dialog[open]")).to_have_count(0)
+    assert page.evaluate(STOCKAGE) == ecrit
+
+    # « Recharger » sans page plus récente à servir : même écran, données toujours intactes.
+    with page.expect_navigation():
+        page.click("#btn-recharger-futur")
+    _page_en_lecture_seule(page)
+    assert page.evaluate(STOCKAGE) == ecrit
+
+    # Une page qui sait lire ce format retrouve tout (ici : le format de cette page, remis à la main).
+    page.evaluate(VERSION_DE_LA_PAGE)
+    page.reload()
+    expect(page.locator("#btn-recharger-futur")).to_have_count(0)
+    chercher(page, "VRAI-1")
+    assert refs(page) == {"VRAI-1"}
+
+
+def test_enregistrement_refuse_quand_une_version_plus_recente_est_passee_entre_temps(page):
+    """Un onglet endormi n'a pas su qu'un onglet à jour avait réécrit les données : il ne doit pas les écraser."""
+    _un_vrai_forfait(page)
+    ouvrir_ajout(page)
+    ecrit = page.evaluate(VERSION_SUIVANTE)  # écrit depuis la page elle-même : aucun événement « storage » ne l'annonce
+    remplir(page, "TROP-TARD", "200", "240")
+    expect(page.locator("#toast")).to_contain_text("recharge la page")
+    _page_en_lecture_seule(page)
+    assert page.evaluate(STOCKAGE) == ecrit
+
+
+def test_onglet_ouvert_prevenu_par_l_onglet_passe_a_une_version_plus_recente(page):
+    _un_vrai_forfait(page)
+    ouvrir_ajout(page)
+    autre = page.context.new_page()
+    try:
+        autre.goto(page.url)
+        ecrit = autre.evaluate(VERSION_SUIVANTE)
+        _page_en_lecture_seule(page)
+        assert page.evaluate(STOCKAGE) == ecrit
+    finally:
+        autre.close()

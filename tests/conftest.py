@@ -2,6 +2,7 @@
 
 import functools
 import http.server
+import io
 import os
 import pathlib
 import socketserver
@@ -22,6 +23,19 @@ class _Serveur(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_args):  # pas de bruit dans la sortie des tests
         pass
 
+    def send_head(self):
+        marque = self.server.marque
+        if marque is None or not self.path.split("?")[0].endswith(("/", "/index.html")):
+            return super().send_head()
+        # La page part avec sa version écrite dedans : un test peut ainsi dire laquelle le service worker a servie.
+        balise = f'<head><meta name="marque" content="{marque["version"]}">'.encode()
+        corps = (RACINE / "index.html").read_bytes().replace(b"<head>", balise, 1)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(corps)))
+        self.end_headers()
+        return io.BytesIO(corps)
+
     def end_headers(self):
         # Sans cela, Firefox recharge la page hors ligne depuis son cache HTTP : le test du service worker ne prouverait rien.
         self.send_header("Cache-Control", "no-store")
@@ -31,11 +45,17 @@ class _Serveur(http.server.SimpleHTTPRequestHandler):
 class _ServeurTcp(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
+    marque = None
 
 
-def demarrer_serveur():
-    """Sert le dossier de l'outil sur http://127.0.0.1:<port libre>/ ; renvoie (adresse, serveur)."""
+def demarrer_serveur(marque=None):
+    """Sert le dossier de l'outil sur http://127.0.0.1:<port libre>/ ; renvoie (adresse, serveur).
+
+    `marque` ({"version": "v1"}, que le test change en cours de route) : la page part avec une balise
+    `<meta name="marque">` qui porte cette version, comme si une nouvelle version venait d'être mise en ligne.
+    """
     serveur = _ServeurTcp(("127.0.0.1", 0), functools.partial(_Serveur, directory=str(RACINE)))
+    serveur.marque = marque
     threading.Thread(target=serveur.serve_forever, daemon=True).start()
     return f"http://127.0.0.1:{serveur.server_address[1]}/", serveur
 

@@ -399,6 +399,20 @@ def test_trier_par_prix(page):
     chercher(page, "")
     assert refs_affichees() == sorted(TOUS)
 
+    page.select_option("#tri", label="prix décroissant")
+    page.reload()  # gardé sur l'appareil
+    expect(page.locator("#tri")).to_have_value("prix-decroissant")
+    assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and len(ttc_affiches()) == len(TOUS)
+
+
+def test_tri_inconnu_dans_les_reglages_revient_aux_references(page):
+    page.evaluate(
+        "cle => localStorage.setItem(cle, JSON.stringify({ tri: 'au-hasard' }))", ".".join(["forfaits", "appareil", "v1"])
+    )
+    page.reload()
+    expect(page.locator("#tri")).to_have_value("ref")
+    assert page.locator("#resultats .carte-ref").all_text_contents() == sorted(TOUS)
+
 
 def test_lecture_des_prix_saisis(page):
     cas = {
@@ -507,6 +521,10 @@ def test_doublon_de_reference_bloque(page):
         ouvrir_ajout(page)
         remplir(page, ref, "100", "120")
         expect(dialogue(page).locator(".msg-erreur")).to_contain_text("existe déjà")
+        expect(dialogue(page).get_by_text("existe déjà")).to_have_count(1)  # un seul message, pas deux l'un sous l'autre
+        page.locator("#f-ref").fill(ref + " ")  # on retape : le contrôle en direct reprend la main, seul lui aussi
+        expect(dialogue(page).locator(".msg-champ")).to_contain_text("existe déjà")
+        expect(dialogue(page).get_by_text("existe déjà")).to_have_count(1)
         dialogue(page).get_by_role("button", name="Annuler").click()
     assert len(refs(page)) == 11
 
@@ -2108,6 +2126,38 @@ def test_element_renomme_en_son_surnom_et_surnom_pris_refuse_au_formulaire(page)
     expect(dialogue(page).locator(".msg-erreur")).to_contain_text("« la 4 » est déjà le surnom de la petite")
 
 
+def test_surnoms_refuses_dans_les_listes_restent_a_corriger(page):
+    activer_modif(page)
+    page.click("#btn-menu")
+    page.click("#btn-listes")
+    d = dialogue(page)
+    champ = d.get_by_label("Surnoms de l'élément 4Q")
+    champ.fill("la petite, T2")  # « T2 » est le nom d'un autre élément
+    champ.press("Tab")
+    expect(d.locator(".msg-erreur")).to_contain_text("« T2 » est déjà le nom de T2")
+    expect(champ).to_have_value("la petite, T2")  # rien à retaper : il suffit d'enlever le surnom refusé
+    expect(champ).to_have_attribute("aria-invalid", "true")
+    champ.fill("la petite")
+    champ.press("Tab")
+    expect(d.locator(".msg-erreur")).to_be_empty()
+    expect(champ).to_have_value("la petite")
+    expect(champ).not_to_have_attribute("aria-invalid", "true")
+
+    # Refusé puis laissé là : au changement suivant, le champ reprend ce qui est enregistré et le message s'en va.
+    champ.fill("la petite, T2")
+    champ.press("Tab")
+    expect(champ).to_have_attribute("aria-invalid", "true")
+    nom = d.get_by_label("Nom de l'élément Zorba 5")
+    nom.fill("Zorba 5 Plus")
+    nom.press("Tab")
+    expect(d.locator(".msg-erreur")).to_be_empty()
+    expect(champ).to_have_value("la petite")
+    expect(champ).not_to_have_attribute("aria-invalid", "true")
+    d.get_by_role("button", name="Terminé").click()
+    chercher(page, "la petite")
+    assert refs(page) == AVEC_4Q
+
+
 def test_trois_surnoms_au_maximum_partout_avec_un_message(page, tmp_path):
     d = surnom_perso_appareil(page, "3Q", "aa, bb, cc, dd")  # perso : rien n'est ajouté en silence
     expect(d.locator(".msg-erreur")).to_contain_text("3 surnoms au maximum")
@@ -2186,9 +2236,12 @@ def test_plus_de_trois_surnoms_d_avant_la_limite_ne_bloquent_rien(page, tmp_path
     page.click("#btn-menu")
     page.click("#btn-listes")
     champ = dialogue(page).get_by_label("Surnoms de l'élément 4Q")
-    champ.fill("qa, qb, qc, qd, qe, qz")  # liste des éléments : l'ajout est refusé et l'ancienne liste revient
+    champ.fill("qa, qb, qc, qd, qe, qz")  # liste des éléments : l'ajout est refusé, la saisie reste là pour être corrigée
     champ.press("Tab")
-    expect(champ).to_have_value("qa, qb, qc, qd, qe")
+    expect(dialogue(page).locator(".msg-erreur")).to_contain_text("3 surnoms au maximum")
+    expect(champ).to_have_value("qa, qb, qc, qd, qe, qz")
+    enregistres = "cle => JSON.parse(localStorage.getItem(cle)).elements.find((e) => e.nom === '4Q').surnoms"
+    assert page.evaluate(enregistres, ".".join(["forfaits", "donnees", "v1"])) == ["qa", "qb", "qc", "qd", "qe"]
     champ.fill("qa, qb, qc, qd")
     champ.press("Tab")
     expect(champ).to_have_value("qa, qb, qc, qd")

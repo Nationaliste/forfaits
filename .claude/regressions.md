@@ -77,3 +77,21 @@
 - Bug : `valider` refuse une `version` supérieure à `VERSION_FORMAT`, et `charger` prenait tout refus pour des données abîmées : copie de côté, exemples à l'écran, puis le premier enregistrement réécrivait la clé avec les exemples. Il suffit d'une page en retard sur les données de l'appareil : deux onglets dont un à jour, un onglet endormi, un site revenu à une ancienne page.
 - À garder : `charger` reconnaît ce cas AVANT tout le reste (`estFutur`, `donneesFutures`) : ni copie de côté, ni exemples, rien d'affiché, un bandeau « Recharger ». `sauver()` relit le stockage juste avant d'écrire et renvoie `false` sans rien écrire : chaque appel s'écrit `if (!sauver()) return;`. Import, export, formulaire et listes commencent par `if (lectureSeule()) return;` (un export fait là serait vide, et effacerait tout une fois importé ailleurs en « Remplacer »).
 - Test : `test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees`, `test_enregistrement_refuse_quand_une_version_plus_recente_est_passee_entre_temps` et `test_onglet_ouvert_prevenu_par_l_onglet_passe_a_une_version_plus_recente`.
+
+## 2026-11-10 — Référence en double : deux messages l'un sous l'autre
+- Où : `index.html`, `ouvrirFormulaire` (`verifierRef`, `msgRef` et `msgErreur`).
+- Bug : à l'enregistrement d'une référence déjà prise, le refus (`msgErreur`) venait se poser sous le champ, juste sous le contrôle en direct (`msgRef`) qui disait déjà la même chose.
+- À garder : un seul message sous la référence. Au refus, `msgRef` est vidé ; dès que la référence est retapée, c'est `msgErreur` qui est vidé et le contrôle en direct reprend la main. Les deux textes viennent de `dejaPrise()`.
+- Test : `test_doublon_de_reference_bloque`.
+
+## 2026-11-10 — Listes des éléments : un surnom refusé vidait la saisie, et le message restait
+- Où : `index.html`, `ouvrirListes` (`signaler`, `changer`).
+- Bug : un seul surnom refusé parmi plusieurs remettait tout le champ à l'ancienne valeur (les surnoms valables étaient à retaper), et le message d'erreur restait affiché après l'action suivante, alors qu'il ne parlait plus de rien.
+- À garder : la saisie refusée reste dans son champ, marqué `aria-invalid` (bordure rouge) ; rien n'est enregistré. `changer()` appelle `signaler('')` : au changement suivant qui réussit, le champ reprend ce qui est enregistré et le message s'en va. Les boutons « Supprimer » n'effacent pas le message eux-mêmes (un refus jamais vu disparaîtrait au clic).
+- Test : `test_surnoms_refuses_dans_les_listes_restent_a_corriger` et `test_plus_de_trois_surnoms_d_avant_la_limite_ne_bloquent_rien`.
+
+## 2026-11-10 — Tri perdu à chaque rechargement
+- Où : `index.html`, `chargerAppareil`, `rendreResultats` et l'écouteur de `#tri`.
+- Bug : le tri n'existait que dans la liste `#tri` de la page : rechargée, elle revenait à « par référence ».
+- À garder : le tri est un réglage de l'appareil (`tri` dans `forfaits.appareil.v1`, jamais exporté). `rendreResultats` lit `appareil.tri` et y aligne la liste ; une valeur inconnue revient à `ref`.
+- Test : `test_trier_par_prix` et `test_tri_inconnu_dans_les_reglages_revient_aux_references`.

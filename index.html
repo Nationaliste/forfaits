@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-xufZywslSbvLLYq8ewANg4oHqRhKOwUh1QXtaXyvTH8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-rH5cUs3jyMwWXS+d/9tW6QYKiL8sr6lLL4R37eHUPkE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -511,6 +511,7 @@ body.avec-total main { padding-bottom: 230px; }
 :where(html[data-geste=souris]) .champ:hover { border-color: var(--texte-doux); }
 .champ:focus { border-color: var(--rouge-vif); box-shadow: 0 0 0 3px var(--rouge-voile); outline: none; }
 .champ::placeholder { color: var(--texte-pale); opacity: 1; }
+.champ[aria-invalid="true"] { border-color: var(--rouge-vif); } /* saisie refusée, laissée là pour être corrigée */
 textarea.champ { resize: vertical; min-height: 90px; }
 .ligne-prix { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .grille-familles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
@@ -995,7 +996,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsOuverts: false, favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsOuverts: false, tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -1025,6 +1026,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
         // tout l'objet, donc tout appareil déjà en service avait déjà enregistré l'ancien
         // défaut — le relire aurait gardé la rangée dépliée partout.
         recentsOuverts: lu.recentsOuverts === true,
+        // Tri choisi sur cet appareil : une des valeurs de la liste « Trier », sinon l'ordre des références.
+        tri: [...$('tri').options].some((o) => o.value === lu.tri) ? lu.tri : 'ref',
       };
     } catch {
       return defaut;
@@ -1570,7 +1573,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const tape = analyse.mots.join('');
     // Une référence tapée en entier passe en premier, puis les favoris, l'ordre choisi, les plus copiés
     // (références dans l'ordre alphabétique par défaut).
-    const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[$('tri').value] || 0;
+    $('tri').value = appareil.tri; // le tri est un réglage de l'appareil : la liste le suit (rechargement, autre onglet)
+    const sens = { 'prix-croissant': 1, 'prix-decroissant': -1 }[appareil.tri] || 0;
     const favori = (f) => Number(appareil.favoris.includes(f.id));
     const usage = (f) => appareil.usageForfaits[f.id] || 0;
     const classer = (liste) => liste.sort((a, b) => Number(norm(b.ref) === tape) - Number(norm(a.ref) === tape) || favori(b) - favori(a)
@@ -2068,16 +2072,20 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const msgErreur = h('p', { class: 'msg-erreur', role: 'alert' });
 
     // Contrôle de la référence pendant la frappe.
+    const dejaPrise = (doublon) => `Cette référence existe déjà${doublon.designation ? ' : ' + doublon.designation : ''}.`;
     const verifierRef = () => {
       const ref = champRef.value.trim();
       const doublon = ref ? index.forfaits.find((f) => autre(f) && memeRef(f.ref, ref)) : null;
       const proche = ref && !doublon ? index.forfaits.find((f) => autre(f) && norm(f.ref) === norm(ref)) : null;
       msgRef.className = 'msg-champ' + (doublon ? ' erreur' : proche ? ' attention' : '');
-      msgRef.textContent = doublon ? `Cette référence existe déjà${doublon.designation ? ' : ' + doublon.designation : ''}.`
-        : proche ? `Ressemble à la référence existante ${proche.ref}.` : '';
+      msgRef.textContent = doublon ? dejaPrise(doublon) : proche ? `Ressemble à la référence existante ${proche.ref}.` : '';
       return { doublon, proche };
     };
-    champRef.addEventListener('input', verifierRef);
+    champRef.addEventListener('input', () => {
+      // La référence change : le refus posé sous elle à l'enregistrement ne vaut plus, le contrôle en direct reprend la main.
+      if (msgErreur.parentElement === champRef.parentElement) msgErreur.textContent = '';
+      verifierRef();
+    });
 
     const enregistrer = async () => {
       const { doublon, proche } = verifierRef();
@@ -2089,13 +2097,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const ajoutes = nouveaux(surnoms, existant?.surnoms);
       const surnomPris = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
       const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
-        : doublon ? ['Cette référence existe déjà : choisis-en une autre.', champRef]
+        : doublon ? [`${dejaPrise(doublon)} Choisis-en une autre.`, champRef]
         : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
         : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
         : surnomPris ? [surnomPris, champSurnoms]
         : ['', null];
       msgErreur.textContent = probleme;
       if (probleme) {
+        if (champFautif === champRef) msgRef.textContent = ''; // un seul message sous la référence : le refus dit déjà tout
         champFautif.closest('.champ-groupe')?.append(msgErreur); // le message apparaît sous le champ à corriger, pas en bas du formulaire
         champFautif.focus();
         return;
@@ -2205,10 +2214,23 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (lectureSeule()) return;
     const message = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const conteneur = h('div', {});
-    const signaler = (texte) => { message.textContent = texte; };
+    // Des surnoms refusés restent dans leur champ, marqué, pour être corrigés sans tout retaper. Au changement suivant
+    // qui réussit (ou au refus suivant, ailleurs), le champ reprend ce qui est enregistré et le message s'en va avec lui :
+    // il ne parlerait plus de rien.
+    let refuse = null;
+    const signaler = (texte, champ = null, enregistre = '') => {
+      message.textContent = texte;
+      if (refuse) {
+        refuse.champ.removeAttribute('aria-invalid');
+        if (refuse.champ !== champ) refuse.champ.value = refuse.enregistre;
+      }
+      refuse = texte && champ ? { champ, enregistre } : null;
+      if (refuse) champ.setAttribute('aria-invalid', 'true');
+    };
     // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
     const changer = (redessinerAussi = true) => {
       if (!sauver()) return;
+      signaler('');
       noterModif();
       if (redessinerAussi) redessiner(); else index = construireIndex();
     };
@@ -2290,8 +2312,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
             const ajoutes = nouveaux(surnoms, courant.surnoms);
             const refus = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, e.id, true)).find(Boolean);
             if (refus) {
-              signaler(refus);
-              champSurnoms.value = (courant.surnoms || []).join(', ');
+              signaler(refus, champSurnoms, (courant.surnoms || []).join(', '));
               return;
             }
             signaler('');
@@ -4036,7 +4057,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
     majSuggestions();
   });
   $('btn-tout-effacer').addEventListener('click', toutEffacer);
-  $('tri').addEventListener('change', rendreResultats);
+  $('tri').addEventListener('change', () => {
+    appareil.tri = $('tri').value;
+    sauverAppareil();
+    rendreResultats();
+  });
   $('btn-ajouter').addEventListener('click', () => ouvrirFormulaire(null));
   $('btn-importer').addEventListener('click', lancerImport);
   $('btn-menu').addEventListener('click', ouvrirMenu);

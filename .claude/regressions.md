@@ -95,6 +95,12 @@
 - À garder : une copie se range ET se relit sous `cle(requete)` (adresse sans paramètres ni ancre), dans `CACHE` seulement — jamais `ignoreSearch`, jamais `caches.match` global. Pour débloquer des appareils déjà touchés, le nom de `CACHE` change (`forfaits-v2`) : l'activation jette l'ancienne copie.
 - Test : `test_adresse_a_parametres_ne_fige_pas_la_page` et `test_ancienne_copie_jetee_quand_son_nom_change`.
 
+## 2026-11-10 — Bandeau « nouvelle version » absent quand la page vient d'être demandée
+- Où : `sw.js`, `ranger`.
+- Bug : `ranger` prévenait les onglets de `clients.matchAll()` dès la copie fraîche rangée. L'onglet qui venait de demander la page n'y était pas encore (liste vide, ou seulement la page qu'il remplace) : il affichait l'ancienne copie sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante. Mesuré sur Edge entre 1 fois sur 10 et 1 fois sur 5 (3 sur 30, 5 sur 25), et à chaque fois dès que la page arrive 150 ms plus tard : sur Chromium, Edge et Firefox par le test, sur WebKit par une mesure à la main.
+- À garder : `ranger` reçoit `ev.resultingClientId` et, si cet onglet n'était pas dans la liste, le redemande par `clients.get()` toutes les 100 ms (3 s au plus) avant de lui écrire. La boucle est nécessaire : Firefox répond « rien » sans attendre que l'onglet existe.
+- Test : `test_nouvelle_version_proposee_a_la_page_qui_vient_d_etre_demandee` (le serveur de test sert `sw.js` avec un retard posé après la lecture de la copie gardée, `page_lente`).
+
 ## 2026-11-10 — Données d'une version plus récente prises pour des données abîmées, puis écrasées
 - Où : `index.html`, `charger`, `sauver` et l'écouteur `storage`.
 - Bug : `valider` refuse une `version` supérieure à `VERSION_FORMAT`, et `charger` prenait tout refus pour des données abîmées : copie de côté, exemples à l'écran, puis le premier enregistrement réécrivait la clé avec les exemples. Il suffit d'une page en retard sur les données de l'appareil : deux onglets dont un à jour, un onglet endormi, un site revenu à une ancienne page.
@@ -106,3 +112,21 @@
 - Bug (vu à la fusion de la lecture seule dans la branche de la synchro, jamais mis en ligne) : une page en retard a des listes vides en mémoire ; responsable avec un envoi en attente, elle les envoyait au cloud, et les appareils de consultation, qui prennent tout du cloud, se vidaient. Les `sauver()` de la synchro ignoraient aussi le refus d'écrire : version du cloud notée comme lue alors que rien n'était enregistré.
 - À garder : `uneSynchro` sort par `pageEnRetard()` au début, après la lecture (sans noter `c.version`) et juste avant l'envoi ; chaque `sauver()` de la synchro s'écrit `if (!sauver()) …return` ; `retirerCetAppareil` efface les forfaits AVANT de couper le lien au cloud ; `ouvrirMaj` et le lien d'appairage commencent par `lectureSeule()`.
 - Test : `test_une_page_en_retard_ne_touche_pas_au_cloud` (tests/test_synchro.py, variantes « prevenue » et « endormie »).
+
+## 2026-11-10 — Référence en double : deux messages l'un sous l'autre
+- Où : `index.html`, `ouvrirFormulaire` (`verifierRef`, `msgRef` et `msgErreur`).
+- Bug : à l'enregistrement d'une référence déjà prise, le refus (`msgErreur`) venait se poser sous le champ, juste sous le contrôle en direct (`msgRef`) qui disait déjà la même chose.
+- À garder : un seul message sous la référence. Au refus, `msgRef` est vidé ; dès que la référence est retapée, c'est `msgErreur` qui est vidé et le contrôle en direct reprend la main. Les deux textes viennent de `dejaPrise()`.
+- Test : `test_doublon_de_reference_bloque`.
+
+## 2026-11-10 — Listes des éléments : un surnom refusé vidait la saisie, et le message restait
+- Où : `index.html`, `ouvrirListes` (`signaler`, `changer`).
+- Bug : un seul surnom refusé parmi plusieurs remettait tout le champ à l'ancienne valeur (les surnoms valables étaient à retaper), et le message d'erreur restait affiché après l'action suivante, alors qu'il ne parlait plus de rien.
+- À garder : la saisie refusée reste dans son champ, marqué `aria-invalid` (bordure rouge) ; rien n'est enregistré. `changer()` appelle `signaler('')` : au changement suivant qui réussit, le champ reprend ce qui est enregistré et le message s'en va. Les boutons « Supprimer » n'effacent pas le message eux-mêmes (un refus jamais vu disparaîtrait au clic).
+- Test : `test_surnoms_refuses_dans_les_listes_restent_a_corriger` et `test_plus_de_trois_surnoms_d_avant_la_limite_ne_bloquent_rien`.
+
+## 2026-11-10 — Tri perdu à chaque rechargement
+- Où : `index.html`, `chargerAppareil`, `rendreResultats` et l'écouteur de `#tri`.
+- Bug : le tri n'existait que dans la liste `#tri` de la page : rechargée, elle revenait à « par référence ».
+- À garder : le tri est un réglage de l'appareil (`tri` dans `forfaits.appareil.v1`, jamais exporté). `rendreResultats` lit `appareil.tri` et y aligne la liste ; une valeur inconnue revient à `ref`.
+- Test : `test_trier_par_prix` et `test_tri_inconnu_dans_les_reglages_revient_aux_references`.

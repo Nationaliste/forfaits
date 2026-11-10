@@ -274,6 +274,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
 .barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+#btn-ajouter { gap: 0; } /* « + » et son texte sont deux morceaux (le texte se cache sur téléphone) : pas d'écart entre eux */
 #compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
 .tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
 .tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
@@ -584,16 +585,18 @@ textarea.champ { resize: vertical; min-height: 90px; }
   .rappel p { flex: 1 1 0; min-width: 0; line-height: 1.25; }
   .rappel-suite { display: none; }
 }
-@media (max-width: 440px) {
-  .ligne-prix { grid-template-columns: 1fr; }
-  #recherche { font-size: 18px; }
-  /* En mode modification, « + Ajouter un forfait » passait sous le compteur et prenait 58 px de haut : il reste
-     sur la même ligne, réduit à « + » (le texte reste lu par les lecteurs d'écran, et le Menu a le bouton entier).
-     Le mot « Trier » laisse sa place de la même façon. */
+/* En mode modification, « + Ajouter un forfait » passait sous le compteur et prenait 58 px de haut (mesuré de
+   441 à 519 px de large, et en dessous) : il reste sur la même ligne, réduit à « + » (le texte reste lu par les
+   lecteurs d'écran, et le Menu a le bouton entier). Le mot « Trier » laisse sa place de la même façon. */
+@media (max-width: 540px) {
   .barre-resultats { flex-wrap: nowrap; align-items: flex-start; }
   .barre-resultats-gauche { flex: 1 1 0; min-width: 0; }
   #btn-ajouter { flex-shrink: 0; width: var(--tactile); padding: 0; justify-content: center; font-size: 24px; }
   .btn-ajouter-texte, .tri-mot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 440px) {
+  .ligne-prix { grid-template-columns: 1fr; }
+  #recherche { font-size: 18px; }
 }
 @media (max-width: 400px) {
   .marque-bloc { display: none; }

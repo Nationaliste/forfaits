@@ -1515,6 +1515,8 @@ def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navig
     assert abs(ajouter.bounding_box()["y"] - page.locator("#compte").bounding_box()["y"]) < 30
     assert ajouter.bounding_box()["width"] <= 60
     expect(ajouter).to_have_accessible_name(re.compile("Ajouter un forfait"))
+    expect(page.get_by_role("combobox", name="Trier")).to_have_count(1)  # le mot est caché à l'écran, pas son nom
+    assert page.locator(".tri-mot").bounding_box()["width"] <= 2
     carte = premiere.bounding_box()
     assert carte["y"] + carte["height"] <= rappel.bounding_box()["y"], (carte, rappel.bounding_box())  # un forfait entier
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
@@ -1532,11 +1534,16 @@ def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navig
     assert ajouter.bounding_box()["x"] + ajouter.bounding_box()["width"] <= 375
     page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-9-responsable-tres-grand.png")
 
+    # Entre deux (grand téléphone) : le bouton entier repassait sous le compteur jusqu'à 519 px de large.
+    page.set_viewport_size({"width": 480, "height": 812})
+    assert abs(ajouter.bounding_box()["y"] - page.locator("#compte").bounding_box()["y"]) < 30
+
     # Sur un grand écran, rien ne change : la consigne et le bouton sont entiers.
     page.set_viewport_size({"width": 1280, "height": 800})
     expect(rappel).to_contain_text("exporte et range le fichier dans OneDrive")
     expect(page.locator(".rappel-suite")).to_be_visible()
     assert ajouter.bounding_box()["width"] > 150
+    assert ajouter.evaluate("b => getComputedStyle(b).columnGap") == "0px"  # pas d'écart ajouté entre « + » et le texte
     assert page.locator(".tri-mot").bounding_box()["width"] > 20
 
 

@@ -59,3 +59,9 @@
 - Bug : la rangée « Derniers consultés » devait devenir repliée par défaut. La lecture faisait `lu.recentsPlies !== false`, mais `sauverAppareil()` réécrit TOUT l'objet `appareil` : un appareil déjà en service avait déjà `recentsPlies: false` enregistré en clair, donc il gardait l'ancien défaut (vérifié en ouvrant l'ancienne version puis la nouvelle sur le même navigateur). Seul un appareil neuf voyait le changement.
 - À garder : changer un défaut de `forfaits.appareil.v1` demande une NOUVELLE clé, jamais une lecture inversée. Ici `recentsPlies` est devenue `recentsOuverts` (sens inverse) et l'ancienne clé est ignorée.
 - Test : `test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme` (il injecte l'ancienne forme enregistrée avant de recharger).
+
+## 2026-11-10 — Appareil figé sur une vieille page après une visite à une adresse à paramètres
+- Où : `sw.js`, `ranger` et la réponse de l'écouteur `fetch`.
+- Bug : la copie était rangée sous l'adresse complète (`cache.put(requete)`) mais relue avec `ignoreSearch`. Après une seule visite à « /?x=1 », cette copie passait devant celle de « / » (la plus ancienne gagne) et plus rien ne la rafraîchissait : l'appareil restait sur la page de ce jour-là, et « Recharger » la redonnait (rejoué sur Chromium, Edge et Firefox).
+- À garder : une copie se range ET se relit sous `cle(requete)` (adresse sans paramètres ni ancre), dans `CACHE` seulement — jamais `ignoreSearch`, jamais `caches.match` global. Pour débloquer des appareils déjà touchés, le nom de `CACHE` change (`forfaits-v2`) : l'activation jette l'ancienne copie.
+- Test : `test_adresse_a_parametres_ne_fige_pas_la_page` et `test_ancienne_copie_jetee_quand_son_nom_change`.

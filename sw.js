@@ -3,7 +3,9 @@
 // en arrière-plan. Quand la page téléchargée n'est plus la même que la copie gardée, on le dit
 // à la page ouverte, qui propose « Recharger » (sinon la nouveauté n'arrive qu'à l'ouverture suivante).
 // Les forfaits eux-mêmes ne passent jamais par ici : ils restent dans le navigateur.
-const CACHE = 'forfaits-v1';
+// Changer ce nom fait repartir chaque appareil d'une copie neuve, et jette l'ancienne (voir « activate »).
+// v2 : les copies v1 pouvaient rester bloquées sur une vieille page (voir « cle »).
+const CACHE = 'forfaits-v2';
 const FICHIERS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (ev) => {
@@ -19,19 +21,29 @@ self.addEventListener('activate', (ev) => {
   );
 });
 
+// Une copie se range et se relit sous son adresse SANS paramètres : « /?x=1 » et « / » sont la même page.
+// Rangée sous l'adresse complète puis relue sans regarder les paramètres, la copie de « /?x=1 » passait
+// devant celle de « / » et plus rien ne la rafraîchissait : l'appareil restait sur la page de ce jour-là.
+function cle(requete) {
+  const adresse = new URL(requete.url);
+  adresse.search = '';
+  adresse.hash = '';
+  return adresse.href;
+}
+
 // Range la copie fraîche et, s'il s'agit de la page et qu'elle a changé, prévient les onglets ouverts.
 // L'avertissement part après la mise en cache : un « Recharger » donne donc bien la nouvelle version.
 async function ranger(requete, copie, estLaPage) {
   const cache = await caches.open(CACHE);
   let change = false;
   if (estLaPage) {
-    const gardee = await cache.match(requete, { ignoreSearch: true });
+    const gardee = await cache.match(cle(requete));
     if (gardee) {
       const [avant, apres] = await Promise.all([gardee.text(), copie.clone().text()]);
       change = avant !== apres;
     }
   }
-  await cache.put(requete, copie);
+  await cache.put(cle(requete), copie);
   if (!change) return;
   const onglets = await self.clients.matchAll({ type: 'window' });
   for (const onglet of onglets) onglet.postMessage({ type: 'nouvelle-version' });
@@ -51,12 +63,14 @@ self.addEventListener('fetch', (ev) => {
   ev.waitUntil(reseau);
 
   ev.respondWith((async () => {
-    const gardee = await caches.match(requete, { ignoreSearch: true });
+    // Dans notre copie seulement : d'autres pages du même site peuvent garder les leurs.
+    const cache = await caches.open(CACHE);
+    const gardee = await cache.match(cle(requete));
     if (gardee) return gardee;
     const reponse = await reseau;
     if (reponse) return reponse;
     if (requete.mode === 'navigate') {
-      const page = await caches.match('./');
+      const page = await cache.match('./');
       if (page) return page;
     }
     return new Response('Hors ligne', { status: 503, statusText: 'Hors ligne' });

@@ -1694,6 +1694,10 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
     page.screenshot(path=f"{prefixe}-5-formulaire.png")
 
 
+# Le nom de la copie gardée change quand il faut repartir d'une copie neuve : le lire, pas le recopier.
+CACHE_SW = re.search(r"const CACHE = '([^']+)'", (RACINE / "sw.js").read_text(encoding="utf-8")).group(1)
+
+
 def test_marche_sans_internet(navigateur):
     url, serveur = demarrer_serveur()  # serveur à part : on le coupe pour de vrai
     contexte = navigateur.new_context(service_workers="allow")
@@ -1726,17 +1730,122 @@ def test_nouvelle_version_proposee_sans_attendre_la_prochaine_ouverture(navigate
         # La copie gardée n'est plus celle du serveur : le service worker doit prévenir l'onglet ouvert.
         # L'attente se fait ici : page.wait_for_function passe par eval(), que la CSP refuse (Firefox).
         page.evaluate(
-            """async () => {
+            """async (nom) => {
             await navigator.serviceWorker.ready;
             for (let i = 0; i < 100 && !navigator.serviceWorker.controller; i++) {
                 await new Promise((fin) => setTimeout(fin, 50));
             }
-            const cache = await caches.open('forfaits-v1');
+            const cache = await caches.open(nom);
             await cache.put('./index.html', new Response('<!doctype html><title>version precedente</title>'));
             await fetch('./index.html');
-        }"""
+        }""",
+            CACHE_SW,
         )
         expect(page.locator("#btn-recharger")).to_be_visible()
+    finally:
+        contexte.close()
+
+
+def _attendre_service_worker(page):
+    # L'attente se fait dans la page : page.wait_for_function passe par eval(), que la CSP refuse (Firefox).
+    page.evaluate(
+        """async () => {
+        await navigator.serviceWorker.ready;
+        for (let i = 0; i < 100 && !navigator.serviceWorker.controller; i++) {
+            await new Promise((fin) => setTimeout(fin, 50));
+        }
+    }"""
+    )
+    assert page.evaluate("navigator.serviceWorker.controller !== null")
+
+
+def _copies_de_la_page(page):
+    """Les copies de la page que garde le service worker, dans l'ordre : « adresse = version »."""
+    return page.evaluate(
+        """async () => {
+        const copies = [];
+        for (const nom of await caches.keys()) {
+            const cache = await caches.open(nom);
+            for (const requete of await cache.keys()) {
+                const adresse = new URL(requete.url);
+                if (!adresse.pathname.endsWith('/')) continue;
+                const texte = await (await cache.match(requete)).text();
+                copies.push(adresse.pathname + adresse.search + ' = ' + (texte.match(/name="marque" content="([^"]+)"/)?.[1] ?? '?'));
+            }
+        }
+        return copies;
+    }"""
+    )
+
+
+def _attendre_copie(page, version):
+    """Le service worker télécharge la page en arrière-plan : attend qu'il ait rangé cette version."""
+    copies = []
+    for _ in range(100):
+        copies = _copies_de_la_page(page)
+        if any(copie.endswith(f"= {version}") for copie in copies):
+            return copies
+        page.wait_for_timeout(50)
+    raise AssertionError(f"la version {version} n'a jamais été rangée : {copies}")
+
+
+def _version_affichee(page):
+    return page.evaluate("document.querySelector('meta[name=marque]')?.content")
+
+
+def test_adresse_a_parametres_ne_fige_pas_la_page(navigateur):
+    """Une seule visite à « /?x=1 » (lien partagé, raccourci) bloquait l'appareil sur la page de ce jour-là.
+
+    La copie était rangée sous l'adresse complète puis relue sans regarder les paramètres : celle de
+    « /?x=1 » passait devant, et plus rien ne la rafraîchissait — le bouton « Recharger » non plus.
+    """
+    marque = {"version": "v1"}
+    url, serveur = demarrer_serveur(marque)
+    contexte = navigateur.new_context(service_workers="allow")
+    try:
+        page = contexte.new_page()
+        page.goto(url)
+        _attendre_service_worker(page)
+
+        marque["version"] = "v2"
+        page.goto(url + "?x=1")
+        _attendre_copie(page, "v2")
+
+        marque["version"] = "v3"
+        page.goto(url)
+        _attendre_copie(page, "v3")
+
+        with page.expect_navigation():
+            page.locator("#btn-recharger").click()
+        assert _version_affichee(page) == "v3"
+        page.goto(url)
+        assert _version_affichee(page) == "v3"
+        assert _copies_de_la_page(page) == ["/ = v3"]  # une seule copie de la page, rangée sans ses paramètres
+    finally:
+        contexte.close()
+        serveur.shutdown()
+        serveur.server_close()
+
+
+def test_ancienne_copie_jetee_quand_son_nom_change(navigateur, url_site):
+    """Un appareil déjà figé ne se débloque que si sa vieille copie part : c'est le changement de nom qui la jette."""
+    assert CACHE_SW != "forfaits-v1", "« forfaits-v1 » est le nom des copies figées : le reprendre les garderait"
+    contexte = navigateur.new_context(service_workers="allow")
+    try:
+        page = contexte.new_page()
+        page.goto(url_site + "page-absente")  # même site, mais rien n'y lance le service worker
+        page.evaluate(
+            """async () => {
+            for (const nom of ['forfaits-v1', 'autre-outil']) {
+                const cache = await caches.open(nom);
+                await cache.put('./?x=1', new Response('vieille page'));
+            }
+        }"""
+        )
+        page.goto(url_site)
+        _attendre_service_worker(page)
+        # Les copies d'un autre outil du même site ne sont pas les nôtres : elles restent.
+        assert sorted(page.evaluate("caches.keys()")) == sorted(["autre-outil", CACHE_SW])
     finally:
         contexte.close()
 

@@ -2398,16 +2398,23 @@ def _page_en_lecture_seule(page):
     assert page.evaluate(COPIES_DE_COTE) == []  # ces données ne sont pas abîmées : rien à mettre de côté
 
 
-def test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees(page):
+def test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees(page, tmp_path):
     """Prises pour des données abîmées, elles laissaient la place aux exemples, et le premier enregistrement les écrasait."""
     _un_vrai_forfait(page)
+    (tmp_path / "sauvegarde.json").write_text(page.evaluate(STOCKAGE), encoding="utf-8")
     ecrit = page.evaluate(VERSION_SUIVANTE)
     page.reload()
     _page_en_lecture_seule(page)
 
+    # Un fichier choisi quand même (le choix était déjà ouvert) : refusé avant toute lecture, aucune fenêtre.
+    page.set_input_files("#fichier-import", str(tmp_path / "sauvegarde.json"))
+    expect(page.locator("#toast")).to_contain_text("recharge la page")
+    expect(page.locator("dialog[open]")).to_have_count(0)
+
     # Rien de ce qui écrit les données ou fabrique un fichier ne s'ouvre.
     expect(page.locator("#btn-ajouter")).to_be_hidden()
     for bouton in ("Importer", "+ Ajouter un forfait", "Listes des éléments", "Exporter"):
+        page.evaluate("document.getElementById('toast').textContent = ''")  # le refus précédent y reste écrit
         page.click("#btn-menu")
         dialogue(page).get_by_role("button", name=re.compile("^" + re.escape(bouton))).click()
         expect(page.locator("#toast")).to_contain_text("recharge la page")

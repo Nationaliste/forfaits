@@ -1831,7 +1831,7 @@ def test_nouvelle_version_proposee_a_la_page_qui_vient_d_etre_demandee(navigateu
     """La nouvelle copie peut être rangée avant que la page demandée existe pour le service worker.
 
     Il prévenait alors les onglets de sa liste : personne, ou la page en train d'être remplacée. La page affichée
-    restait sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante (1 fois sur 5 sur Edge, en test).
+    restait sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante (mesuré entre 1 fois sur 10 et 1 fois sur 5 sur Edge, en test).
     """
     marque = {"version": "v1"}
     url, serveur = demarrer_serveur(marque)

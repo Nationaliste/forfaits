@@ -68,7 +68,7 @@
 
 ## 2026-11-10 — Bandeau « nouvelle version » absent quand la page vient d'être demandée
 - Où : `sw.js`, `ranger`.
-- Bug : `ranger` prévenait les onglets de `clients.matchAll()` dès la copie fraîche rangée. L'onglet qui venait de demander la page n'y était pas encore (liste vide, ou seulement la page qu'il remplace) : il affichait l'ancienne copie sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante. Mesuré 3 fois sur 30 sur Edge, et à chaque fois sur Chromium, Edge, Firefox et WebKit dès que la page arrive 150 ms plus tard.
+- Bug : `ranger` prévenait les onglets de `clients.matchAll()` dès la copie fraîche rangée. L'onglet qui venait de demander la page n'y était pas encore (liste vide, ou seulement la page qu'il remplace) : il affichait l'ancienne copie sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante. Mesuré sur Edge entre 1 fois sur 10 et 1 fois sur 5 (3 sur 30, 5 sur 25), et à chaque fois dès que la page arrive 150 ms plus tard : sur Chromium, Edge et Firefox par le test, sur WebKit par une mesure à la main.
 - À garder : `ranger` reçoit `ev.resultingClientId` et, si cet onglet n'était pas dans la liste, le redemande par `clients.get()` toutes les 100 ms (3 s au plus) avant de lui écrire. La boucle est nécessaire : Firefox répond « rien » sans attendre que l'onglet existe.
 - Test : `test_nouvelle_version_proposee_a_la_page_qui_vient_d_etre_demandee` (le serveur de test sert `sw.js` avec un retard posé après la lecture de la copie gardée, `page_lente`).
 

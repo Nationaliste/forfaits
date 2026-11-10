@@ -1827,6 +1827,35 @@ def test_adresse_a_parametres_ne_fige_pas_la_page(navigateur):
         serveur.server_close()
 
 
+def test_nouvelle_version_proposee_a_la_page_qui_vient_d_etre_demandee(navigateur):
+    """La nouvelle copie peut être rangée avant que la page demandée existe pour le service worker.
+
+    Il prévenait alors les onglets de sa liste : personne, ou la page en train d'être remplacée. La page affichée
+    restait sans bandeau, et la nouveauté n'arrivait qu'à l'ouverture suivante (mesuré entre 1 fois sur 10 et 1 fois sur 5 sur Edge, en test).
+    """
+    marque = {"version": "v1"}
+    url, serveur = demarrer_serveur(marque)
+    serveur.page_lente = True  # la page arrive 150 ms après la demande : la copie fraîche est rangée avant, à coup sûr
+    contexte = navigateur.new_context(service_workers="allow")
+    try:
+        page = contexte.new_page()
+        page.goto(url)
+        _attendre_service_worker(page)
+
+        marque["version"] = "v2"
+        page.goto(url)
+        _attendre_copie(page, "v2")
+        assert _version_affichee(page) == "v1"  # la copie gardée d'abord : c'est elle qu'il faut pouvoir recharger
+        expect(page.locator("#btn-recharger")).to_be_visible()
+        with page.expect_navigation():
+            page.locator("#btn-recharger").click()
+        assert _version_affichee(page) == "v2"
+    finally:
+        contexte.close()
+        serveur.shutdown()
+        serveur.server_close()
+
+
 def test_ancienne_copie_jetee_quand_son_nom_change(navigateur, url_site):
     """Un appareil déjà figé ne se débloque que si sa vieille copie part : c'est le changement de nom qui la jette."""
     assert CACHE_SW != "forfaits-v1", "« forfaits-v1 » est le nom des copies figées : le reprendre les garderait"

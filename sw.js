@@ -33,7 +33,8 @@ function cle(requete) {
 
 // Range la copie fraîche et, s'il s'agit de la page et qu'elle a changé, prévient les onglets ouverts.
 // L'avertissement part après la mise en cache : un « Recharger » donne donc bien la nouvelle version.
-async function ranger(requete, copie, estLaPage) {
+// `futur` : l'identifiant de l'onglet que cette demande de page va faire naître (vide pour tout le reste).
+async function ranger(requete, copie, estLaPage, futur) {
   const cache = await caches.open(CACHE);
   let change = false;
   if (estLaPage) {
@@ -47,6 +48,18 @@ async function ranger(requete, copie, estLaPage) {
   if (!change) return;
   const onglets = await self.clients.matchAll({ type: 'window' });
   for (const onglet of onglets) onglet.postMessage({ type: 'nouvelle-version' });
+  // L'onglet qui vient de demander la page reçoit l'ancienne copie, mais n'existe pas encore ici : la liste est vide,
+  // ou ne contient que la page qu'il remplace, et l'avertissement ne lui arrivait pas. On l'attend donc, 3 s au plus.
+  // En boucle, parce que clients.get() n'attend pas partout (Firefox répond « rien » tant que l'onglet n'est pas né).
+  if (!futur || onglets.some((onglet) => onglet.id === futur)) return;
+  for (let essai = 0; essai < 30; essai++) {
+    const onglet = await self.clients.get(futur);
+    if (onglet) {
+      onglet.postMessage({ type: 'nouvelle-version' });
+      return;
+    }
+    await new Promise((fin) => setTimeout(fin, 100));
+  }
 }
 
 self.addEventListener('fetch', (ev) => {
@@ -57,7 +70,7 @@ self.addEventListener('fetch', (ev) => {
 
   // Copie fraîche depuis internet (si disponible), rangée pour la prochaine fois.
   const reseau = fetch(requete).then((reponse) => {
-    if (reponse.ok) ev.waitUntil(ranger(requete, reponse.clone(), estLaPage));
+    if (reponse.ok) ev.waitUntil(ranger(requete, reponse.clone(), estLaPage, ev.resultingClientId));
     return reponse;
   }).catch(() => null);
   ev.waitUntil(reseau);

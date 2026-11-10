@@ -24,6 +24,16 @@ class _Serveur(http.server.SimpleHTTPRequestHandler):
         pass
 
     def send_head(self):
+        if self.server.page_lente and self.path.split("?")[0] == "/sw.js":
+            # Le service worker du dépôt, qui répond à une demande de page avec un peu de retard (voir _ServeurTcp).
+            sw = (RACINE / "sw.js").read_text(encoding="utf-8")
+            assert sw.count(REPONSE_SW) == 1, "sw.js changé : mettre à jour REPONSE_SW"
+            corps = sw.replace(REPONSE_SW, ATTENTE_SW + REPONSE_SW).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript; charset=utf-8")
+            self.send_header("Content-Length", str(len(corps)))
+            self.end_headers()
+            return io.BytesIO(corps)
         marque = self.server.marque
         if marque is None or not self.path.split("?")[0].endswith(("/", "/index.html")):
             return super().send_head()
@@ -46,6 +56,14 @@ class _ServeurTcp(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
     marque = None
+    # True (posé par le test juste après demarrer_serveur) : la page demandée arrive 150 ms plus tard, donc à coup sûr
+    # après que le service worker a rangé la nouvelle copie. Sur un vrai appareil c'est une affaire de millisecondes.
+    page_lente = False
+
+
+# Le retard se place APRÈS la lecture de la copie gardée : la page reçoit bien l'ancienne copie, mais en retard.
+REPONSE_SW = "    if (gardee) return gardee;\n"
+ATTENTE_SW = "    if (gardee && requete.mode === 'navigate') await new Promise((fin) => setTimeout(fin, 150));\n"
 
 
 def demarrer_serveur(marque=None):

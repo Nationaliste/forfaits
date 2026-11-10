@@ -36,6 +36,35 @@
 - À garder : après la fusion, un fichier qui a des exemples supprimés et aucun exemple actif lance `marquerExemplesSupprimes(true)` (éléments marqués exemple seulement : un élément d’un fichier sans date a aussi maj 0).
 - Test : `test_fichier_sans_exemples_retire_ceux_d_une_autre_version`.
 
+## 2026-11-05 — Retour arrière annulé par un second appareil responsable
+- Où : `index.html`, `pourRetourArriere` et le bouton « Revenir » de `ouvrirVersions`.
+- Bug : `/api/revenir` remet l'ancien paquet comme une nouvelle version, mais avec ses `maj` d'origine, plus anciens que la fausse manœuvre. Un AUTRE appareil responsable ne fusionnait donc rien (`apporte(distant, donnees)` faux), concluait qu'il avait du plus récent (`apporte(donnees, distant)` vrai) et renvoyait la fausse manœuvre : le retour ne tenait que sur l'appareil qui l'avait demandé et sur les appareils de consultation, alors que la fenêtre promet « les forfaits de tous les appareils ».
+- À garder : après `/api/revenir`, l'appareil relit la version, la passe par `pourRetourArriere` (réhorodatage au présent de ce que le retour change, marques `supprime: true` pour ce qui a été créé depuis, `maj 0` des exemples jamais touchés laissé tel quel) puis la RENVOIE (`aEnvoyer = true` + `synchroniser()`). Ne pas « simplifier » en remplaçant simplement les données locales.
+- Test : `test_un_retour_arriere_tient_face_a_un_second_responsable`.
+
+## 2026-11-05 — La clé de l'équipe restait dans la barre d'adresse quand le lien était refusé
+- Où : `index.html`, `appairerDepuisAdresse`.
+- Bug : le `history.replaceState` qui efface le `#` venait APRÈS `if (!lien) return`. Un lien refusé par `lireLien` (coupé en route par la messagerie, sous-domaine du compte pas encore renseigné, autre compte) laissait donc la clé de 43 caractères affichée dans la barre d'adresse, dans l'entrée d'historique du navigateur (donc dans l'autocomplétion et l'historique synchronisé) et sur toute capture d'écran — et sans aucun message, l'appareil restait simplement non connecté. Qui lit cet historique déchiffre tout le paquet gardé dans le cloud.
+- À garder : on efface le `#` AVANT de lire le lien (dès que le fragment contient `maj=`), puis on dit pourquoi le lien n'a pas servi. Ne pas « simplifier » en remettant l'effacement après la validation du lien.
+- Test : `test_un_lien_refuse_ne_laisse_pas_la_cle_dans_l_adresse`.
+
+## 2026-11-05 — Retour arrière sans effet sur un exemple modifié depuis
+- Où : `index.html`, `pourRetourArriere`.
+- Bug : la règle « les exemples gardent leur maj 0 » ne regardait que la version CIBLE. Un forfait d'exemple modifié après cette version (donc `maj > 0` sur les autres appareils) revenait à `maj: 0` : la fusion le perdait face à l'autre appareil responsable, qui le jugeait plus récent et renvoyait la modification que le retour devait annuler. Le retour échouait exactement sur l'enregistrement visé, en silence.
+- À garder : on réhorodate tout ce que le retour CHANGE, et on ne garde la date d'origine que si l'état actuel porte la même `maj` pour le même id (même écriture). Les exemples jamais touchés gardent ainsi leur maj 0, donc « Supprimer les exemples » continue de les balayer, sans sacrifier la fusion.
+- Test : `test_un_retour_arriere_annule_aussi_la_modification_d_un_exemple`.
+
+## 2026-11-05 — Un appareil retiré revenait par un lien qu'il avait émis
+- Où : `cloud/src/index.js`, `POST /api/invitation` et `DELETE /api/appareils/<id>`.
+- Bug : rien ne liait une invitation à son créateur, et retirer un appareil n'effaçait que `app:` et `jeton:`. Un lien d'appairage « responsable » émis avant le retrait (jusqu'à 20 usages pendant 24 h) restait valable : l'appareil retiré revenait avec un jeton neuf, un autre identifiant et un autre nom, sans que personne ne le voie passer dans la liste des appareils. C'est le scénario même que la fonction promet de régler (téléphone perdu).
+- À garder : l'invitation porte `par: <id de l'appareil émetteur>`, et le retrait balaie `inv:` pour supprimer celles de la cible. Conséquence voulue : retirer son ancien téléphone invalide les liens encore en circulation émis depuis lui.
+- Test : `test_retirer_un_appareil_annule_les_liens_qu_il_a_emis`.
+
+## 2026-11-05 — Un inconnu pouvait fermer l'appairage à toute l'équipe
+- Où : `cloud/src/index.js`, `freine` et le début de `fetch`.
+- Bug : un seul seau à jetons, en mémoire du Durable Object, partagé par tous les appelants sans jeton valable. N'importe qui connaissant l'adresse du Worker le gardait vide (10 requêtes par minute suffisent) : l'appairage d'un nouvel appareil ET la récupération par code de secours renvoyaient 429 AVANT même la lecture de l'invitation. L'équipe se retrouvait dehors sans recours. Les porteurs de jeton, à l'inverse, n'étaient freinés par rien.
+- À garder : un seau par source (`CF-Connecting-IP`), deux seaux par source — large pour tout appelant, appliqué avant la moindre lecture de stockage, et serré en plus pour les requêtes sans jeton valable. Sans en-tête de source (wrangler dev), tout le monde partage un seau : jamais plus permissif qu'avant. `DELETE /api/tout` vide les seaux.
+- Test : pas de test (inonder le Worker en test coûterait des minutes pour prouver une limite de débit) ; la lecture du code et `test_le_cloud_refuse_l_ecriture_a_un_appareil_de_consultation` couvrent le chemin.
 ## 2026-11-09 — Survol resté allumé après un appui du doigt
 - Où : `index.html`, les 20 règles `:hover` de la feuille.
 - Bug : au doigt, l'effet de survol restait appliqué jusqu'au prochain appui ailleurs (mesuré sur Chromium, WebKit et Firefox : `transform` et `border-color` persistaient après l'appui).
@@ -77,6 +106,12 @@
 - Bug : `valider` refuse une `version` supérieure à `VERSION_FORMAT`, et `charger` prenait tout refus pour des données abîmées : copie de côté, exemples à l'écran, puis le premier enregistrement réécrivait la clé avec les exemples. Il suffit d'une page en retard sur les données de l'appareil : deux onglets dont un à jour, un onglet endormi, un site revenu à une ancienne page.
 - À garder : `charger` reconnaît ce cas AVANT tout le reste (`estFutur`, `donneesFutures`) : ni copie de côté, ni exemples, rien d'affiché, un bandeau « Recharger ». `sauver()` relit le stockage juste avant d'écrire et renvoie `false` sans rien écrire : chaque appel s'écrit `if (!sauver()) return;`. Import, export, formulaire et listes commencent par `if (lectureSeule()) return;` (un export fait là serait vide, et effacerait tout une fois importé ailleurs en « Remplacer »).
 - Test : `test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees`, `test_enregistrement_refuse_quand_une_version_plus_recente_est_passee_entre_temps` et `test_onglet_ouvert_prevenu_par_l_onglet_passe_a_une_version_plus_recente`.
+
+## 2026-11-10 — Page en retard connectée au cloud : ses listes vides partaient à toute l'équipe
+- Où : `index.html`, `uneSynchro`, `remplacerParEquipe`, `retirerCetAppareil`, le retour arrière d'`ouvrirVersions`, `ouvrirMaj`.
+- Bug (vu à la fusion de la lecture seule dans la branche de la synchro, jamais mis en ligne) : une page en retard a des listes vides en mémoire ; responsable avec un envoi en attente, elle les envoyait au cloud, et les appareils de consultation, qui prennent tout du cloud, se vidaient. Les `sauver()` de la synchro ignoraient aussi le refus d'écrire : version du cloud notée comme lue alors que rien n'était enregistré.
+- À garder : `uneSynchro` sort par `pageEnRetard()` au début, après la lecture (sans noter `c.version`) et juste avant l'envoi ; chaque `sauver()` de la synchro s'écrit `if (!sauver()) …return` ; `retirerCetAppareil` efface les forfaits AVANT de couper le lien au cloud ; `ouvrirMaj` et le lien d'appairage commencent par `lectureSeule()`.
+- Test : `test_une_page_en_retard_ne_touche_pas_au_cloud` (tests/test_synchro.py, variantes « prevenue » et « endormie »).
 
 ## 2026-11-10 — Référence en double : deux messages l'un sous l'autre
 - Où : `index.html`, `ouvrirFormulaire` (`verifierRef`, `msgRef` et `msgErreur`).

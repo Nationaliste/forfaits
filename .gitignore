@@ -10,6 +10,9 @@ forfaits-*.json
 .env*
 
 # Fichiers de travail
+# Rapports des agents : dépôt PUBLIC, un rapport de sécurité y serait une carte des failles.
+.claude/reports/
+
 captures/
 __pycache__/
 .pytest_cache/

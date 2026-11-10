@@ -14,9 +14,21 @@ import time
 import urllib.error
 import urllib.request
 
+import pytest
 from conftest import CODE_SECOURS, appel_cloud
 from playwright.sync_api import expect
-from test_forfaits import activer_modif, chercher, dialogue, modifier, ouvrir_ajout, remplir
+from test_forfaits import (
+    STOCKAGE,
+    VERSION_DE_LA_PAGE,
+    VERSION_SUIVANTE,
+    _page_en_lecture_seule,
+    activer_modif,
+    chercher,
+    dialogue,
+    modifier,
+    ouvrir_ajout,
+    remplir,
+)
 
 # L'en-tête affiche « · à jour 14:32 » quand tout est envoyé. Le motif évite « · mise à jour… »,
 # qui s'affiche pendant l'échange et contient aussi « à jour ».
@@ -499,6 +511,57 @@ def test_hors_ligne_puis_retour_du_reseau(cloud_vide, appareils_maj):
     vendeur = appareils_maj()
     connecter_avec_lien(vendeur.page, creer_lien(patron.page))
     attendre_forfait(vendeur.page, "AVION-1")
+
+
+@pytest.mark.parametrize("prevenue", [True, False], ids=["prevenue", "endormie"])
+def test_une_page_en_retard_ne_touche_pas_au_cloud(cloud_vide, appareils_maj, prevenue):
+    """Une page plus ancienne que les données de l'appareil a des listes vides : un responsable qui les
+    envoyait vidait les appareils de consultation. Elle ne lit ni n'envoie rien, et tout repart au rechargement."""
+    patron = appareils_maj(tolerer=r"api/|Failed to|NetworkError|net::|load resource")
+    connecter_premier(patron.page, cloud_vide)
+    activer_modif(patron.page)
+    ajouter_forfait(patron.page, "EQUIPE-1")
+    attendre_envoi(patron.page)
+    vendeur = appareils_maj()
+    connecter_avec_lien(vendeur.page, creer_lien(patron.page))
+    attendre_forfait(vendeur.page, "EQUIPE-1")
+
+    # Une modification attend son envoi (réseau coupé), puis les données de l'appareil passent à la version suivante.
+    patron.page.route("**/api/**", lambda route: route.abort())
+    ajouter_forfait(patron.page, "TARD-1")
+    expect(patron.page.locator("#etat-donnees")).to_contain_text("hors ligne", timeout=25000)
+    version = sonde(cloud_vide)["version"]
+    ecrit = patron.page.evaluate(VERSION_SUIVANTE)
+    if prevenue:  # annoncée par un autre onglet ; sinon l'onglet endormi la découvre au moment de synchroniser
+        patron.page.evaluate(
+            "window.dispatchEvent(new StorageEvent('storage', { key: ['forfaits', 'donnees', 'v1'].join('.') }))"
+        )
+        _page_en_lecture_seule(patron.page)
+    patron.page.unroute("**/api/**")
+    appels = []
+    patron.page.on("request", lambda requete: appels.append(requete.url) if "/api/" in requete.url else None)
+    patron.page.evaluate("window.dispatchEvent(new Event('online'))")  # le réseau revient : la synchro repart
+    _page_en_lecture_seule(patron.page)
+
+    # Le menu de la mise à jour ne s'ouvre pas non plus (« Revenir à une version » écrirait les forfaits).
+    patron.page.evaluate("document.getElementById('toast').textContent = ''")
+    patron.page.click("#btn-menu")
+    patron.page.click("#btn-maj")
+    expect(patron.page.locator("#toast")).to_contain_text("recharge la page")
+    expect(patron.page.locator("dialog[open]")).to_have_count(0)
+
+    verifier_maintenant(vendeur.page)  # un aller-retour au cloud : ce que le patron aurait envoyé serait arrivé
+    attendre_forfait(vendeur.page, "EQUIPE-1")
+    assert appels == []
+    assert sonde(cloud_vide)["version"] == version
+    assert patron.page.evaluate(STOCKAGE) == ecrit
+
+    # Une page qui sait lire ce format (ici : le format remis à la main) envoie enfin la modification en attente.
+    patron.page.evaluate(VERSION_DE_LA_PAGE)
+    patron.page.reload()
+    expect(patron.page.locator("#etat-donnees")).to_contain_text(A_JOUR, timeout=25000)
+    verifier_maintenant(vendeur.page)
+    attendre_forfait(vendeur.page, "TARD-1")
 
 
 def test_tout_effacer_du_cloud_laisse_les_forfaits_sur_les_appareils(cloud_vide, appareils_maj):

@@ -94,3 +94,15 @@
 - Bug : la copie était rangée sous l'adresse complète (`cache.put(requete)`) mais relue avec `ignoreSearch`. Après une seule visite à « /?x=1 », cette copie passait devant celle de « / » (la plus ancienne gagne) et plus rien ne la rafraîchissait : l'appareil restait sur la page de ce jour-là, et « Recharger » la redonnait (rejoué sur Chromium, Edge et Firefox).
 - À garder : une copie se range ET se relit sous `cle(requete)` (adresse sans paramètres ni ancre), dans `CACHE` seulement — jamais `ignoreSearch`, jamais `caches.match` global. Pour débloquer des appareils déjà touchés, le nom de `CACHE` change (`forfaits-v2`) : l'activation jette l'ancienne copie.
 - Test : `test_adresse_a_parametres_ne_fige_pas_la_page` et `test_ancienne_copie_jetee_quand_son_nom_change`.
+
+## 2026-11-10 — Données d'une version plus récente prises pour des données abîmées, puis écrasées
+- Où : `index.html`, `charger`, `sauver` et l'écouteur `storage`.
+- Bug : `valider` refuse une `version` supérieure à `VERSION_FORMAT`, et `charger` prenait tout refus pour des données abîmées : copie de côté, exemples à l'écran, puis le premier enregistrement réécrivait la clé avec les exemples. Il suffit d'une page en retard sur les données de l'appareil : deux onglets dont un à jour, un onglet endormi, un site revenu à une ancienne page.
+- À garder : `charger` reconnaît ce cas AVANT tout le reste (`estFutur`, `donneesFutures`) : ni copie de côté, ni exemples, rien d'affiché, un bandeau « Recharger ». `sauver()` relit le stockage juste avant d'écrire et renvoie `false` sans rien écrire : chaque appel s'écrit `if (!sauver()) return;`. Import, export, formulaire et listes commencent par `if (lectureSeule()) return;` (un export fait là serait vide, et effacerait tout une fois importé ailleurs en « Remplacer »).
+- Test : `test_donnees_d_une_version_plus_recente_ni_remplacees_ni_ecrasees`, `test_enregistrement_refuse_quand_une_version_plus_recente_est_passee_entre_temps` et `test_onglet_ouvert_prevenu_par_l_onglet_passe_a_une_version_plus_recente`.
+
+## 2026-11-10 — Page en retard connectée au cloud : ses listes vides partaient à toute l'équipe
+- Où : `index.html`, `uneSynchro`, `remplacerParEquipe`, `retirerCetAppareil`, le retour arrière d'`ouvrirVersions`, `ouvrirMaj`.
+- Bug (vu à la fusion de la lecture seule dans la branche de la synchro, jamais mis en ligne) : une page en retard a des listes vides en mémoire ; responsable avec un envoi en attente, elle les envoyait au cloud, et les appareils de consultation, qui prennent tout du cloud, se vidaient. Les `sauver()` de la synchro ignoraient aussi le refus d'écrire : version du cloud notée comme lue alors que rien n'était enregistré.
+- À garder : `uneSynchro` sort par `pageEnRetard()` au début, après la lecture (sans noter `c.version`) et juste avant l'envoi ; chaque `sauver()` de la synchro s'écrit `if (!sauver()) …return` ; `retirerCetAppareil` efface les forfaits AVANT de couper le lien au cloud ; `ouvrirMaj` et le lien d'appairage commencent par `lectureSeule()`.
+- Test : `test_une_page_en_retard_ne_touche_pas_au_cloud` (tests/test_synchro.py, variantes « prevenue » et « endormie »).

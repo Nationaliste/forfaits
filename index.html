@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-g+WOfNAFGgNmcXvoUxSysoMKm6ecvCa03NOwkf9FHEs='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-xufZywslSbvLLYq8ewANg4oHqRhKOwUh1QXtaXyvTH8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -906,11 +906,28 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   let stockageOk = true;      // faux si l'appareil refuse d'enregistrer (navigation privée…)
   let donneesIllisibles = false;
+  // L'appareil porte des données écrites par une version plus récente de l'outil (autre onglet déjà à jour, site revenu
+  // à une ancienne page) : elles sont bonnes, c'est cette page qui est en retard. Elle n'en affiche rien et n'écrit plus rien.
+  let donneesFutures = false;
   let nouvelleVersion = false; // le service worker a téléchargé une version plus récente de la page
+
+  // Vrai si ce texte du stockage a été écrit par une version de l'outil plus récente que cette page.
+  function estFutur(brut) {
+    try {
+      const obj = JSON.parse(brut);
+      return !!obj && obj.format === FORMAT && Number.isInteger(obj.version) && obj.version > VERSION_FORMAT;
+    } catch {
+      return false;
+    }
+  }
 
   function charger() {
     let brut = null;
     try { brut = localStorage.getItem(CLE_DONNEES); } catch { stockageOk = false; }
+    // Avant tout le reste : prises pour des données abîmées, elles étaient remplacées par les exemples, et le premier
+    // enregistrement écrasait les vraies. Ni copie de côté, ni exemples : des listes vides, que sauver() refuse d'écrire.
+    donneesFutures = estFutur(brut);
+    if (donneesFutures) return { familles: [], elements: [], forfaits: [] };
     if (brut === null) return donneesInitiales();
     try {
       return valider(JSON.parse(brut));
@@ -922,13 +939,59 @@ textarea.champ { resize: vertical; min-height: 90px; }
     }
   }
 
+  // Renvoie false quand rien n'a été écrit parce que l'appareil porte des données d'une version plus récente :
+  // celui qui appelle s'arrête là (« if (!sauver()) return; »), l'écran et le message sont déjà à jour.
   function sauver() {
+    // Relu juste avant d'écrire : un onglet endormi a pu manquer l'annonce (événement « storage ») d'un onglet à jour.
+    let brut = null;
+    try { brut = localStorage.getItem(CLE_DONNEES); } catch { /* stockage refusé : rien à protéger */ }
+    if (donneesFutures || estFutur(brut)) {
+      refuserFutur();
+      return false;
+    }
     try {
       localStorage.setItem(CLE_DONNEES, JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, ...donnees }));
       stockageOk = true;
     } catch {
       stockageOk = false;
     }
+    return true;
+  }
+
+  const MSG_FUTUR = "Cette page est une ancienne version de l'outil : elle ne sait pas lire les forfaits de cet appareil. Recharge-la, avec Internet. Tes forfaits sont intacts.";
+  const REFUS_FUTUR = "Impossible sur cette ancienne version de l'outil : recharge la page.";
+
+  function fermerFenetres() {
+    for (const dlg of document.querySelectorAll('dialog[open]')) dlg.close();
+  }
+
+  // La modification en cours n'a pas pu être enregistrée : on repart de ce que porte l'appareil, sans elle.
+  function refuserFutur() {
+    donnees = charger();
+    appareil = chargerAppareil();
+    fermerFenetres();
+    rafraichir();
+    toast(REFUS_FUTUR, true);
+  }
+
+  // Vrai, avec un mot à l'écran, quand cette page n'a pas le droit de toucher aux données (voir donneesFutures).
+  function lectureSeule() {
+    if (!donneesFutures) return false;
+    toast(REFUS_FUTUR, true);
+    return true;
+  }
+
+  // Comme lectureSeule(), mais sans mot à l'écran et en relisant le stockage : pour ce qui tourne tout seul (la mise à
+  // jour automatique). L'onglet endormi qui a manqué l'annonce d'un onglet à jour passe ici en lecture seule.
+  function pageEnRetard() {
+    if (donneesFutures) return true;
+    let brut = null;
+    try { brut = localStorage.getItem(CLE_DONNEES); } catch { /* stockage refusé : rien à protéger */ }
+    if (!estFutur(brut)) return false;
+    donnees = charger();
+    fermerFenetres();
+    rafraichir();
+    return true;
   }
 
   function chargerAppareil() {
@@ -1323,7 +1386,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreEntete() {
     const derniere = derniereModif(donnees);
-    $('etat-donnees').textContent = (derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple") + texteSynchro();
+    $('etat-donnees').textContent = donneesFutures ? 'Outil à mettre à jour'
+      : (derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple") + texteSynchro();
     $('barre-modif').hidden = !appareil.modeModif;
   }
 
@@ -1334,6 +1398,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function rendreBandeaux() {
     const liste = [];
     if (!stockageOk) liste.push(bandeau("Cet appareil n'enregistre pas les données (navigation privée ?). Exporte avant de fermer la page.", null, true));
+    if (donneesFutures) {
+      // Un seul message : importer, exporter ou supprimer des exemples n'a pas de sens tant que la page est en retard.
+      liste.push(bandeau(MSG_FUTUR, h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger-futur', onclick: () => location.reload() }, 'Recharger'), true));
+      $('bandeaux').replaceChildren(...liste);
+      return;
+    }
     if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer'), true));
     // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
     if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
@@ -1516,13 +1586,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
     // filtres, sinon la barre passait sur deux lignes et mangeait une carte sur un téléphone.
     $('btn-tout-effacer').hidden = etatUi.filtres.size === 0;
     $('zone-tri').hidden = total < 2;
-    $('btn-ajouter').hidden = !appareil.modeModif;
+    $('btn-ajouter').hidden = !appareil.modeModif || donneesFutures;
     $('btn-vider').hidden = texte === '';
 
     const recents = actif ? [] : appareil.recents.map((id) => index.forfaitParId.get(id)).filter(Boolean);
 
     let contenu;
-    if (total === 0) {
+    if (donneesFutures) {
+      contenu = [h('div', { class: 'vide' }, h('p', {}, 'Les forfaits de cet appareil ne sont pas affichés : cette page doit être rechargée.'))];
+    } else if (total === 0) {
       contenu = [h('div', { class: 'vide' },
         h('p', {}, 'Aucun forfait enregistré sur cet appareil.'),
         appareil.modeModif
@@ -1827,7 +1899,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
-    $('rappel').hidden = n === 0;
+    $('rappel').hidden = n === 0 || donneesFutures;  // exporter est refusé sur une page en retard : pas de rappel
     $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
   }
 
@@ -1978,6 +2050,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
      AJOUTER / MODIFIER / SUPPRIMER UN FORFAIT
      ===================================================================== */
   function ouvrirFormulaire(existant) {
+    if (lectureSeule()) return;
     const autre = (f) => f.id !== existant?.id;
     const champRef = h('input', { id: 'f-ref', class: 'champ', value: existant?.ref ?? '', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
     const msgRef = h('p', { class: 'msg-champ', 'aria-live': 'polite' });
@@ -2051,7 +2124,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const { exemple: _ancienExemple, surnoms: _anciensSurnoms, ...base } = existant || { id: nouvelId('fft') };
       const forfait = { ...base, ref, designation: champDes.value.trim(), ...avecSurnoms(surnoms), ht, ttc, elements, maj: Date.now() };
       remplacer(donnees.forfaits, forfait);
-      sauver();
+      if (!sauver()) return;
       noterModif();
       dlg.close();
       rafraichir();
@@ -2091,7 +2164,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
     if (!ok) return;
     remplacer(donnees.forfaits, { ...f, supprime: true, maj: Date.now() });
-    sauver();
+    if (!sauver()) return;
     noterModif();
     rafraichir();
     toast(`Forfait ${f.ref} supprimé`);
@@ -2119,7 +2192,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
     if (!ok) return;
     marquerExemplesSupprimes();
-    sauver();
+    if (!sauver()) return;
     noterModif();
     rafraichir();
     toast('Exemples supprimés');
@@ -2129,12 +2202,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
      LISTES DES ÉLÉMENTS (familles et éléments, modifiables sans toucher au code)
      ===================================================================== */
   function ouvrirListes() {
+    if (lectureSeule()) return;
     const message = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const conteneur = h('div', {});
     const signaler = (texte) => { message.textContent = texte; };
     // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
     const changer = (redessinerAussi = true) => {
-      sauver();
+      if (!sauver()) return;
       noterModif();
       if (redessinerAussi) redessiner(); else index = construireIndex();
     };
@@ -2361,6 +2435,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function ouvrirExport() {
+    if (lectureSeule()) return;  // le fichier serait vide : importé ailleurs en « Remplacer », il effacerait tout
     const dlg = ouvrirDialogue({
       titre: 'Exporter',
       corps: [
@@ -2386,6 +2461,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function lancerImport() {
+    if (lectureSeule()) return;
     const champ = $('fichier-import');
     champ.value = '';
     champ.click();
@@ -2663,7 +2739,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (!choix) return;
     donnees = fusionner(donnees, entrant);
     if (choix === 'sans-exemples') marquerExemplesSupprimes();
-    sauver();
+    if (!sauver()) return;
     if (bilan.nouveaux || bilan.modifies || nouvellesFamilles.length || nouveauxElements.length || choix === 'sans-exemples') noterModif();
     rafraichir();
     toast('Tableau importé');
@@ -2671,6 +2747,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   async function importerFichier(fichier) {
     if (!fichier) return;
+    if (lectureSeule()) return;  // le choix du fichier était déjà ouvert quand un autre onglet a annoncé la version plus récente
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
     if (/\.xlsx?$/i.test(fichier.name)) {
       await informer('Import impossible', "C'est le fichier Excel lui-même. Dans Excel : Fichier → Enregistrer sous → « CSV UTF-8 », puis importe ce fichier .csv.");
@@ -2740,10 +2817,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
       donnees = entrant;
       appareil.modifsEnAttente = 0;
     }
+    if (!sauver()) return;
     donneesIllisibles = false;
     appareil.dernierImport = Date.now();
     demanderStockageDurable();
-    sauver();
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
@@ -3194,6 +3271,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   async function uneSynchro() {
     const c = cloud;
+    // Une page en retard (voir donneesFutures) ne lit ni n'envoie rien : ses listes sont vides, et un responsable
+    // qui les enverrait viderait tous les appareils de consultation. Tout repart au rechargement de la page.
+    if (pageEnRetard()) return;
     etatSynchro = 'encours';
     rendreEntete();
     try {
@@ -3215,11 +3295,14 @@ textarea.champ { resize: vertical; min-height: 90px; }
             const bilan = bilanFusion(distant);
             donnees = fusionner(donnees, distant);
             donneesIllisibles = false;
-            sauver();
+            if (!sauver()) { etatSynchro = ''; return; }
             rafraichir();
             const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
             toast(changes ? `Forfaits mis à jour : ${pluriel(changes, 'changement')}` : 'Listes mises à jour');
           }
+          // Écriture refusée, ou page passée en retard pendant l'échange : on s'arrête sans noter la version du
+          // cloud, sinon elle passerait pour déjà lue après le rechargement et ces forfaits n'arriveraient jamais.
+          if (pageEnRetard()) { etatSynchro = ''; return; }
           if (c.role === 'responsable' && apporte(donnees, distant)) c.aEnvoyer = true;
           c.version = etat.version;
         } else if (r.status !== 304) {
@@ -3228,6 +3311,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
         // 2. Envoyer nos modifications (responsables seulement).
         if (c.role !== 'responsable' || !c.aEnvoyer) break;
+        if (pageEnRetard()) { etatSynchro = ''; return; } // un autre onglet vient de passer à la version suivante
         if (horlogeFausse()) throw Object.assign(new Error(texteHorloge()), { horloge: true });
         // Remis à faux AVANT l'envoi : une modification faite pendant l'envoi le remet à vrai, et repartira.
         c.aEnvoyer = false;
@@ -3283,8 +3367,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const bilan = bilanFusion(distant);
     donnees = distant;
     donneesIllisibles = false;
+    if (!sauver()) return;
     appareil.modifsEnAttente = 0;
-    sauver();
     sauverAppareil();
     rafraichir();
     const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
@@ -3303,10 +3387,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
   // Appareil retiré par un responsable (téléphone perdu, départ) : il efface sa copie. Seulement sur
   // ce motif explicite du cloud, jamais sur une panne : une coupure de réseau n'efface rien.
   function retirerCetAppareil() {
+    // Les forfaits d'abord : une page en retard n'a pas le droit de les effacer (voir sauver), et l'appareil doit
+    // alors rester connecté — la page à jour recevra le même refus du cloud et effacera. Déconnecté d'abord, il gardait tout.
+    donnees = { familles: [], elements: [], forfaits: [] };
+    if (!sauver()) { etatSynchro = ''; return; }
     cloud = null;
     sauverCloud();
-    donnees = { familles: [], elements: [], forfaits: [] };
-    sauver();
     appareil.modeModif = false;
     appareil.modifsEnAttente = 0;
     appareil.favoris = [];
@@ -3398,6 +3484,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       return;
     }
     if (cloud) { toast('Cet appareil est déjà connecté à la mise à jour'); return; }
+    if (lectureSeule()) return;  // le lien n'a pas servi : il se rouvre une fois la page rechargée
     try {
       await appairer(lien, '');
       toast(cloud?.role === 'responsable' ? 'Connecté : tes modifications partiront toutes seules' : 'Connecté : les mises à jour arrivent toutes seules');
@@ -3409,6 +3496,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   /* ---------- Fenêtres ---------- */
 
   function ouvrirMaj() {
+    if (lectureSeule()) return;  // connecter, revenir à une version… : tout ici lit ou écrit les forfaits
     if (cloud) { ouvrirEtatMaj(); return; }
     const dlg = ouvrirDialogue({
       titre: 'Mise à jour automatique',
@@ -3734,7 +3822,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
                 message: `Les forfaits de tous les appareils reviendront à leur état du ${fmtDateHeure.format(new Date(v.date))}. La version actuelle reste dans l'historique, donc ce retour s'annule aussi.`,
                 boutons: [{ texte: 'Revenir', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
               });
-              if (!ok) return;
+              if (!ok || pageEnRetard()) return;
               const avant = donnees;
               const p = await appelCloud(cloud.adresse, '/api/revenir', { methode: 'POST', jeton: cloud.jeton, corps: { version: v.version } });
               if (!p.ok) { await informer('Impossible', `Le cloud a répondu ${p.status}.`); return; }
@@ -3752,7 +3840,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
               }
               donnees = pourRetourArriere(avant, valider(await dechiffrer(etat.blob, cloud.cle)), Date.now());
               donneesIllisibles = false;
-              sauver();
+              if (!sauver()) return;
               cloud.version = etat.version;
               cloud.aEnvoyer = true;
               sauverCloud();
@@ -3958,7 +4046,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Si la page est ouverte dans deux onglets, ils restent d'accord.
   window.addEventListener('storage', (ev) => {
-    if (ev.key === CLE_DONNEES) donnees = charger();
+    if (ev.key === CLE_DONNEES) { donnees = charger(); if (donneesFutures) fermerFenetres(); }
     else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerApparence(); }
     else if (ev.key === CLE_CLOUD) cloud = chargerCloud();
     else return;

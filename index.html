@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-goxObEJR7gins/iSYL7gudYQzCdT/+PqEdy1Pe5DNiQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-kTsFZTBbZ34olg8w3C37KOLdTApxYEf3L2G/k6iYWiE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -898,11 +898,28 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   let stockageOk = true;      // faux si l'appareil refuse d'enregistrer (navigation privée…)
   let donneesIllisibles = false;
+  // L'appareil porte des données écrites par une version plus récente de l'outil (autre onglet déjà à jour, site revenu
+  // à une ancienne page) : elles sont bonnes, c'est cette page qui est en retard. Elle n'en affiche rien et n'écrit plus rien.
+  let donneesFutures = false;
   let nouvelleVersion = false; // le service worker a téléchargé une version plus récente de la page
+
+  // Vrai si ce texte du stockage a été écrit par une version de l'outil plus récente que cette page.
+  function estFutur(brut) {
+    try {
+      const obj = JSON.parse(brut);
+      return !!obj && obj.format === FORMAT && Number.isInteger(obj.version) && obj.version > VERSION_FORMAT;
+    } catch {
+      return false;
+    }
+  }
 
   function charger() {
     let brut = null;
     try { brut = localStorage.getItem(CLE_DONNEES); } catch { stockageOk = false; }
+    // Avant tout le reste : prises pour des données abîmées, elles étaient remplacées par les exemples, et le premier
+    // enregistrement écrasait les vraies. Ni copie de côté, ni exemples : des listes vides, que sauver() refuse d'écrire.
+    donneesFutures = estFutur(brut);
+    if (donneesFutures) return { familles: [], elements: [], forfaits: [] };
     if (brut === null) return donneesInitiales();
     try {
       return valider(JSON.parse(brut));
@@ -914,13 +931,46 @@ textarea.champ { resize: vertical; min-height: 90px; }
     }
   }
 
+  // Renvoie false quand rien n'a été écrit parce que l'appareil porte des données d'une version plus récente :
+  // celui qui appelle s'arrête là (« if (!sauver()) return; »), l'écran et le message sont déjà à jour.
   function sauver() {
+    // Relu juste avant d'écrire : un onglet endormi a pu manquer l'annonce (événement « storage ») d'un onglet à jour.
+    let brut = null;
+    try { brut = localStorage.getItem(CLE_DONNEES); } catch { /* stockage refusé : rien à protéger */ }
+    if (donneesFutures || estFutur(brut)) {
+      refuserFutur();
+      return false;
+    }
     try {
       localStorage.setItem(CLE_DONNEES, JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, ...donnees }));
       stockageOk = true;
     } catch {
       stockageOk = false;
     }
+    return true;
+  }
+
+  const MSG_FUTUR = "Cette page est une ancienne version de l'outil : elle ne sait pas lire les forfaits de cet appareil. Recharge-la, avec Internet. Tes forfaits sont intacts.";
+  const REFUS_FUTUR = "Impossible sur cette ancienne version de l'outil : recharge la page.";
+
+  function fermerFenetres() {
+    for (const dlg of document.querySelectorAll('dialog[open]')) dlg.close();
+  }
+
+  // La modification en cours n'a pas pu être enregistrée : on repart de ce que porte l'appareil, sans elle.
+  function refuserFutur() {
+    donnees = charger();
+    appareil = chargerAppareil();
+    fermerFenetres();
+    rafraichir();
+    toast(REFUS_FUTUR, true);
+  }
+
+  // Vrai, avec un mot à l'écran, quand cette page n'a pas le droit de toucher aux données (voir donneesFutures).
+  function lectureSeule() {
+    if (!donneesFutures) return false;
+    toast(REFUS_FUTUR, true);
+    return true;
   }
 
   function chargerAppareil() {
@@ -1292,7 +1342,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreEntete() {
     const derniere = derniereModif(donnees);
-    $('etat-donnees').textContent = derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple";
+    $('etat-donnees').textContent = donneesFutures ? 'Outil à mettre à jour' : derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple";
     $('barre-modif').hidden = !appareil.modeModif;
   }
 
@@ -1303,6 +1353,12 @@ textarea.champ { resize: vertical; min-height: 90px; }
   function rendreBandeaux() {
     const liste = [];
     if (!stockageOk) liste.push(bandeau("Cet appareil n'enregistre pas les données (navigation privée ?). Exporte avant de fermer la page.", null, true));
+    if (donneesFutures) {
+      // Un seul message : importer, exporter ou supprimer des exemples n'a pas de sens tant que la page est en retard.
+      liste.push(bandeau(MSG_FUTUR, h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger-futur', onclick: () => location.reload() }, 'Recharger'), true));
+      $('bandeaux').replaceChildren(...liste);
+      return;
+    }
     if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer'), true));
     // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
     if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
@@ -1478,13 +1534,15 @@ textarea.champ { resize: vertical; min-height: 90px; }
     // filtres, sinon la barre passait sur deux lignes et mangeait une carte sur un téléphone.
     $('btn-tout-effacer').hidden = etatUi.filtres.size === 0;
     $('zone-tri').hidden = total < 2;
-    $('btn-ajouter').hidden = !appareil.modeModif;
+    $('btn-ajouter').hidden = !appareil.modeModif || donneesFutures;
     $('btn-vider').hidden = texte === '';
 
     const recents = actif ? [] : appareil.recents.map((id) => index.forfaitParId.get(id)).filter(Boolean);
 
     let contenu;
-    if (total === 0) {
+    if (donneesFutures) {
+      contenu = [h('div', { class: 'vide' }, h('p', {}, 'Les forfaits de cet appareil ne sont pas affichés : cette page doit être rechargée.'))];
+    } else if (total === 0) {
       contenu = [h('div', { class: 'vide' },
         h('p', {}, 'Aucun forfait enregistré sur cet appareil.'),
         appareil.modeModif
@@ -1789,7 +1847,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
-    $('rappel').hidden = n === 0;
+    $('rappel').hidden = n === 0 || donneesFutures;  // exporter est refusé sur une page en retard : pas de rappel
     $('rappel-texte').textContent = `${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'} : exporte et range le fichier dans OneDrive.`;
   }
 
@@ -1940,6 +1998,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
      AJOUTER / MODIFIER / SUPPRIMER UN FORFAIT
      ===================================================================== */
   function ouvrirFormulaire(existant) {
+    if (lectureSeule()) return;
     const autre = (f) => f.id !== existant?.id;
     const champRef = h('input', { id: 'f-ref', class: 'champ', value: existant?.ref ?? '', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
     const msgRef = h('p', { class: 'msg-champ', 'aria-live': 'polite' });
@@ -2013,7 +2072,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const { exemple: _ancienExemple, surnoms: _anciensSurnoms, ...base } = existant || { id: nouvelId('fft') };
       const forfait = { ...base, ref, designation: champDes.value.trim(), ...avecSurnoms(surnoms), ht, ttc, elements, maj: Date.now() };
       remplacer(donnees.forfaits, forfait);
-      sauver();
+      if (!sauver()) return;
       noterModif();
       dlg.close();
       rafraichir();
@@ -2053,7 +2112,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
     if (!ok) return;
     remplacer(donnees.forfaits, { ...f, supprime: true, maj: Date.now() });
-    sauver();
+    if (!sauver()) return;
     noterModif();
     rafraichir();
     toast(`Forfait ${f.ref} supprimé`);
@@ -2081,7 +2140,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     });
     if (!ok) return;
     marquerExemplesSupprimes();
-    sauver();
+    if (!sauver()) return;
     noterModif();
     rafraichir();
     toast('Exemples supprimés');
@@ -2091,12 +2150,13 @@ textarea.champ { resize: vertical; min-height: 90px; }
      LISTES DES ÉLÉMENTS (familles et éléments, modifiables sans toucher au code)
      ===================================================================== */
   function ouvrirListes() {
+    if (lectureSeule()) return;
     const message = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const conteneur = h('div', {});
     const signaler = (texte) => { message.textContent = texte; };
     // Après un renommage on ne redessine pas : le clic en cours sur un autre bouton serait perdu.
     const changer = (redessinerAussi = true) => {
-      sauver();
+      if (!sauver()) return;
       noterModif();
       if (redessinerAussi) redessiner(); else index = construireIndex();
     };
@@ -2323,6 +2383,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function ouvrirExport() {
+    if (lectureSeule()) return;  // le fichier serait vide : importé ailleurs en « Remplacer », il effacerait tout
     const dlg = ouvrirDialogue({
       titre: 'Exporter',
       corps: [
@@ -2348,6 +2409,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function lancerImport() {
+    if (lectureSeule()) return;
     const champ = $('fichier-import');
     champ.value = '';
     champ.click();
@@ -2625,7 +2687,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (!choix) return;
     donnees = fusionner(donnees, entrant);
     if (choix === 'sans-exemples') marquerExemplesSupprimes();
-    sauver();
+    if (!sauver()) return;
     if (bilan.nouveaux || bilan.modifies || nouvellesFamilles.length || nouveauxElements.length || choix === 'sans-exemples') noterModif();
     rafraichir();
     toast('Tableau importé');
@@ -2633,6 +2695,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   async function importerFichier(fichier) {
     if (!fichier) return;
+    if (lectureSeule()) return;  // le choix du fichier était déjà ouvert quand un autre onglet a annoncé la version plus récente
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
     if (/\.xlsx?$/i.test(fichier.name)) {
       await informer('Import impossible', "C'est le fichier Excel lui-même. Dans Excel : Fichier → Enregistrer sous → « CSV UTF-8 », puis importe ce fichier .csv.");
@@ -2702,10 +2765,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
       donnees = entrant;
       appareil.modifsEnAttente = 0;
     }
+    if (!sauver()) return;
     donneesIllisibles = false;
     appareil.dernierImport = Date.now();
     demanderStockageDurable();
-    sauver();
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
@@ -2867,7 +2930,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
 
   // Si la page est ouverte dans deux onglets, ils restent d'accord.
   window.addEventListener('storage', (ev) => {
-    if (ev.key === CLE_DONNEES) donnees = charger();
+    if (ev.key === CLE_DONNEES) { donnees = charger(); if (donneesFutures) fermerFenetres(); }
     else if (ev.key === CLE_APPAREIL) { appareil = chargerAppareil(); appliquerApparence(); }
     else return;
     rafraichir();

@@ -130,3 +130,9 @@
 - Bug : le tri n'existait que dans la liste `#tri` de la page : rechargée, elle revenait à « par référence ».
 - À garder : le tri est un réglage de l'appareil (`tri` dans `forfaits.appareil.v1`, jamais exporté). `rendreResultats` lit `appareil.tri` et y aligne la liste ; une valeur inconnue revient à `ref`.
 - Test : `test_trier_par_prix` et `test_tri_inconnu_dans_les_reglages_revient_aux_references`.
+
+## 2026-11-10 — Téléphone d'un responsable : le rappel d'export et le total couvraient tous les forfaits
+- Où : `index.html`, CSS `.rappel`, `.barre-resultats` et `#btn-ajouter` dans les blocs `@media (max-width: 600px)` et `(max-width: 540px)` ; `rendreRappel`.
+- Bug : en 375x812, mode modification, une modification à exporter et un total en cours : le rappel prenait 128 px (texte sur deux lignes, bouton dessous) au-dessus des 70 px du total, et « + Ajouter un forfait » passait sous le compteur (58 px de plus). Il restait 7 px du premier forfait à l'écran (mesuré).
+- À garder : sous 600 px le rappel tient sur une ligne (`flex-wrap: nowrap`, la consigne `.rappel-suite` cachée, elle est redite par la fenêtre d'export) ; sous 540 px le bouton d'ajout reste sur la ligne du compteur, réduit à « + » (entier, il passait dessous jusqu'à 519 px). Son texte et le mot « Trier » sont cachés à l'écran seulement (pas `display: none`) : ils restent le nom lu par les lecteurs d'écran.
+- Test : `test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait`.

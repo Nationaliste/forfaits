@@ -28,6 +28,7 @@ from test_forfaits import (
     modifier,
     ouvrir_ajout,
     remplir,
+    supprimer,
 )
 
 # L'en-tête affiche « · à jour 14:32 » quand tout est envoyé. Le motif évite « · mise à jour… »,
@@ -381,7 +382,7 @@ def test_revenir_a_une_version_annule_une_fausse_manoeuvre(cloud_vide, appareils
     attendre_envoi(patron.page)
 
     chercher(patron.page, "RETOUR-1")
-    patron.page.get_by_role("button", name="Supprimer", exact=True).click()
+    supprimer(patron.page, "RETOUR-1")  # la suppression est dans la fiche du forfait
     dialogue(patron.page).get_by_role("button", name="Supprimer", exact=True).click()
     attendre_envoi(patron.page)
     attendre_sans_forfait(patron.page, "RETOUR-1")

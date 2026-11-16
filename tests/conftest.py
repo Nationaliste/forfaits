@@ -135,24 +135,12 @@ def navigateur(request, pw):
     b.close()
 
 
-# Les cartes sont repliées par défaut (réglage de l'appareil). La plupart des tests lisent et
-# cliquent dans le détail des cartes : ils demandent « cartes entières » avant le chargement.
-CARTES_ENTIERES = """try {
-  const cle = ['forfaits', 'appareil', 'v1'].join('.');
-  const regl = JSON.parse(localStorage.getItem(cle) || '{}');
-  regl.compact = false;
-  localStorage.setItem(cle, JSON.stringify(regl));
-} catch {}"""
-
-
 class Appareil:
     """Un appareil (navigateur avec ses propres données) qui ouvre l'outil."""
 
-    def __init__(self, navigateur, url, compact=False, tolerer=None, **options):
+    def __init__(self, navigateur, url, tolerer=None, **options):
         """tolerer : motif des erreurs de console attendues (ex. cloud volontairement coupé)."""
         self.contexte = navigateur.new_context(locale="fr-FR", accept_downloads=True, service_workers="block", **options)
-        if not compact:
-            self.contexte.add_init_script(CARTES_ENTIERES)
         self.erreurs = []
         self.tolerer = re.compile(tolerer) if tolerer else None
         # Le choix du dossier d'export (Edge, Chrome) ouvrirait une fenêtre : les tests prennent le téléchargement,

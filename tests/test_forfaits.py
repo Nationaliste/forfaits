@@ -71,27 +71,44 @@ def dialogue(page):
     return page.locator("dialog[open]").last
 
 
+def menu(page):
+    """Le menu ouvert sous la barre (choix d'un filtre, derniers consultés)."""
+    return page.locator("#barre .menu")
+
+
 def noms_filtres(page):
-    """Les boutons de la rangée de filtres, dans l'ordre, sans le chevron."""
-    return [t.strip().removesuffix("▾").strip() for t in page.locator("#filtres .filtre").all_text_contents()]
+    """Les pastilles de filtre, dans l'ordre ; « Famille : élément » quand un filtre est posé."""
+    return [t.strip() for t in page.locator("#filtres .filtre").all_text_contents()]
 
 
-def ouvrir_filtre(page, nom, cadre=None):
-    """Ouvre la fenêtre de filtre d'une famille, qu'elle soit un bouton ou rangée dans « Autres »."""
-    cadre = cadre or page
-    bouton = cadre.locator("#filtres .filtre", has_text=nom)
-    if bouton.count() == 0:
-        cadre.locator("#btn-autres-filtres").click()
-        dialogue(cadre).get_by_role("button", name=nom, exact=True).click()
-    else:
-        bouton.click()
+def ouvrir_filtre(page, nom):
+    """Ouvre le menu de filtre d'une famille et renvoie ses choix, qu'elle soit une pastille ou rangée dans « Autres »."""
+    pastille = page.locator("#filtres .filtre", has_text=nom)
+    if pastille.count() == 0:
+        page.locator("#btn-autres-filtres").click()
+        return menu(page).get_by_role("group", name=nom, exact=True)
+    pastille.click()
+    return menu(page)
+
+
+def filtrer(page, famille, choix):
+    ouvrir_filtre(page, famille).get_by_role("button", name=choix, exact=True).click()
+
+
+def choix_du_filtre(page, famille):
+    """Les choix proposés pour une famille, sans leur nombre de forfaits. Le menu reste ouvert."""
+    return ouvrir_filtre(page, famille).locator(".choix > span:first-child").all_text_contents()
+
+
+# Page d'ordi assez haute (900 px et plus) pour que le total soit sous la fiche ; plus bas, il est en barre.
+HAUT = {"width": 1280, "height": 1000}
 
 
 def activer_modif(page):
     page.click("#btn-menu")
     page.click("#btn-mode-modif")
     dialogue(page).get_by_role("button", name="Activer").click()
-    expect(page.locator("#barre-modif")).to_be_visible()
+    expect(page.locator("#btn-ajouter")).to_be_visible()  # la pastille « Modification » est cachée sur un téléphone
 
 
 def ouvrir_ajout(page):
@@ -109,10 +126,19 @@ def remplir(page, ref=None, ht=None, ttc=None, elements=None, designation=None):
     d.locator("#f-enregistrer").click()
 
 
+def fiche(page, ref):
+    """Choisit un forfait dans la liste et renvoie sa fiche : à droite sur un grand écran, sinon la feuille du bas."""
+    rangee = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text=re.compile(f"^{re.escape(ref)}$")))
+    rangee.locator(".carte-ouvrir").click()
+    return page.locator("#fiche:visible, #dlg-fiche[open]")
+
+
 def modifier(page, ref):
-    page.locator(".carte", has=page.locator(".carte-ref", has_text=re.compile(f"^{re.escape(ref)}$"))).get_by_role(
-        "button", name="Modifier"
-    ).click()
+    fiche(page, ref).get_by_role("button", name=f"Modifier {ref}", exact=True).click()
+
+
+def supprimer(page, ref):
+    fiche(page, ref).get_by_role("button", name=f"Supprimer {ref}", exact=True).click()
 
 
 def fermer_rappel_telechargement(page):
@@ -204,7 +230,7 @@ def test_rien_trouve_puis_effacer(page):
 # ---------------------------------------------------------------- suggestions, étiquettes, boutons
 
 
-def test_suggestions_zor_puis_etiquette(page):
+def test_suggestions_zor_puis_filtre_pose(page):
     chercher(page, "zor")
     suggestions = page.locator("#suggestions .suggestion")
     expect(suggestions).to_have_count(2)
@@ -214,15 +240,15 @@ def test_suggestions_zor_puis_etiquette(page):
     assert familles == ["Boîtier", "Boîtier"]
 
     page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
-    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Zorba 5")
+    expect(page.locator("#filtres .filtre.actif")).to_have_text("Boîtier : Zorba 5")  # la pastille pleine dit le choix
     expect(page.locator("#recherche")).to_have_value("")
     assert refs(page) == AVEC_ZORBA5
 
-    chercher(page, "3q")  # le mot tapé s'ajoute à l'étiquette
+    chercher(page, "3q")  # le mot tapé s'ajoute au filtre
     assert refs(page) == AVEC_ZORBA5 & AVEC_3Q
 
-    page.locator("#etiquettes .etiquette").click()  # un clic retire l'étiquette
-    expect(page.locator("#etiquettes")).to_be_hidden()
+    filtrer(page, "Boîtier", "Tous")  # « Tous » retire le filtre
+    expect(page.locator("#filtres .filtre.actif")).to_have_count(0)
     assert refs(page) == AVEC_3Q
 
 
@@ -243,14 +269,16 @@ def ordre_affiche(page):
 
 def test_favori_en_tete_de_liste_puis_retire(page):
     dernier = sorted(TOUS)[-1]
-    etoile = page.get_by_role("button", name=f"Favori : {dernier}", exact=True)
+    etoile = fiche(page, dernier).get_by_role("button", name=f"Favori : {dernier}", exact=True)
     etoile.click()
     expect(page.locator("#toast")).to_contain_text(f"{dernier} en favori")
     assert ordre_affiche(page)[0] == dernier
+    expect(etoile).to_be_focused()  # la liste est redessinée, le clavier reste sur l'étoile
     page.reload()  # gardé sur l'appareil
     assert ordre_affiche(page)[0] == dernier
-    expect(etoile).to_have_attribute("aria-pressed", "true")
-    page.select_option("#tri", label="prix croissant")
+    expect(etoile).to_have_attribute("aria-pressed", "true")  # premier de la liste : c'est lui que la fiche montre
+    expect(page.locator("#resultats .carte").first.locator(".marque-favori")).to_be_visible()
+    page.select_option("#tri", label="Prix croissant")
     assert ordre_affiche(page)[0] == dernier  # le favori passe avant le tri par prix
     page.select_option("#tri", index=0)
     etoile.click()
@@ -272,26 +300,59 @@ def test_suggestion_au_clavier(page):
     expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["Kalpo universelle"])
     page.keyboard.press("ArrowDown")
     page.keyboard.press("Enter")
-    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : Kalpo universelle")
+    expect(page.locator("#filtres .filtre.actif")).to_have_text("Boîtier : Kalpo universelle")
     assert refs(page) == {"EX-T2-KPU-4Q"}
 
 
 def test_boutons_de_filtre(page):
-    ouvrir_filtre(page, "Imprimante")
-    dialogue(page).get_by_role("button", name="4Q", exact=True).click()
+    filtrer(page, "Imprimante", "4Q")
     assert refs(page) == AVEC_4Q
-    expect(page.locator("#filtres .filtre", has_text="Imprimante")).to_have_attribute("aria-pressed", "true")
+    pastille = page.locator("#filtres .filtre", has_text="Imprimante")
+    expect(pastille).to_have_class(re.compile(r"\bactif\b"))
+    expect(pastille).to_have_text("Imprimante : 4Q")
+    expect(pastille).to_be_focused()  # le clavier revient à la pastille
 
-    ouvrir_filtre(page, "Imprimante")
-    dialogue(page).get_by_role("button", name="Tous", exact=True).click()
-    ouvrir_filtre(page, "Boîtier")
-    dialogue(page).get_by_role("button", name="Sans boîtier").click()
+    filtrer(page, "Imprimante", "Tous")
+    expect(pastille).to_have_text("Imprimante")
+    filtrer(page, "Boîtier", "Sans boîtier")
     assert refs(page) == {"EX-T2-3Q", "EX-LUM-POSE"}
-    expect(page.locator("#etiquettes")).to_contain_text("Boîtier : sans")
+    expect(page.locator("#filtres .filtre.actif")).to_have_text("Boîtier : Sans boîtier")
 
 
-def test_ordre_des_filtres_se_regle_sans_mode_modification_et_reste_sur_l_appareil(page, tmp_path):
+def test_menu_de_filtre_au_clavier_puis_ferme_par_echap_ou_un_appui_ailleurs(page):
+    pastille = page.locator("#filtres .filtre", has_text="Imprimante")
+    pastille.focus()
+    page.keyboard.press("Enter")
+    expect(pastille).to_have_attribute("aria-expanded", "true")
+    expect(menu(page).get_by_role("button", name="Tous", exact=True)).to_be_focused()  # le clavier entre dans le menu
+    page.keyboard.press("Escape")
+    expect(menu(page)).to_have_count(0)
+    expect(pastille).to_be_focused()  # et revient à la pastille
+    expect(pastille).to_have_attribute("aria-expanded", "false")
+
+    pastille.click()
+    expect(menu(page)).to_be_visible()
+    page.mouse.click(30, 30)  # un appui ailleurs le referme, sans rien choisir
+    expect(menu(page)).to_have_count(0)
+    assert refs(page) == TOUS
+
+    # Le choix en cours est marqué, chaque choix dit combien de forfaits il donne, et un seul menu est ouvert à la fois.
+    filtrer(page, "Imprimante", "4Q")
+    choix = ouvrir_filtre(page, "Imprimante").get_by_role("button", name="4Q", exact=True)
+    expect(choix).to_have_attribute("aria-pressed", "true")
+    expect(choix).to_be_focused()
+    expect(choix.locator(".nb")).to_have_text(str(len(AVEC_4Q)))
+    ouvrir_filtre(page, "Taximètre")
+    expect(menu(page)).to_have_count(1)
+    expect(menu(page)).to_have_attribute("aria-label", "Taximètre")
+    expect(pastille).to_have_attribute("aria-expanded", "false")
+
+
+def test_ordre_des_filtres_se_regle_sans_mode_modification_et_reste_sur_l_appareil(appareils, tmp_path):
     """Un vendeur doit pouvoir ranger ses familles ; son ordre ne part pas dans le fichier exporté."""
+    # Sur un grand écran, les cinq familles sont des pastilles ; sur un téléphone, trois, puis « Autres ».
+    assert noms_filtres(appareils().page) == ["Taximètre", "Lumineux", "Imprimante", "Boîtier", "Installation"]
+    page = appareils(viewport={"width": 375, "height": 812}).page
     assert noms_filtres(page) == ["Taximètre", "Lumineux", "Imprimante", "Autres"]
     page.click("#btn-menu")
     page.click("#btn-ordre-filtres")
@@ -309,31 +370,30 @@ def test_ordre_des_filtres_se_regle_sans_mode_modification_et_reste_sur_l_appare
     assert noms_familles(page, tmp_path / "ordre.json") == ["Taximètre", "Lumineux", "Imprimante", "Boîtier", "Installation"]
 
 
-def test_famille_rangee_dans_autres_filtre_et_redevient_un_bouton_une_fois_posee(page):
+def test_famille_rangee_dans_autres_filtre_et_redevient_un_bouton_une_fois_posee(appareils):
+    page = appareils(viewport={"width": 375, "height": 812}).page
     page.click("#btn-autres-filtres")
-    dialogue(page).get_by_role("button", name="Boîtier", exact=True).click()
-    dialogue(page).get_by_role("button", name="Zorba 5", exact=True).click()
+    # « Autres » montre d'un coup les choix de chaque famille rangée : un appui de moins.
+    expect(menu(page).locator(".menu-titre")).to_have_text(["Boîtier", "Installation"])
+    menu(page).get_by_role("group", name="Boîtier", exact=True).get_by_role("button", name="Zorba 5", exact=True).click()
     assert refs(page) == AVEC_ZORBA5
     # Le filtre posé reste visible, et « Autres » disparaît : il ne restait qu'une famille.
     assert noms_filtres(page) == ["Taximètre", "Lumineux", "Imprimante", "Boîtier : Zorba 5", "Installation"]
 
 
 def test_deux_filtres_sans_forfait_commun_montrent_les_forfaits_de_chaque_filtre(page):
-    """Au comptoir : un boîtier d'un forfait, un lumineux d'un autre, à additionner avec « + Total »."""
-    ouvrir_filtre(page, "Taximètre")
-    dialogue(page).get_by_role("button", name="T1 DEMO", exact=True).click()
-    ouvrir_filtre(page, "Lumineux")
-    dialogue(page).get_by_role("button", name="Lumineux EXEMPLE", exact=True).click()
+    """Au comptoir : un boîtier d'un forfait, un lumineux d'un autre, à additionner avec leur « + »."""
+    filtrer(page, "Taximètre", "T1 DEMO")
+    filtrer(page, "Lumineux", "Lumineux EXEMPLE")
 
     expect(page.locator("#compte")).to_have_text("Aucun forfait ne contient tout")
     titres = page.locator("#resultats .titre-groupe").all_text_contents()
     assert titres == ["Taximètre : T1 DEMO5 forfaits", "Lumineux : Lumineux EXEMPLE1 forfait"]
     assert refs(page) == AVEC_T1 | {"EX-LUM-POSE"}
-    expect(page.locator(".note-groupes")).to_contain_text("+ Total")
+    expect(page.locator(".note-groupes")).to_contain_text("au total avec leur « + »")
 
     # Un seul filtre qui ne donne rien : pas de groupes, le message habituel.
-    ouvrir_filtre(page, "Taximètre")
-    dialogue(page).get_by_role("button", name="Tous", exact=True).click()
+    filtrer(page, "Taximètre", "Tous")
     chercher(page, "zorba")
     expect(page.locator("#resultats .vide")).to_contain_text("Aucun forfait ne correspond à cette recherche.")
     expect(page.locator("#resultats .titre-groupe")).to_have_count(0)
@@ -372,7 +432,14 @@ def test_carte_complete_et_prix_au_format_francais(page):
     assert espaces(cartes(page)[0]["ttc"]) == "1 481,40 €"
     assert " " not in cartes(page)[0]["ttc"]  # espace visible avec toutes les polices
     assert espaces(cartes(page)[0]["ht"]) == "1 234,50 €"
-    expect(page.locator(".badge-exemple").first).to_have_text("EXEMPLE")
+    # La fiche du forfait choisi (à droite sur cet écran) reprend sa ligne, arrêt par arrêt, jusqu'au prix.
+    f = fiche(page, "EX-T1-Z5-3Q")
+    expect(f.locator(".badge-exemple")).to_have_text("Exemple")
+    expect(f.locator(".fiche-ref")).to_have_text("EX-T1-Z5-3Q")
+    expect(f.locator(".trajet .fam")).to_have_text(list(cartes(page)[0]["elements"]))
+    expect(f.locator(".trajet .el")).to_have_text(list(cartes(page)[0]["elements"].values()))
+    assert espaces(f.locator(".ttc-grand").text_content()) == "1 481,40 €TTC"
+    assert espaces(f.locator(".ht-fiche").text_content()) == "1 234,50 € HT"
 
 
 def test_trier_par_prix(page):
@@ -386,20 +453,20 @@ def test_trier_par_prix(page):
         return page.locator("#resultats .carte-ref").all_text_contents()
 
     assert refs_affichees() == sorted(TOUS)  # par défaut : ordre des références
-    page.select_option("#tri", label="prix croissant")
+    page.select_option("#tri", label="Prix croissant")
     assert ttc_affiches() == sorted(ttc_affiches()) and len(ttc_affiches()) == len(TOUS)
     assert set(refs_affichees()) == TOUS
-    page.select_option("#tri", label="prix décroissant")
+    page.select_option("#tri", label="Prix décroissant")
     assert ttc_affiches() == sorted(ttc_affiches(), reverse=True)
     chercher(page, "3Q")  # le tri s'applique aussi aux résultats d'une recherche
     assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and set(refs_affichees()) == AVEC_3Q
     chercher(page, "EX-T2-3Q")  # une référence tapée en entier reste en tête
     assert refs_affichees()[0] == "EX-T2-3Q"
-    page.select_option("#tri", label="par référence")
+    page.select_option("#tri", label="Par référence")
     chercher(page, "")
     assert refs_affichees() == sorted(TOUS)
 
-    page.select_option("#tri", label="prix décroissant")
+    page.select_option("#tri", label="Prix décroissant")
     page.reload()  # gardé sur l'appareil
     expect(page.locator("#tri")).to_have_value("prix-decroissant")
     assert ttc_affiches() == sorted(ttc_affiches(), reverse=True) and len(ttc_affiches()) == len(TOUS)
@@ -448,15 +515,16 @@ def test_copier_la_reference(navigateur, appareils):
     bouton = a.page.get_by_role("button", name="Copier la référence")
     bouton.click()
     expect(a.page.locator("#toast")).to_contain_text("EX-T2-3Q copiée")
-    expect(bouton).to_have_text("Copié")
+    expect(bouton).to_have_class(re.compile(r"\bcopie\b"))  # la pilule passe au vert, avec sa coche
     # Un second clic relance la confirmation : le premier minuteur ne doit pas la couper.
     a.page.clock.run_for(1000)
     bouton.click()
     a.page.wait_for_timeout(300)  # temps réel : laisse la copie se terminer (l'horloge de la page est figée)
     a.page.clock.run_for(800)
-    expect(bouton).to_have_text("Copié")
+    expect(bouton).to_have_class(re.compile(r"\bcopie\b"))
     a.page.clock.run_for(800)
-    expect(bouton).to_have_text("Copier")
+    expect(bouton).not_to_have_class(re.compile(r"\bcopie\b"))
+    expect(bouton).to_have_text("EX-T2-3Q")
     # Ce qui a été copié : on le colle dans la recherche (les tests n'ont pas le droit de lire le presse-papiers sous Firefox).
     a.page.fill("#recherche", "")
     a.page.keyboard.press("ControlOrMeta+V")
@@ -495,11 +563,11 @@ def test_ajouter_modifier_supprimer(page):
     assert refs(page) == {"TX-100"}
 
     chercher(page, "TX-100")
-    page.get_by_role("button", name="Supprimer", exact=True).click()
+    supprimer(page, "TX-100")
     expect(dialogue(page)).to_contain_text("Supprimer ce forfait ?")
     dialogue(page).get_by_role("button", name="Annuler").click()
     assert refs(page) == {"TX-100"}  # annuler ne supprime rien
-    page.get_by_role("button", name="Supprimer", exact=True).click()
+    supprimer(page, "TX-100")
     dialogue(page).get_by_role("button", name="Supprimer", exact=True).click()
     expect(page.locator("#resultats .carte")).to_have_count(0)
     chercher(page, "")
@@ -581,11 +649,8 @@ def test_supprimer_les_exemples(page):
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    ouvrir_filtre(page, "Lumineux")  # l'élément d'exemple a disparu
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans lumineux"])
-    dialogue(page).get_by_role("button", name="Tous").click()
-    ouvrir_filtre(page, "Taximètre")  # les éléments de départ, inutilisés, sont partis aussi
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
+    assert choix_du_filtre(page, "Lumineux") == ["Tous", "Sans lumineux"]  # l'élément d'exemple a disparu
+    assert choix_du_filtre(page, "Taximètre") == ["Tous", "Sans taximètre"]  # les éléments de départ, inutilisés, sont partis aussi
 
 
 def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appareils(page, tmp_path):
@@ -600,11 +665,8 @@ def test_supprimer_les_exemples_retire_les_elements_de_depart_des_anciens_appare
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    ouvrir_filtre(page, "Taximètre")
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
-    dialogue(page).get_by_role("button", name="Tous").click()
-    ouvrir_filtre(page, "Boîtier")
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "Sans boîtier"])
+    assert choix_du_filtre(page, "Taximètre") == ["Tous", "Sans taximètre"]
+    assert choix_du_filtre(page, "Boîtier") == ["Tous", "Sans boîtier"]
 
 
 def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_path):
@@ -625,8 +687,7 @@ def test_fichier_sans_exemples_retire_ceux_d_une_autre_version(appareils, tmp_pa
     importer(neuf, tmp_path / "equipe.json")
     expect(neuf.locator("#resultats")).to_contain_text("VRAI-1")
     expect(neuf.locator("#resultats")).not_to_contain_text("EXEMPLE")
-    ouvrir_filtre(neuf, "Taximètre")  # les éléments d'exemple sont partis aussi
-    expect(dialogue(neuf).locator(".choix")).to_have_text(["Tous", "Sans taximètre"])
+    assert choix_du_filtre(neuf, "Taximètre") == ["Tous", "Sans taximètre"]  # les éléments d'exemple sont partis aussi
 
 
 def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
@@ -641,8 +702,7 @@ def test_supprimer_les_exemples_garde_les_elements_modifies(page, tmp_path):
     activer_modif(page)
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
-    ouvrir_filtre(page, "Taximètre")
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
+    assert choix_du_filtre(page, "Taximètre") == ["Tous", "T2 Plus", "Sans taximètre"]
 
 
 def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
@@ -655,8 +715,7 @@ def test_supprimer_les_exemples_garde_un_element_de_depart_renomme(page):
     page.click("#btn-suppr-exemples")
     dialogue(page).get_by_role("button", name="Supprimer les exemples").click()
     expect(page.locator("#resultats")).to_contain_text("Aucun forfait enregistré")
-    ouvrir_filtre(page, "Taximètre")
-    expect(dialogue(page).locator(".choix")).to_have_text(["Tous", "T2 Plus", "Sans taximètre"])
+    assert choix_du_filtre(page, "Taximètre") == ["Tous", "T2 Plus", "Sans taximètre"]
 
 
 # ---------------------------------------------------------------- listes modifiables sans code
@@ -683,10 +742,11 @@ def test_listes_ajouter_renommer_et_proteger(page):
     dialogue(page).get_by_role("button", name="Compris").click()
     dialogue(page).get_by_role("button", name="Terminé").click()
 
-    # Nouvelle famille : elle arrive après les trois boutons de filtre, donc dans « Autres ».
-    page.click("#btn-autres-filtres")
-    expect(dialogue(page).get_by_role("button", name="TPE", exact=True)).to_be_visible()
-    dialogue(page).get_by_role("button", name="Fermer").click()
+    # Nouvelle famille, la sixième : sur cet écran cinq sont des pastilles, et une seule de reste
+    # s'affiche telle quelle (« Autres » ne sert qu'à partir de deux). La barre se redessine à la
+    # fermeture de la fenêtre, dont l'événement part en différé : on l'attend (Edge était parfois plus lent).
+    expect(page.locator("#filtres .filtre").last).to_have_text(re.compile("TPE"))
+    assert noms_filtres(page)[-1] == "TPE"
     chercher(page, "zorba5plus")  # le renommage s'applique aux forfaits existants
     assert refs(page) == AVEC_ZORBA5
     chercher(page, "3Q")
@@ -713,7 +773,7 @@ def test_exporter_puis_importer_donne_les_memes_donnees(appareils, tmp_path):
     modifier(a, "EX-T2-3Q")
     remplir(a, ht="800", ttc="960")
     chercher(a, "EX-LUM-POSE")
-    a.get_by_role("button", name="Supprimer", exact=True).click()
+    supprimer(a, "EX-LUM-POSE")
     dialogue(a).get_by_role("button", name="Supprimer", exact=True).click()
     expect(a.locator("#resultats .carte")).to_have_count(0)
     chercher(a, "")
@@ -742,7 +802,7 @@ def test_fusion_entre_deux_responsables_et_un_comptoir(appareils, tmp_path):
     chercher(b, "EX-T2-3Q")
     assert espaces(cartes(b)[0]["ttc"]) == "960,00 €"
     chercher(b, "EX-LUM-POSE")
-    b.get_by_role("button", name="Supprimer", exact=True).click()
+    supprimer(b, "EX-LUM-POSE")
     dialogue(b).get_by_role("button", name="Supprimer", exact=True).click()
     expect(b.locator("#resultats .carte")).to_have_count(0)
     ouvrir_ajout(b)
@@ -1221,12 +1281,11 @@ def test_boutons_vider_et_tout_effacer(page):
     expect(page.locator("#recherche")).to_have_value("")
     assert refs(page) == TOUS
     chercher(page, "3Q")
-    ouvrir_filtre(page, "Taximètre")
-    dialogue(page).get_by_role("button", name="T2", exact=True).click()
+    filtrer(page, "Taximètre", "T2")
     assert refs(page) == AVEC_T2_ET_3Q
     page.click("#btn-tout-effacer")  # efface le texte ET les filtres
     expect(page.locator("#recherche")).to_have_value("")
-    expect(page.locator("#etiquettes")).to_be_hidden()
+    expect(page.locator("#filtres .filtre.actif")).to_have_count(0)
     assert refs(page) == TOUS
 
 
@@ -1382,12 +1441,25 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
 
     sans_defilement_horizontal()
     page.screenshot(path=f"{prefixe}-1-accueil.png")
-    # Gros boutons faciles à toucher
+    # Commandes faciles à toucher : 44 px sur un téléphone, 36 px sur un PC sans écran tactile.
     hauteurs = page.eval_on_selector_all(
-        "#filtres .filtre, .btn-copier, #btn-importer, #btn-menu", "els => els.map(e => e.getBoundingClientRect().height)"
+        "#filtres .filtre, #resultats .carte, #btn-importer, #btn-menu",
+        "els => els.map(e => e.getBoundingClientRect().height).filter(h => h > 0)",
     )
-    assert min(hauteurs) >= 44, hauteurs
-    # Tous les boutons de filtre sont dans l'écran : sur téléphone ils passent à la ligne au lieu
+    assert min(hauteurs) >= (44 if largeur < 600 else 36), hauteurs
+    # Les deux boutons d'une rangée sont plus petits que leur zone d'appui, qui déborde autour d'eux :
+    # on mesure la hauteur sur laquelle un appui les atteint.
+    zones = page.eval_on_selector_all(
+        "#resultats .carte:first-child :is(.btn-copier, .btn-plus)",
+        """els => els.filter(e => e.getBoundingClientRect().height > 0).map(e => {
+             const r = e.getBoundingClientRect(), x = r.left + r.width / 2;
+             let haut = 0;
+             for (let y = Math.floor(r.top) - 12; y < r.bottom + 12; y++) if (e.contains(document.elementFromPoint(x, y))) haut++;
+             return haut;
+           })""",
+    )
+    assert zones and min(zones) >= 44, zones
+    # Toutes les pastilles de filtre sont dans l'écran : sur téléphone elles passent à la ligne au lieu
     # de défiler du doigt, sinon « Autres » reste hors de l'écran sans que rien ne le signale.
     debords = page.eval_on_selector_all(
         "#filtres .filtre",
@@ -1397,7 +1469,7 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     assert not debords, debords
 
     # Un nom d'élément d'une seule traite (le champ en accepte 60) ne doit pas faire défiler la page
-    # en largeur : le bouton de filtre coupe le mot au lieu de pousser la page.
+    # en largeur : la pastille de filtre coupe le mot au lieu de pousser la page.
     def sans_debord_avec_nom_long(selecteur):
         depasse = page.evaluate(
             """([sel, mot]) => {
@@ -1409,11 +1481,11 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
                  e.textContent = avant;
                  return trop;
                }""",
-            [selecteur, "Imprimante : " + "M" * 60],
+            [selecteur, "M" * 60],
         )
         assert depasse is False, f"{selecteur} : {depasse if depasse == 'absent' else 'un nom long fait défiler la page'}"
 
-    sans_debord_avec_nom_long("#filtres .filtre")
+    sans_debord_avec_nom_long("#filtres .filtre-nom")
 
     page.click("#recherche")
     page.keyboard.type("zor")
@@ -1421,9 +1493,9 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     sans_defilement_horizontal()
     page.screenshot(path=f"{prefixe}-2-suggestions.png")
     page.locator("#suggestions .suggestion", has_text="Zorba 5").click()
-    page.screenshot(path=f"{prefixe}-3-etiquette.png")
-    # L'étiquette du filtre posé porte le même nom : elle aussi coupe un mot trop long.
-    sans_debord_avec_nom_long("#etiquettes .etiquette span")
+    page.screenshot(path=f"{prefixe}-3-filtre-pose.png")
+    # La pastille du filtre posé affiche le nom de l'élément : elle aussi coupe un mot trop long.
+    sans_debord_avec_nom_long("#filtres .filtre.actif .filtre-nom")
 
     activer_modif(page)
     ouvrir_ajout(page)
@@ -1433,56 +1505,175 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-4-formulaire.png")
     dialogue(page).get_by_role("button", name="Fermer").click()
 
-    # Le Total : le bouton de carte, la barre du bas et le panneau tiennent dans l'écran
+    # La fiche d'un forfait : à droite de la liste sur le PC, en feuille qui monte du bas sur le téléphone.
+    f = fiche(page, "EX-T1-Z5-3Q")
+    expect(f.locator(".trajet")).to_be_visible()
+    boite = f.bounding_box()
+    assert boite["x"] >= 0 and boite["x"] + boite["width"] <= largeur and boite["y"] >= 0, boite
+    page.screenshot(path=f"{prefixe}-5-fiche.png")
+    f.get_by_role("button", name="Ajouter au total").click()
+    if largeur < 600:
+        f.get_by_role("button", name="Fermer").click()
+
+    # Le total : une barre qui ouvre une feuille. En bas de l'écran sur le téléphone ; sur ce PC, dont la
+    # page fait 800 px de haut (trop peu pour le total sous la fiche), elle est rangée sous le panneau.
     page.get_by_role("button", name="Ajouter EX-T1-Z5-3Q au total", exact=True).click()
-    page.get_by_role("button", name="Ajouter EX-T1-Z5-3Q au total", exact=True).click()
-    expect(page.locator("#barre-total")).to_be_visible()
     sans_defilement_horizontal()
-    page.screenshot(path=f"{prefixe}-5-total-barre.png")
-    page.locator("#barre-total").click()
+    barre = page.locator("#barre-total")
+    expect(barre).to_be_visible()
+    if largeur >= 600:
+        expect(page.locator("#total")).to_be_hidden()
+        b, p = barre.bounding_box(), page.locator("#panneau").bounding_box()
+        assert abs(b["x"] - p["x"]) <= 1 and abs(b["width"] - p["width"]) <= 1, (b, p)  # dans la colonne de droite
+        assert p["y"] + p["height"] <= b["y"] and b["y"] + b["height"] <= hauteur, (b, p)  # sous la fiche, à l'écran
+        gestes = page.locator("#fiche .fiche-gestes").bounding_box()
+        assert gestes["y"] + gestes["height"] <= b["y"], (gestes, b)  # « Ajouter au total » reste visible
+    page.screenshot(path=f"{prefixe}-6-total-barre.png")
+    barre.click()
     boite = dialogue(page).bounding_box()
-    assert boite["width"] <= largeur and boite["y"] >= 0
-    page.screenshot(path=f"{prefixe}-6-total-panneau.png")
+    assert boite["width"] <= largeur and boite["y"] >= 0, boite
+    expect(dialogue(page).locator(".total-qte")).to_have_text("2")
+    page.screenshot(path=f"{prefixe}-7-total.png")
 
 
-def test_cartes_repliees_par_defaut_puis_deroulees(navigateur, appareils):
-    """Au départ : le nom et le TTC. Le reste au premier appui ; le réglage du Menu reste sur l'appareil."""
-    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
+def test_telephone_une_rangee_par_forfait_puis_sa_fiche_en_feuille(navigateur, appareils):
+    """Sur un téléphone, une rangée : le nom, les éléments, le TTC et le « + ». Le reste est dans la
+    fiche, qui monte du bas au premier appui."""
+    page = appareils(viewport={"width": 375, "height": 812}).page
     carte = page.locator("#resultats .carte").first
-    expect(carte).to_have_class(re.compile(r"\bcarte-compacte\b"))
     expect(carte.locator(".prix-ttc .prix-montant")).to_be_visible()
-    expect(carte.locator(".carte-elements")).to_be_hidden()
-    expect(carte.locator(".prix-ht .prix-montant")).to_be_hidden()
-    expect(carte.locator(".btn-copier")).to_be_hidden()
-    assert carte.locator(".carte-ouvrir").bounding_box()["height"] >= 44
-    CAPTURES.mkdir(exist_ok=True)
-    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-7-cartes-repliees.png")
-
-    ouvrir = carte.locator(".carte-ouvrir")
-    expect(ouvrir).to_have_attribute("aria-expanded", "false")
-    ouvrir.click()
-    expect(ouvrir).to_have_attribute("aria-expanded", "true")
     expect(carte.locator(".carte-elements")).to_be_visible()
-    expect(carte.locator(".btn-copier")).to_be_visible()
-    ouvrir.click()  # un deuxième appui referme
-    expect(carte.locator(".carte-elements")).to_be_hidden()
+    expect(carte.locator(".btn-plus")).to_be_visible()
+    expect(carte.locator(".prix-ht")).to_be_hidden()
+    expect(carte.locator(".btn-copier")).to_be_hidden()
+    expect(page.locator("#panneau")).to_be_hidden()
+    # « On voit trop peu de forfaits » : il y en avait deux à l'écran.
+    entiers = page.eval_on_selector_all(
+        "#resultats .carte", "cs => cs.filter(c => c.getBoundingClientRect().bottom <= innerHeight).length"
+    )
+    assert entiers >= 6, entiers
+    CAPTURES.mkdir(exist_ok=True)
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-7-liste.png")
 
-    # Le réglage est dans le Menu : la barre de résultats tenait sur deux lignes au téléphone.
-    page.click("#btn-menu")
-    groupe = dialogue(page).get_by_role("group", name="Cartes")
-    expect(groupe.get_by_role("button", name="Repliées")).to_have_attribute("aria-pressed", "true")
-    groupe.get_by_role("button", name="Entières").click()
-    expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
-    expect(groupe.get_by_role("button", name="Entières")).to_have_attribute("aria-pressed", "true")
-    dialogue(page).get_by_role("button", name="Fermer").click()
-    expect(page.locator("#resultats .carte").first.locator(".btn-copier")).to_be_visible()
-    page.reload()  # gardé sur l'appareil
-    expect(page.locator("#resultats .carte-compacte")).to_have_count(0)
+    ref = carte.locator(".carte-ref").text_content()
+    ouvrir = carte.locator(".carte-ouvrir")
+    ouvrir.click()
+    feuille = page.locator("#dlg-fiche")
+    expect(feuille).to_be_visible()
+    expect(feuille.locator(".fiche-ref")).to_have_text(ref)
+    expect(feuille.locator(".trajet .el")).to_have_text(carte.locator(".el-nom").all_text_contents())
+    expect(feuille.locator(".ht-fiche")).to_be_visible()
+    boite = feuille.bounding_box()
+    assert boite["x"] >= 0 and boite["x"] + boite["width"] <= 375 and boite["y"] >= 0, boite
+    for bouton in feuille.get_by_role("button").all():
+        # 43,99 : la feuille est posée au demi-pixel près, la mesure rend 43,99997 pour 44.
+        assert bouton.bounding_box()["height"] >= 43.99, bouton.get_attribute("aria-label") or bouton.text_content()
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-8-fiche.png")
+
+    # Elle se ferme par son bouton, par Échap ou par un appui à côté ; le clavier revient à la rangée.
+    page.keyboard.press("Escape")
+    expect(feuille).to_be_hidden()
+    expect(ouvrir).to_be_focused()
+    ouvrir.click()
+    expect(feuille).to_be_visible()
+    page.mouse.click(180, 20)
+    expect(feuille).to_be_hidden()
+    ouvrir.click()
+    feuille.get_by_role("button", name="Fermer").click()
+    expect(feuille).to_be_hidden()
+    assert refs(page) == TOUS  # regarder une fiche ne change pas la liste
+
+
+def test_fenetre_retrecie_la_fiche_et_le_total_changent_de_place(page):
+    """« Ça dépend du poste » : la même page, en pleine largeur, sur une moitié d'écran, ou peu haute."""
+    page.set_viewport_size(HAUT)
+    a = sorted(TOUS)[1]
+    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
+    expect(page.locator("#fiche")).to_be_visible()  # grand écran : la fiche et le total à droite de la liste
+    expect(page.locator("#total")).to_be_visible()
+    expect(page.locator("#barre-total")).to_be_hidden()
+    assert len(noms_filtres(page)) == 5
+
+    page.set_viewport_size({"width": 900, "height": 720})  # la fenêtre sur une moitié d'écran
+    expect(page.locator("#panneau")).to_be_hidden()
+    expect(page.locator("#barre-total")).to_be_visible()  # le total passe dans la barre du bas
+    expect(page.locator("#dlg-fiche")).to_be_hidden()  # la fiche attend qu'on choisisse un forfait
+    assert page.evaluate("document.documentElement.scrollWidth") <= 900
+    assert refs(page) == TOUS
+    f = fiche(page, a)
+    expect(f).to_have_attribute("id", "dlg-fiche")
+    f.get_by_role("button", name="Fermer").click()
+
+    page.set_viewport_size(HAUT)
+    expect(page.locator("#total .total-ligne")).to_have_count(1)
+    expect(page.locator("#fiche .fiche-ref")).to_have_text(a)  # le forfait choisi reste choisi
+    expect(page.locator("#barre-total")).to_be_hidden()
+
+    # Page d'ordi peu haute (portable, écran agrandi) : sous la fiche, le total sortait de l'écran.
+    # Il devient la barre, rangée sous le panneau ; la fiche reste à droite de la liste.
+    page.set_viewport_size({"width": 1280, "height": 720})
+    barre = page.locator("#barre-total")
+    expect(barre).to_be_visible()
+    expect(page.locator("#total")).to_be_hidden()
+    expect(page.locator("#fiche .fiche-ref")).to_have_text(a)
+    b, p = barre.bounding_box(), page.locator("#panneau").bounding_box()
+    assert abs(b["x"] - p["x"]) <= 1 and p["y"] + p["height"] <= b["y"] and b["y"] + b["height"] <= 720, (b, p)
+    barre.click()
+    expect(page.locator("#dlg-total .total-ligne")).to_have_count(1)
+    page.set_viewport_size(HAUT)  # la fenêtre regrandit : la feuille se ferme, le total revient sous la fiche
+    expect(page.locator("#dlg-total")).to_be_hidden()
+    expect(page.locator("#total .total-ligne")).to_have_count(1)
+    expect(barre).to_be_hidden()
+
+
+def test_fiche_fermee_apres_un_favori_le_clavier_revient_au_forfait(appareils):
+    """Petit écran : un favori redessine la liste sous la fiche, le bouton qui l'avait ouverte n'existe plus.
+    À la fermeture, le clavier revient au forfait qu'on regardait (il retombait en haut de la page)."""
+    page = appareils(viewport={"width": 375, "height": 812}).page
+    dernier = sorted(TOUS)[-1]
+    fiche(page, dernier).get_by_role("button", name=f"Favori : {dernier}", exact=True).click()
+    expect(page.locator("#toast")).to_contain_text(f"{dernier} en favori")
+    page.keyboard.press("Escape")
+    expect(page.locator("#dlg-fiche")).not_to_be_visible()
+    rangee = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text=re.compile(f"^{re.escape(dernier)}$")))
+    expect(rangee.locator(".carte-ouvrir")).to_be_focused()
+
+
+def test_total_du_panneau_garde_son_defilement_et_montre_la_ligne_ajoutee(appareils):
+    """Grand écran : le total est redessiné à chaque ajout. Ses lignes repartaient en haut et la ligne
+    qui venait d'arriver, la dernière, restait sous le bord. La page, elle, ne doit pas défiler."""
+    page = appareils(viewport={"width": 1280, "height": 1000}).page
+    derniere_visible = """() => { const z = document.querySelector('#total .total-lignes');
+        const r = z.getBoundingClientRect(), d = z.lastElementChild.getBoundingClientRect();
+        return d.top >= r.top - 1 && d.bottom <= r.bottom + 1; }"""
+    for i in range(6):
+        page.locator("#resultats .carte").nth(i).locator(".btn-plus").click()
+        expect(page.locator("#total .total-ligne")).to_have_count(i + 1)
+        page.wait_for_function(derniere_visible)
+    lignes = page.locator("#total .total-lignes")
+    # Attendre la fin de l'entrée de la ligne : tant qu'elle se déplie, Playwright ne peut pas toucher
+    # son « + » et fait défiler la zone lui-même avant de cliquer (8 px, mesuré sur Firefox).
+    page.wait_for_function("() => document.querySelector('#total .total-lignes').lastElementChild.getAnimations().length === 0")
+    haut = lignes.evaluate("z => z.scrollTop")
+    assert haut > 0  # six lignes ne tiennent pas : la zone a défilé jusqu'à la dernière
+    page.locator('#total [data-cmd="plus"]').last.click()
+    expect(page.locator("#total .total-qte").last).to_have_text("2")
+    assert lignes.evaluate("z => z.scrollTop") == haut  # une quantité changée ne ramène pas en haut
+    assert page.evaluate("scrollY") == 0
+
+
+def test_retour_d_appui_au_doigt_sur_les_rangees_et_les_suggestions(page):
+    """Au doigt le survol est éteint : sans « :active », rien ne dit qu'un appui est pris. La refonte
+    avait retiré la rangée de forfait et les suggestions de cette règle."""
+    regle = page.evaluate("""[...document.styleSheets].flatMap((f) => [...f.cssRules]).map((r) => r.selectorText || '')
+        .find((s) => s.includes('doigt') && s.includes(':active')) || ''""")
+    for cible in (".carte-ouvrir", ".suggestion", ".filtre", ".btn-plus", ".btn-copier", ".menu-item"):
+        assert cible in regle, (cible, regle)
 
 
 def test_telephone_tourne_garde_les_forfaits_visibles(navigateur, appareils):
     """Mode paysage : en-tête et recherche aplatis, et tout revient en retournant le téléphone."""
-    appareil = appareils(compact=True, viewport={"width": 812, "height": 375}, reduced_motion="reduce")
+    appareil = appareils(viewport={"width": 812, "height": 375}, reduced_motion="reduce")
     page = appareil.page
     assert page.evaluate("document.documentElement.scrollWidth") <= 812
     CAPTURES.mkdir(exist_ok=True)
@@ -1495,16 +1686,41 @@ def test_telephone_tourne_garde_les_forfaits_visibles(navigateur, appareils):
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
 
 
+def test_telephone_tourne_du_responsable_rappel_et_total_cote_a_cote(navigateur, appareils):
+    """Téléphone tourné, mode modification, rappel d'export et total : empilés, ils ne laissaient que
+    41 px du premier forfait. Ils se rangent côte à côte et la barre des filtres tient sur une ligne."""
+    page = appareils(viewport={"width": 812, "height": 375}, reduced_motion="reduce").page
+    activer_modif(page)
+    ouvrir_ajout(page)
+    remplir(page, "R-1", "100", "120")
+    rappel, total = page.locator("#rappel"), page.locator("#barre-total")
+    expect(rappel).to_be_visible()
+    seul = rappel.bounding_box()
+    assert abs(seul["x"] + seul["width"] / 2 - 406) < 2, seul  # sans total, le rappel reste au milieu
+    page.locator("#resultats .carte").first.locator(".btn-plus").click()
+    expect(total).to_be_visible()
+    page.evaluate("window.scrollTo(0, 0)")
+    r, b = rappel.bounding_box(), total.bounding_box()
+    assert r["x"] + r["width"] <= b["x"], (r, b)  # côte à côte, sans se toucher
+    assert abs(r["y"] + r["height"] - (b["y"] + b["height"])) <= 1, (r, b)  # posés sur la même ligne
+    assert page.locator("#barre").bounding_box()["height"] <= 60  # filtres, compteur, tri et « + » sur une ligne
+    expect(page.locator("#btn-ajouter")).to_have_accessible_name(re.compile("Ajouter un forfait"))
+    haut = min(r["y"], b["y"])
+    entiers = [c for c in page.locator("#resultats .carte").all() if c.bounding_box()["y"] + c.bounding_box()["height"] <= haut]
+    assert len(entiers) >= 2, len(entiers)
+    assert page.evaluate("document.documentElement.scrollWidth") <= 812
+    CAPTURES.mkdir(exist_ok=True)
+    page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-8-paysage-responsable.png")
+
+
 def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navigateur, appareils):
     """Mode modification, rappel d'export et total à la fois : à eux trois ils couvraient tout le bas d'un téléphone."""
-    page = appareils(compact=True, viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
+    page = appareils(viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
     activer_modif(page)
     ouvrir_ajout(page)
     remplir(page, "R-1", "100", "120")  # une modification à exporter : le rappel apparaît
     premiere = page.locator("#resultats .carte").first
-    premiere.locator(".carte-ouvrir").click()
-    premiere.locator(".btn-total").click()
-    premiere.locator(".carte-ouvrir").click()
+    premiere.locator(".btn-plus").click()  # un forfait au total : la barre du bas apparaît
     page.evaluate("window.scrollTo(0, 0)")
     rappel, total, ajouter = page.locator("#rappel"), page.locator("#barre-total"), page.locator("#btn-ajouter")
     expect(rappel).to_contain_text("1 modification pas encore exportée")
@@ -1515,10 +1731,11 @@ def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navig
     assert abs(ajouter.bounding_box()["y"] - page.locator("#compte").bounding_box()["y"]) < 30
     assert ajouter.bounding_box()["width"] <= 60
     expect(ajouter).to_have_accessible_name(re.compile("Ajouter un forfait"))
-    expect(page.get_by_role("combobox", name="Trier")).to_have_count(1)  # le mot est caché à l'écran, pas son nom
-    assert page.locator(".tri-mot").bounding_box()["width"] <= 2
-    carte = premiere.bounding_box()
-    assert carte["y"] + carte["height"] <= rappel.bounding_box()["y"], (carte, rappel.bounding_box())  # un forfait entier
+    expect(page.get_by_role("combobox", name="Trier")).to_have_count(1)  # le mot n'est pas à l'écran, le nom si
+    # Des forfaits entiers au-dessus des deux barres (il n'en restait plus un seul).
+    haut_rappel = rappel.bounding_box()["y"]
+    entiers = [c for c in page.locator("#resultats .carte").all() if c.bounding_box()["y"] + c.bounding_box()["height"] <= haut_rappel]
+    assert len(entiers) >= 3, len(entiers)
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
     CAPTURES.mkdir(exist_ok=True)
     page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-9-responsable.png")
@@ -1532,6 +1749,14 @@ def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navig
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
     assert rappel.bounding_box()["y"] + rappel.bounding_box()["height"] <= total.bounding_box()["y"] + 1
     assert ajouter.bounding_box()["x"] + ajouter.bounding_box()["width"] <= 375
+    # Le montant TTC reste dans la barre du total (il en sortait par la droite : « 1 140,00 € TT »).
+    dans_la_barre = """() => {
+        const barre = document.querySelector('#barre-total').getBoundingClientRect();
+        const ttc = document.querySelector('#barre-total-ttc');
+        const boite = ttc.getBoundingClientRect();
+        return boite.right <= barre.right - 8 && boite.left >= barre.left + 8 && ttc.scrollWidth <= ttc.clientWidth + 1;
+    }"""
+    assert page.evaluate(dans_la_barre)
     page.screenshot(path=CAPTURES / f"{navigateur.nom}-telephone-9-responsable-tres-grand.png")
 
     # Entre deux (grand téléphone) : le bouton entier repassait sous le compteur jusqu'à 519 px de large.
@@ -1543,76 +1768,64 @@ def test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait(navig
     expect(rappel).to_contain_text("exporte et range le fichier dans OneDrive")
     expect(page.locator(".rappel-suite")).to_be_visible()
     assert ajouter.bounding_box()["width"] > 150
-    assert ajouter.evaluate("b => getComputedStyle(b).columnGap") == "0px"  # pas d'écart ajouté entre « + » et le texte
-    assert page.locator(".tri-mot").bounding_box()["width"] > 20
 
 
 def test_derniers_consultes_reviennent_quand_la_recherche_est_vide(appareils):
-    """La liste est longue : le forfait regardé il y a deux minutes revient en haut, en un appui."""
-    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
-    expect(page.locator("#resultats .recents")).to_have_count(0)  # rien de consulté : pas de rangée
+    """La liste est longue : le forfait regardé il y a deux minutes se rouvre par « Récents »."""
+    page = appareils(viewport={"width": 375, "height": 812}).page
+    recents = page.locator("#btn-recents")
+    expect(recents).to_be_hidden()  # rien de consulté : pas de bouton
 
-    carte = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text="EX-T2-3Q"))
-    carte.locator(".carte-ouvrir").click()
-    chercher(page, "3Q")  # une recherche, puis on revient à la liste complète
+    fiche(page, "EX-T2-3Q").get_by_role("button", name="Fermer").click()
+    expect(recents).to_be_visible()
+    chercher(page, "3Q")  # pendant une recherche, « Tout effacer » prend sa place
+    expect(recents).to_be_hidden()
+    expect(page.locator("#btn-tout-effacer")).to_be_visible()
     chercher(page, "")
-    page.click("#btn-recents")  # repliée par défaut : un appui l'ouvre
-    recent = page.locator("#resultats .recent")
+    recents.click()
+    expect(recents).to_have_attribute("aria-expanded", "true")
+    recent = menu(page).locator(".recent")
     expect(recent).to_have_count(1)
     expect(recent).to_contain_text("Taximètre T2 + imprimante 3Q")
 
-    recent.click()
-    assert refs(page) == {"EX-T2-3Q"}
-    expect(page.locator("#resultats .carte")).to_have_class(re.compile(r"\bcarte-ouverte\b"))
+    recent.click()  # la fiche se rouvre ; la liste ne bouge pas
+    expect(menu(page)).to_have_count(0)
+    expect(page.locator("#dlg-fiche .fiche-ref")).to_have_text("EX-T2-3Q")
+    assert refs(page) == TOUS
 
 
-def test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme(appareils):
-    """Repliée par défaut pour laisser la place aux forfaits : un appui l'ouvre, l'appareil s'en souvient."""
-    page = appareils(compact=True, viewport={"width": 375, "height": 812}).page
-    carte = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text="EX-T2-3Q"))
-    carte.locator(".carte-ouvrir").click()
-    chercher(page, "3Q")
-    chercher(page, "")
-    expect(page.locator("#resultats .recent")).to_have_count(1)
-
-    bouton = page.locator("#btn-recents")
-    expect(bouton).to_have_attribute("aria-expanded", "false")
-    expect(page.locator("#resultats .recent")).to_be_hidden()
-    # Mesure depuis le haut du document : la page peut être défilée, ce qui fausserait bounding_box.
-    haut_premiere_carte = "document.querySelector('#resultats .carte').offsetTop"
-    haut_replie = page.evaluate(haut_premiere_carte)
-
-    bouton.click()
-    expect(page.locator("#resultats .recent").first).to_be_visible()
-    expect(bouton).to_have_attribute("aria-expanded", "true")
-    assert page.evaluate(haut_premiere_carte) > haut_replie  # ouverte, la rangée pousse les forfaits
-
-    # Un appareil déjà en service avait enregistré l'ancien réglage (rangée dépliée) : il ne doit
-    # pas le garder. `sauverAppareil()` réécrit tout l'objet, donc l'ancienne clé était déjà là.
+def test_recents_quatre_au_plus_le_dernier_en_tete_et_anciens_reglages_ignores(page):
+    """Grand écran : « Récents » montre la fiche à droite. Les réglages des versions d'avant (rangée
+    des récents ouverte ou non, cartes repliées) restent dans l'appareil : ils ne doivent rien casser."""
+    noms = {c["ref"]: c["designation"] or c["ref"] for c in cartes(page)}
+    consultes = sorted(TOUS)[:5]
+    for ref in consultes:
+        fiche(page, ref)
     page.evaluate(
         "() => { const c = ['forfaits', 'appareil', 'v1'].join('.');"
         " const r = JSON.parse(localStorage.getItem(c));"
-        " delete r.recentsOuverts; r.recentsPlies = false;"
+        " Object.assign(r, { recentsPlies: false, recentsOuverts: true, compact: true });"
         " localStorage.setItem(c, JSON.stringify(r)); }"
     )
     page.reload()
     page.wait_for_selector("#resultats .carte")
-    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "false")
+    expect(page.locator("#resultats .carte .btn-copier").first).to_be_visible()  # pas de carte « repliée »
+    bouton = page.locator("#btn-recents")
+    expect(bouton).to_have_attribute("aria-expanded", "false")
+    bouton.click()
+    recents = menu(page).locator(".recent > span:first-child")
+    expect(recents).to_have_text([noms[ref] for ref in reversed(consultes[1:])])  # 4 au plus, le dernier en tête
 
-    # Réglage de cet appareil : il tient au rechargement, et on peut la refermer.
-    page.locator("#btn-recents").click()
-    page.reload()
-    page.wait_for_selector("#resultats .carte")
-    expect(page.locator("#btn-recents")).to_have_attribute("aria-expanded", "true")
-    expect(page.locator("#resultats .recent").first).to_be_visible()
-    page.locator("#btn-recents").click()
-    expect(page.locator("#resultats .recent")).to_be_hidden()
-    assert page.evaluate(haut_premiere_carte) == haut_replie  # la place est rendue aux forfaits
+    menu(page).locator(".recent").last.click()
+    expect(menu(page)).to_have_count(0)
+    expect(page.locator("#fiche .fiche-ref")).to_have_text(consultes[1])
+    expect(page.locator("#resultats .carte.choisie .carte-ref")).to_have_text(consultes[1])
+    expect(page.locator("#dlg-fiche")).to_be_hidden()
 
 
 def test_grands_caracteres_grossissent_tout_sans_deborder(appareils):
     """Comptoir et atelier : un cran de plus, gardé sur l'appareil, sans casser la mise en page."""
-    page = appareils(compact=True, viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
+    page = appareils(viewport={"width": 375, "height": 812}, reduced_motion="reduce").page
     avant = page.locator("#recherche").bounding_box()["height"]
 
     page.click("#btn-menu")
@@ -1624,6 +1837,17 @@ def test_grands_caracteres_grossissent_tout_sans_deborder(appareils):
 
     assert page.locator("#recherche").bounding_box()["height"] > avant * 1.2
     assert page.evaluate("document.documentElement.scrollWidth") <= 375
+    # Même piège pour le menu d'un filtre : il se pose sous sa pastille, dans l'écran.
+    boite = ouvrir_filtre(page, "Imprimante").bounding_box()
+    pastille = page.locator("#filtres .filtre", has_text="Imprimante").bounding_box()
+    assert boite["x"] >= 0 and boite["x"] + boite["width"] <= 375, boite
+    assert 0 <= boite["y"] - (pastille["y"] + pastille["height"]) <= 16, (boite, pastille)
+    page.keyboard.press("Escape")
+    # Et pour la feuille d'un forfait.
+    f = fiche(page, "EX-T2-3Q")
+    boite = f.bounding_box()
+    assert boite["x"] >= 0 and boite["x"] + boite["width"] <= 375 and boite["y"] >= 0, boite
+    f.get_by_role("button", name="Fermer").click()
     page.reload()  # gardé sur l'appareil
     expect(page.locator("html")).to_have_attribute("data-texte", "tres-grand")
 
@@ -1698,12 +1922,15 @@ def _contraste(a, b):
 # (couleur, fond, minimum) : seulement les associations réellement affichées.
 # 4,5 = texte lisible (WCAG AA) ; 3 = bordure ou icône visible.
 PAIRES_PAGE = [
-    ("--texte", "--fond", 4.5), ("--texte", "--surface", 4.5), ("--texte-fort", "--surface", 4.5),
+    ("--texte", "--fond", 4.5), ("--texte", "--surface", 4.5), ("--texte", "--surface-2", 4.5),
+    ("--texte-fort", "--fond", 4.5), ("--texte-fort", "--surface", 4.5), ("--texte-fort", "--surface-2", 4.5),
     ("--texte-doux", "--fond", 4.5), ("--texte-doux", "--surface", 4.5), ("--texte-doux", "--surface-2", 4.5),
     ("--texte-pale", "--fond", 4.5),  # texte d'exemple dans les champs
     ("--rouge-vif", "--fond", 4.5), ("--rouge-vif", "--surface", 4.5), ("--rouge-vif", "--surface-2", 4.5),
     ("--ambre", "--surface-2", 4.5), ("--ambre", "--surface", 4.5),
-    ("--inverse-texte", "--inverse", 4.5),
+    ("--ambre", "--fond", 3),  # l'étoile d'un favori, dans la liste
+    # Pastille pleine = « choisi » (filtre posé, choix d'un menu, quantité au total), survol compris.
+    ("--inverse-texte", "--inverse", 4.5), ("--inverse-texte", "--inverse-survol", 4.5),
     ("--blanc", "--rouge", 4.5), ("--blanc", "--vert", 4.5),
     # Bordure des boutons : elle doit se voir sur le fond de page, mais aussi sur une carte et
     # sur une puce, sinon on ne comprend pas que c'est un bouton.
@@ -1746,9 +1973,10 @@ def test_affichage_clair_telephone_et_pc(navigateur, appareils, largeur, hauteur
             page.click(selecteur)
 
     # On ouvre un filtre avant de chercher : au doigt, la rangée se replie dès qu'il y a du texte.
-    ouvrir_filtre(page, "Taximètre")
+    expect(ouvrir_filtre(page, "Taximètre")).to_be_visible()
     page.screenshot(path=f"{prefixe}-2-filtre.png")
     page.keyboard.press("Escape")
+    expect(menu(page)).to_have_count(0)
     toucher("#recherche")
     page.keyboard.type("3Q")
     page.screenshot(path=f"{prefixe}-3-recherche.png")
@@ -2043,7 +2271,7 @@ def test_surnom_perso_d_un_appareil_retrouve_ses_forfaits(page, tmp_path):
     expect(page.locator("#suggestions .suggestion-nom")).to_have_text(["3Q"])
     expect(page.locator("#suggestions .suggestion-surnom")).to_have_text(["« la petite »"])
     page.locator("#suggestions .suggestion").first.click()
-    expect(page.locator("#etiquettes")).to_contain_text("Imprimante : 3Q")
+    expect(page.locator("#filtres .filtre.actif")).to_have_text("Imprimante : 3Q")
     assert "la petite" not in json.dumps(exporter_json(page, tmp_path / "a.json"))  # perso : jamais exporté
 
 
@@ -2063,8 +2291,8 @@ def test_surnom_deja_pris_est_refuse(page):
     expect(d.locator(".surnom-mien")).to_have_count(0)
 
 
-def test_surnom_perso_d_un_forfait_depuis_sa_carte(page):
-    page.get_by_role("button", name="Surnoms de EX-T2-3Q", exact=True).click()
+def test_surnom_perso_d_un_forfait_depuis_sa_fiche(page):
+    fiche(page, "EX-T2-3Q").get_by_role("button", name="Surnoms de EX-T2-3Q", exact=True).click()
     d = dialogue(page)
     d.get_by_label("Nouveau surnom pour forfait EX-T2-3Q").fill("pack nuit, le basique")
     d.get_by_role("button", name="Ajouter", exact=True).click()
@@ -2072,7 +2300,8 @@ def test_surnom_perso_d_un_forfait_depuis_sa_carte(page):
     d.get_by_role("button", name="Terminé").click()
     chercher(page, "basiq")
     assert refs(page) == {"EX-T2-3Q"}
-    expect(page.locator(".carte .carte-surnoms")).to_have_text("Aussi appelé : pack nuit, le basique")
+    expect(page.locator(".carte .carte-surnoms")).to_have_text("dit « pack nuit, le basique »")
+    expect(page.locator("#fiche .fiche-surnom")).to_have_text("dit « pack nuit, le basique »")
 
 
 def test_surnoms_d_equipe_partages_et_l_equipe_gagne(appareils, tmp_path):
@@ -2328,49 +2557,104 @@ def prix_carte(page, ref):
 
 
 def test_total_additionne_forfaits_quantites_et_lignes_libres(page):
+    page.set_viewport_size(HAUT)
     a, b = sorted(TOUS)[:2]
     (ht_a, ttc_a), (ht_b, ttc_b) = prix_carte(page, a), prix_carte(page, b)
-    expect(page.locator("#barre-total")).to_be_hidden()  # rien à afficher tant que le total est vide
+    total = page.locator("#total")  # grand écran : le total est sous la fiche, à droite de la liste
+    expect(total).to_be_hidden()  # rien à afficher tant que le total est vide
 
-    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
+    plus_a = page.get_by_role("button", name=f"Ajouter {a} au total", exact=True)
+    plus_a.click()
     expect(page.locator("#toast")).to_contain_text(f"{a} ajouté au total")
-    page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
-    expect(page.get_by_role("button", name=f"Ajouter {a} au total", exact=True)).to_have_text("Total ×2")
+    plus_a.click()
+    expect(plus_a).to_have_text("2")  # le « + » de la rangée affiche la quantité déjà comptée
     page.get_by_role("button", name=f"Ajouter {b} au total", exact=True).click()
-    expect(page.locator("#barre-total-nb")).to_contain_text("3 articles")
-    assert centimes(page.locator("#barre-total-ht").text_content()) == 2 * ht_a + ht_b
-    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2 * ttc_a + ttc_b
+    expect(total.locator(".total-tete")).to_contain_text("3 articles")
+    assert centimes(total.locator(".s-ht").text_content()) == 2 * ht_a + ht_b
+    assert centimes(total.locator(".s-ttc").text_content()) == 2 * ttc_a + ttc_b
+    # Le bouton de la fiche ajoute au même total, et dit ce qui est déjà compté.
+    fiche(page, a).get_by_role("button", name="Ajouter au total").click()
+    expect(page.locator("#fiche .deja")).to_have_text("×3")
+    expect(plus_a).to_have_text("3")
 
-    page.locator("#barre-total").click()
-    d = dialogue(page)
-    d.get_by_role("button", name=f"Moins : {a}").click()  # 2 → 1
-    d.get_by_role("button", name=f"Retirer {b}").click()
-    expect(d.locator(".total-ligne")).to_have_count(1)
+    total.get_by_role("button", name=f"Moins : {a}").click()  # 3 → 2
+    total.get_by_role("button", name=f"Moins : {a}").click()  # 2 → 1
+    total.get_by_role("button", name=f"Retirer {b}").click()
+    expect(total.locator(".total-ligne")).to_have_count(1)
+    expect(plus_a).to_have_text("1")
+    # Chaque ligne garde son HT sous son TTC (les clients sont des professionnels : le HT se lit ligne par ligne).
+    assert centimes(total.locator(".total-ligne-prix small").text_content()) == ht_a
     # Ligne libre : 0,10 + 0,20 doit faire 0,30 exactement ; le TTC se calcule depuis le HT
+    total.get_by_role("button", name="Ligne libre").click()
+    d = dialogue(page)
     d.get_by_label("Nom de la ligne libre").fill("Pièce test")
     d.get_by_label("Prix HT de la ligne libre").fill("0,10")
     expect(d.get_by_label("Prix TTC de la ligne libre")).to_have_value("0,12")
-    d.get_by_role("button", name="+ Ajouter à la liste").click()
+    d.get_by_role("button", name="Ajouter à la liste").click()
+    expect(d.locator("#toast")).to_have_text("Pièce test ajouté au total")  # dans la fenêtre : derrière, on ne le verrait pas
     d.get_by_label("Prix TTC de la ligne libre").fill("0,24")
     expect(d.get_by_label("Prix HT de la ligne libre")).to_have_value("0,20")
-    d.get_by_role("button", name="+ Ajouter à la liste").click()
-    expect(d.locator(".total-ligne")).to_have_count(3)
-    assert centimes(d.locator(".total-somme dd").first.text_content()) == ht_a + 10 + 20
-    assert centimes(d.locator(".total-somme dd").last.text_content()) == ttc_a + 12 + 24
+    d.get_by_role("button", name="Ajouter à la liste").click()
     d.get_by_role("button", name="Terminé").click()
+    expect(total.locator(".total-ligne-nom")).to_have_text([a, "Pièce test", "Divers"])
+    assert centimes(total.locator(".s-ht").text_content()) == ht_a + 10 + 20
+    assert centimes(total.locator(".s-ttc").text_content()) == ttc_a + 12 + 24
 
     page.reload()  # gardé sur l'appareil
-    expect(page.locator("#barre-total-nb")).to_contain_text("3 articles")
-    assert centimes(page.locator("#barre-total-ht").text_content()) == ht_a + 30
-    page.locator("#barre-total").click()
-    dialogue(page).get_by_role("button", name="Tout vider").click()
+    expect(total.locator(".total-tete")).to_contain_text("3 articles")
+    assert centimes(total.locator(".s-ht").text_content()) == ht_a + 30
+    total.get_by_role("button", name="Vider", exact=True).click()
+    expect(dialogue(page)).to_contain_text("Vider le total ?")
+    dialogue(page).get_by_role("button", name="Annuler").click()
+    expect(total.locator(".total-ligne")).to_have_count(3)  # annuler ne vide rien
+    total.get_by_role("button", name="Vider", exact=True).click()
     dialogue(page).get_by_role("button", name="Vider", exact=True).click()
-    expect(dialogue(page).locator(".total-vide")).to_be_visible()
-    dialogue(page).get_by_role("button", name="Terminé").click()
-    expect(page.locator("#barre-total")).to_be_hidden()
+    expect(total).to_be_hidden()
+    expect(plus_a).not_to_have_attribute("data-qte", re.compile("."))
+
+
+def test_total_sur_telephone_barre_du_bas_puis_feuille(appareils):
+    page = appareils(viewport={"width": 375, "height": 812}).page
+    a = sorted(TOUS)[0]
+    ht, ttc = prix_carte(page, a)
+    barre = page.locator("#barre-total")
+    expect(barre).to_be_hidden()  # rien à afficher tant que le total est vide
+
+    plus = page.get_by_role("button", name=f"Ajouter {a} au total", exact=True)
+    plus.click()
+    plus.click()
+    expect(page.locator("#barre-total-nb")).to_contain_text("2 articles")
+    assert centimes(page.locator("#barre-total-ht").text_content()) == 2 * ht
+    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2 * ttc
+    # La dernière rangée reste atteignable au-dessus de la barre.
+    derniere = page.locator("#resultats .carte").last
+    derniere.scroll_into_view_if_needed()
+    page.mouse.wheel(0, 2000)
+    assert derniere.bounding_box()["y"] + derniere.bounding_box()["height"] <= barre.bounding_box()["y"]
+
+    barre.click()
+    feuille = page.locator("#dlg-total")
+    expect(feuille.locator("h2")).to_be_focused()
+    expect(feuille.locator(".total-ligne-nom")).to_have_text([a])
+    feuille.get_by_role("button", name="Ligne libre").click()
+    d = dialogue(page)
+    d.get_by_label("Prix TTC de la ligne libre").fill("12")
+    d.get_by_role("button", name="Ajouter à la liste").click()
+    d.get_by_role("button", name="Terminé").click()
+    expect(feuille.locator(".total-ligne-nom")).to_have_text([a, "Divers"])
+    assert centimes(feuille.locator(".s-ttc").text_content()) == 2 * ttc + 1200
+    feuille.get_by_role("button", name="Fermer").click()
+    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2 * ttc + 1200
+
+    barre.click()
+    feuille.get_by_role("button", name="Vider", exact=True).click()
+    dialogue(page).get_by_role("button", name="Vider", exact=True).click()
+    expect(feuille).to_be_hidden()  # plus rien à montrer : la feuille et la barre s'en vont
+    expect(barre).to_be_hidden()
 
 
 def test_total_abime_ou_invalide_ne_bloque_rien(page):
+    page.set_viewport_size(HAUT)
     # Données d'appareil bricolées : la page s'ouvre quand même et ne garde que les lignes valides.
     page.evaluate(
         """() => localStorage.setItem('forfaits.appareil.v1', JSON.stringify({total: [
@@ -2381,21 +2665,24 @@ def test_total_abime_ou_invalide_ne_bloque_rien(page):
             'x', null]}))"""
     )
     page.reload()
-    expect(page.locator("#barre-total-nb")).to_contain_text("2 articles")
-    assert centimes(page.locator("#barre-total-ttc").text_content()) == 2400
-    page.locator("#barre-total").click()
+    total = page.locator("#total")
+    expect(total.locator(".total-tete")).to_contain_text("2 articles")
+    assert centimes(total.locator(".s-ttc").text_content()) == 2400
+    total.get_by_role("button", name="Ligne libre").click()
     d = dialogue(page)
     d.get_by_label("Nom de la ligne libre").fill("Sans prix")
-    d.get_by_role("button", name="+ Ajouter à la liste").click()
+    d.get_by_role("button", name="Ajouter à la liste").click()
     expect(d.locator(".msg-erreur")).to_contain_text("Tape un prix")  # dans la fenêtre : un toast passerait dessous
-    expect(d.locator(".total-ligne")).to_have_count(1)
+    d.get_by_role("button", name="Terminé").click()
+    expect(total.locator(".total-ligne")).to_have_count(1)
 
 
-def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(page):
+def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(appareils):
+    page = appareils(viewport={"width": 375, "height": 812}).page
     a = sorted(TOUS)[0]
     page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
     page.locator("#barre-total").click()
-    d = dialogue(page)
+    d = page.locator("#dlg-total")
     plus = d.get_by_role("button", name=f"Plus : {a}")
     plus.focus()
     page.keyboard.press("Enter")
@@ -2403,16 +2690,16 @@ def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(page):
     expect(d.get_by_role("button", name=f"Plus : {a}")).to_be_focused()  # le focus ne se perd pas
     hauteur = d.get_by_role("button", name=f"Retirer {a}").bounding_box()
     assert hauteur["height"] >= 44 and hauteur["width"] >= 44, hauteur
-    # Le total a changé dans un autre onglet : « Retirer » sur une ligne périmée ne retire pas la mauvaise
+    # Le total a changé dans un autre onglet : la feuille ouverte le suit, et « Retirer » retire la ligne visée.
     page.evaluate(
         """() => { const l = JSON.parse(localStorage.getItem('forfaits.appareil.v1'));
           l.total.push({id: null, nom: 'Autre', qte: 1, ht: 100, ttc: 120});
           localStorage.setItem('forfaits.appareil.v1', JSON.stringify(l));
           window.dispatchEvent(new StorageEvent('storage', {key: ['forfaits', 'appareil', 'v1'].join('.')})); }"""
     )
-    d.get_by_role("button", name=f"Retirer {a}").click()
-    expect(d.locator(".total-ligne")).to_have_count(2)  # rien n'est retiré à tort : la liste est redessinée
     expect(d.locator(".total-ligne-nom")).to_have_text([a, "Autre"])
+    d.get_by_role("button", name=f"Retirer {a}").click()
+    expect(d.locator(".total-ligne-nom")).to_have_text(["Autre"])
 
 
 def test_fichier_excel_directement_est_explique(page, tmp_path):
@@ -2436,28 +2723,31 @@ def test_menu_les_actions_de_tous_les_jours_avant_celles_des_responsables(page):
 
 
 def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur, appareils):
-    """Clavier ouvert, la rangée des familles mangeait les deux seules cartes visibles : elle se
+    """Clavier ouvert, la rangée des familles mangeait les seules rangées visibles : elle se
     replie donc dès que la recherche contient du texte. Mais seulement quand on vient de toucher
     l'écran : sur un PC à dalle tactile, « pointer: coarse » et « hover: none » répondent « tactile »
     même avec une souris branchée, et la rangée disparaîtrait pour rien."""
-    options = {"viewport": {"width": 375, "height": 812}, "has_touch": True, "compact": True}
+    options = {"viewport": {"width": 375, "height": 812}, "has_touch": True}
     if navigateur.nom != "firefox":  # Firefox ne gère pas is_mobile
         options |= {"is_mobile": True, "device_scale_factor": 2}
     page = appareils(**options).page
-    rangee = page.locator("#filtres")
+    rangee = page.locator("#filtres .filtre").first
+    feuille = page.locator("#dlg-fiche")
     expect(rangee).to_be_visible()
     assert page.evaluate("document.documentElement.dataset.geste") == "doigt"
 
     page.tap("#recherche")
     page.keyboard.type("3Q")
     expect(rangee).to_be_hidden()
+    expect(page.locator("#filtres .filtre:visible")).to_have_count(0)
 
     # Et l'appui suivant doit être PRIS : replier la rangée sur le focus du champ la faisait
-    # revenir dès que le doigt touchait une carte, le contenu redescendait de 116 px et plus
-    # aucune carte ne s'ouvrait.
-    carte = page.locator(".carte-ouvrir").first
-    carte.tap()
-    expect(carte).to_have_attribute("aria-expanded", "true")
+    # revenir dès que le doigt touchait un forfait, le contenu redescendait de 116 px et plus
+    # aucune fiche ne s'ouvrait.
+    page.locator(".carte-ouvrir").first.tap()
+    expect(feuille.locator(".fiche-ref")).to_have_text(page.locator("#resultats .carte-ref").first.text_content())
+    feuille.get_by_role("button", name="Fermer").tap()
+    expect(feuille).to_be_hidden()
 
     # La croix du champ efface le texte : la rangée revient (et elle est au-dessus de la croix,
     # donc rien ne bouge sous le doigt).
@@ -2468,7 +2758,7 @@ def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur
     pc = appareils(viewport={"width": 1280, "height": 800}).page
     assert pc.evaluate("document.documentElement.dataset.geste") == "souris"
     chercher(pc, "3Q")
-    expect(pc.locator("#filtres")).to_be_visible()
+    expect(pc.locator("#filtres .filtre").first).to_be_visible()
 
     # Appareil hybride (dalle tactile + souris) : une fois la recherche tapée au doigt, la rangée
     # NE revient PAS si la souris bouge. Elle reviendrait sous le curseur, et surtout : si elle
@@ -2483,15 +2773,37 @@ def test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media(navigateur
         page.mouse.move(180, 400)
         assert page.evaluate("document.documentElement.dataset.geste") == "souris"
         expect(rangee).to_be_hidden()
-        # Et l'appui du doigt au même endroit ouvre bien la carte visée : rien n'a bougé.
-        # Une poignée, pas un locator : « [aria-expanded=false] » désignerait une autre carte
-        # une fois celle-ci ouverte.
-        cible = page.locator('.carte-ouvrir[aria-expanded="false"]').first.element_handle()
-        boite = cible.bounding_box()
+        # Et l'appui du doigt au même endroit ouvre bien la fiche du forfait visé : rien n'a bougé.
+        cible = page.locator("#resultats .carte").nth(1)
+        boite = cible.locator(".carte-ouvrir").bounding_box()
         page.touchscreen.tap(boite["x"] + boite["width"] / 2, boite["y"] + boite["height"] / 2)
-        page.wait_for_function(
-            "(b) => b.getAttribute('aria-expanded') === 'true'", arg=cible, timeout=3000
-        )
+        expect(feuille.locator(".fiche-ref")).to_have_text(cible.locator(".carte-ref").text_content())
+
+
+def test_taille_des_commandes_ne_change_pas_au_contact_du_doigt(navigateur, appareils):
+    """PC à écran tactile : si les commandes grossissaient quand le doigt touche (36 → 44 px), la
+    liste bougerait sous le doigt et l'appui serait perdu. Leur taille se décide une fois, à
+    l'ouverture : 44 px dès qu'un écran peut être touché, 36 px avec une souris seule."""
+    page = appareils(viewport={"width": 1280, "height": 800}, has_touch=True, reduced_motion="reduce").page
+    hauteur = "document.querySelector('#filtres .filtre').getBoundingClientRect().height"
+    haut = "document.querySelector('#resultats .carte:nth-child(3)').getBoundingClientRect().top"
+    assert page.evaluate(hauteur) >= 44
+    avant = page.evaluate(haut)
+    if navigateur.nom != "firefox":  # voir le test précédent : pas de souris sous Firefox une fois le tactile émulé
+        page.mouse.move(600, 400)
+        assert page.evaluate("document.documentElement.dataset.geste") == "souris"
+        assert page.evaluate(haut) == avant and page.evaluate(hauteur) >= 44
+    page.touchscreen.tap(30, 30)
+    assert page.evaluate("document.documentElement.dataset.geste") == "doigt"
+    assert page.evaluate(haut) == avant and page.evaluate(hauteur) >= 44
+
+    # Sans écran tactile : 36 px. Firefox lit le vrai matériel : sur un PC à dalle tactile, il répond
+    # « coarse » même sans émulation, et les commandes y font 44 px comme sur le vrai poste.
+    pc = appareils(viewport={"width": 1280, "height": 800}).page
+    attendu = 44 if pc.evaluate("matchMedia('(any-pointer: coarse)').matches") else 36
+    assert pc.evaluate(hauteur) == attendu
+    pc.mouse.move(600, 400)
+    assert pc.evaluate(hauteur) == attendu
 
 
 # Ce qu'une version plus récente de l'outil aurait enregistré sur l'appareil : les mêmes données,

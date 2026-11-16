@@ -37,7 +37,7 @@
 - Test : `test_fichier_sans_exemples_retire_ceux_d_une_autre_version`.
 
 ## 2026-11-09 — Survol resté allumé après un appui du doigt
-- Où : `index.html`, les 20 règles `:hover` de la feuille.
+- Où : `index.html`, toutes les règles `:hover` de la feuille.
 - Bug : au doigt, l'effet de survol restait appliqué jusqu'au prochain appui ailleurs (mesuré sur Chromium, WebKit et Firefox : `transform` et `border-color` persistaient après l'appui).
 - À garder : chaque règle de survol s'écrit `:where(html[data-geste=souris]) …:hover`, sur sa propre ligne et à sa place dans la feuille (`:where()` n'ajoute aucune spécificité). Le retour d'un appui vient de `:active` sous `:where(html[data-geste=doigt])`.
 - Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media`.
@@ -49,7 +49,7 @@
 - Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (3e partie : après un mouvement de souris, `data-geste` repasse à `souris` ; la rangée, elle, reste repliée — c'est voulu, voir l'entrée suivante).
 
 ## 2026-11-09 — Appui avalé quand le contenu bouge entre le doigt qui touche et le doigt qui part
-- Où : `index.html`, repli de la rangée des familles (`:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres`).
+- Où : `index.html`, repli des pastilles de filtre sans filtre posé (`:where(html[data-recherche=doigt]) .page:has(#recherche:not(:placeholder-shown)) .filtre:not(.actif)`).
 - Bug : replier la rangée sur le **focus** du champ la faisait revenir dès que le doigt touchait une carte ; le contenu redescendait de 116 px et plus aucune carte ne s'ouvrait (mesuré sur les 3 moteurs).
 - À garder : le déclencheur est le TEXTE du champ, jamais son focus ni un événement de pointeur. Plus généralement : rien qui déplace le contenu ne doit réagir au focus ou au `touchstart`.
 - Test : `test_la_rangee_des_familles_suit_le_doigt_et_pas_la_requete_media` (l'appui sur une carte reste pris).
@@ -58,7 +58,7 @@
 - Où : `index.html`, `chargerAppareil` et `sauverAppareil` (réglage `recentsOuverts`).
 - Bug : la rangée « Derniers consultés » devait devenir repliée par défaut. La lecture faisait `lu.recentsPlies !== false`, mais `sauverAppareil()` réécrit TOUT l'objet `appareil` : un appareil déjà en service avait déjà `recentsPlies: false` enregistré en clair, donc il gardait l'ancien défaut (vérifié en ouvrant l'ancienne version puis la nouvelle sur le même navigateur). Seul un appareil neuf voyait le changement.
 - À garder : changer un défaut de `forfaits.appareil.v1` demande une NOUVELLE clé, jamais une lecture inversée. Ici `recentsPlies` est devenue `recentsOuverts` (sens inverse) et l'ancienne clé est ignorée.
-- Test : `test_la_rangee_des_derniers_consultes_s_ouvre_et_se_referme` (il injecte l'ancienne forme enregistrée avant de recharger).
+- Test : `test_recents_quatre_au_plus_le_dernier_en_tete_et_anciens_reglages_ignores` (depuis la refonte du 16/11/2026 les récents sont un menu et ces réglages sont ignorés : le test injecte les anciennes formes enregistrées et vérifie qu'elles ne cassent rien).
 
 ## 2026-11-10 — Appareil figé sur une vieille page après une visite à une adresse à paramètres
 - Où : `sw.js`, `ranger` et la réponse de l'écouteur `fetch`.
@@ -97,7 +97,61 @@
 - Test : `test_trier_par_prix` et `test_tri_inconnu_dans_les_reglages_revient_aux_references`.
 
 ## 2026-11-10 — Téléphone d'un responsable : le rappel d'export et le total couvraient tous les forfaits
-- Où : `index.html`, CSS `.rappel`, `.barre-resultats` et `#btn-ajouter` dans les blocs `@media (max-width: 600px)` et `(max-width: 540px)` ; `rendreRappel`.
+- Où : `index.html`, CSS `.rappel`, `.barre` et `#btn-ajouter` sous 600 px de large (conteneur `page`) ; `rendreRappel` ; `--bas-total`.
 - Bug : en 375x812, mode modification, une modification à exporter et un total en cours : le rappel prenait 128 px (texte sur deux lignes, bouton dessous) au-dessus des 70 px du total, et « + Ajouter un forfait » passait sous le compteur (58 px de plus). Il restait 7 px du premier forfait à l'écran (mesuré).
-- À garder : sous 600 px le rappel tient sur une ligne (`flex-wrap: nowrap`, la consigne `.rappel-suite` cachée, elle est redite par la fenêtre d'export) ; sous 540 px le bouton d'ajout reste sur la ligne du compteur, réduit à « + » (entier, il passait dessous jusqu'à 519 px). Son texte et le mot « Trier » sont cachés à l'écran seulement (pas `display: none`) : ils restent le nom lu par les lecteurs d'écran.
+- À garder : sous 600 px le rappel tient sur une ligne (`flex-wrap: nowrap`, la consigne `.rappel-suite` cachée, elle est redite par la fenêtre d'export) et le bouton d'ajout reste sur la ligne du compteur, réduit à « + ». Son texte long (`.long`) est caché, et son `aria-label` « Ajouter un forfait » reste le nom lu par les lecteurs d'écran. Le rappel se pose au-dessus de la barre du total d'après sa hauteur MESURÉE (`--bas-total`, ResizeObserver sur `#barre-total`), jamais d'après une hauteur écrite en dur.
 - Test : `test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait`.
+
+## 2026-11-16 — Commandes qui grossissaient au contact du doigt
+- Où : `index.html`, `--h` (hauteur des commandes) et `html[data-tactile]`.
+- Bug : pendant la refonte, `--h` passait de 36 à 44 px d'après `data-geste`. Au premier contact du doigt sur un PC tactile, toutes les commandes grossissaient, le contenu descendait et l'appui était perdu (même famille que « Appui avalé »).
+- À garder : `--h` ne dépend jamais de `data-geste`. Il vaut 44 px si l'écran se touche (`data-tactile`, posé UNE fois au démarrage par `(any-pointer: coarse)`), sous 600 px et dans une feuille du bas ; 36 px sinon.
+- Test : `test_taille_des_commandes_ne_change_pas_au_contact_du_doigt` (l'attendu sans émulation se calcule d'après `(any-pointer: coarse)` : Firefox lit la vraie dalle tactile du PC).
+
+## 2026-11-16 — Très grands caractères : le rappel chevauchait le total, et le TTC sortait de la barre
+- Où : `index.html`, `#rappel`, `#barre-total` (`.barre-total`, `.barre-total-montants`), `--bas-total`.
+- Bug : en « Très grand » sur téléphone, la barre du total est plus haute que prévu : le rappel d'export, posé à une hauteur écrite en dur, passait dessus ; et le montant TTC dépassait le bord droit de la barre.
+- À garder : `--bas-total` vient de la hauteur mesurée de la barre ; la barre et ses montants sont en `flex-wrap: wrap` (les montants passent sous « Total · N articles » au lieu de sortir).
+- Test : `test_telephone_du_responsable_rappel_et_total_laissent_voir_un_forfait` (partie « Très grand » : `dans_la_barre`).
+
+## 2026-11-16 — Refonte : le HT de chaque ligne du total avait disparu
+- Où : `index.html`, `totalContenu` (`.total-ligne-prix small`).
+- Bug : la refonte de l'interface n'affichait plus que le TTC de chaque ligne du total ; le HT par ligne (les clients sont des professionnels) n'était plus que dans la somme. Trouvé en comparant les textes de l'ancienne page et de la nouvelle.
+- À garder : chaque ligne du total montre son TTC et, dessous, son HT.
+- Test : `test_total_additionne_forfaits_quantites_et_lignes_libres`.
+
+## 2026-11-16 — Téléphone tourné d'un responsable : rappel et total empilés cachaient la liste
+- Où : `index.html`, bloc `@media (orientation: landscape) and (max-height: 540px)` (`.rappel`, `.barre-total`, `--bas-rappel`).
+- Bug : en 812x375, mode modification, une modification à exporter et un total en cours : les deux barres empilées prenaient 128 px des 375 de l'écran, il restait 41 px du premier forfait (mesuré).
+- À garder : en paysage bas, rappel et total sont côte à côte (une moitié d'écran chacun) et la barre des filtres tient sur une ligne (« + » seul, sans icône de pastille) ; sans total, le rappel reste au milieu.
+- Test : `test_telephone_tourne_du_responsable_rappel_et_total_cote_a_cote`.
+
+## 2026-11-16 — Page d'ordi peu haute : le total sortait de l'écran sous la fiche
+- Où : `index.html`, `totalSousFiche`, `rendreTotal`, `calerBas`, CSS `--total` sur `.panneau`, `.barre-total.colonne`, `.panneau[data-total="barre"]`.
+- Bug : sur un portable (page de 1366x640 dans Edge) ou un écran à 125 %, la fiche d'un forfait à 4 éléments prend 481 px des 504 du panneau : la somme du total était hors de l'écran, il fallait faire défiler le panneau (mesuré ; jusqu'à 1536x730).
+- À garder : sous 900 px de haut (seuil multiplié par la taille du texte), le total est la barre `#barre-total.colonne`, rangée sous le panneau, qui ouvre `#dlg-total` ; le panneau lui laisse la place (`--bas-colonne`) et la fiche se serre. Le seuil est dans la feuille de style seulement (`--total`), le script le lit.
+- Test : `test_fenetre_retrecie_la_fiche_et_le_total_changent_de_place` et `test_affichage_telephone_et_pc` (cas « pc », 1280x800).
+
+## 2026-11-16 — Total redessiné : ses lignes repartaient en haut
+- Où : `index.html`, `rendreTotal` (`poser`).
+- Bug : chaque ajout ou changement de quantité reconstruit le total ; la zone des lignes revenait en haut et la ligne qui venait d'arriver restait sous le bord.
+- À garder : `poser` rend son défilement à `.total-lignes` et amène la ligne ajoutée dans la zone, par `scrollTop` (jamais `scrollIntoView`, qui ferait aussi défiler la page sous la souris).
+- Test : `test_total_du_panneau_garde_son_defilement_et_montre_la_ligne_ajoutee`.
+
+## 2026-11-16 — Fiche fermée après un favori : le clavier retombait en haut de la page
+- Où : `index.html`, écouteur `close` de `#dlg-fiche`.
+- Bug : sur petit écran, un favori redessine la liste sous la feuille ; le bouton qui l'avait ouverte n'existe plus. À l'événement `close`, le focus est encore sur un bouton de la feuille fermée (pas sur `body`), donc le retour au forfait ne se faisait pas (Chromium et Firefox).
+- À garder : le focus revient à la rangée du forfait choisi s'il est sur `body` OU encore dans la feuille.
+- Test : `test_fiche_fermee_apres_un_favori_le_clavier_revient_au_forfait`.
+
+## 2026-11-16 — Refonte : plus de retour d'appui au doigt sur une rangée ni sur une suggestion
+- Où : `index.html`, règle `:where(html[data-geste=doigt]) :is(…):active`.
+- Bug : la refonte avait retiré `.carte-ouvrir` et `.suggestion` de la liste ; au doigt le survol est éteint, donc rien ne montrait que l'appui était pris.
+- À garder : tout ce qui s'appuie et n'est pas un `.btn` est dans cette liste (rangée, suggestion, pastille, « + », copie, choix de menu, `.btn-doux`, `.btn-lien`).
+- Test : `test_retour_d_appui_au_doigt_sur_les_rangees_et_les_suggestions`.
+
+## 2026-11-16 — Écran tactile : la page défilait de 4 px pour rien
+- Où : `index.html`, `--barre` sous `html[data-tactile]`.
+- Bug : avec des commandes de 44 px la barre des filtres fait 60 px, mais `--barre` disait 56 : la liste dépassait l'écran de 4 px et le panneau collait 4 px trop haut (mesuré sur Firefox, qui lit la dalle tactile du PC).
+- À garder : `--barre` vaut 60 px quand `data-tactile` est posé.
+- Test : `test_total_du_panneau_garde_son_defilement_et_montre_la_ligne_ajoutee` (`scrollY` reste à 0 ; Firefox lit la vraie dalle).

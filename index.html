@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-R08EQprrE/rBH+HnjXsysmzfMqz3oh+PqLrPSKIA/mQ='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-HX6p8cdeN88vdi7j0eqfYBdU3jbXshGTTqLy+ggpflk='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -44,12 +44,13 @@
   --ombre-forte: 0 14px 40px rgb(0 0 0 / 0.6);
   /* Polices déjà présentes sur les appareils : l'outil marche sans internet. */
   --police: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --police-titre: Bahnschrift, "DIN Alternate", sans-serif-condensed, system-ui, sans-serif;
-  --tactile: 48px; /* hauteur minimale des boutons (doigt) */
+  --police-titre: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --tactile: 46px; /* boutons carrés des fenêtres */
   --zoom: 1;       /* grossissement du texte, posé par data-texte sur <html> */
 }
-/* Palette claire : choisie dans le Menu (ou suivant l'appareil), posée par le script sur <html>. */
-:root[data-theme="clair"] {
+/* Palette claire : choisie dans le Menu (ou suivant l'appareil), posée par le script sur <html>.
+   La liste des suggestions est dans l'en-tête noir mais se pose sur la page : elle suit le thème. */
+:root[data-theme="clair"], :root[data-theme="clair"] .suggestions {
   color-scheme: light;
   --fond: #f1f1f1;
   --surface: #ffffff;
@@ -70,560 +71,649 @@
   --ombre-forte: 0 14px 40px rgb(0 0 0 / 0.25);
 }
 
+/* ============ Mesures (aucune couleur ici) ============ */
+:root {
+  --h: 36px;            /* hauteur d'une commande à la souris */
+  --entete: 64px;
+  --barre: 56px;
+  --r: 12px;
+  --r-petit: 8px;
+  --r-grand: 20px;
+  --rond: 999px;
+  --sortie: cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Écran tactile (décidé une fois, au démarrage) : des commandes de 44 px. Surtout pas d'après
+   data-geste : elles grossiraient au contact du doigt, le contenu bougerait et l'appui serait perdu. */
+html[data-tactile] { --h: 44px; --h-ligne: 44px; --barre: 60px; } /* la barre suit ses pastilles : sinon la page défile de 4 px pour rien */
+/* Familles en boutons de filtre ; les suivantes vont dans « Autres ». Le script lit ce nombre. */
+.barre { --filtres: 5; }
+@container page (max-width: 599px) { .entete, .barre, .plan { --h: 44px; --entete: 60px; --filtres: 3; } }
+
 *, *::before, *::after { box-sizing: border-box; }
+html { color-scheme: dark; background: var(--fond); scrollbar-color: var(--trait-fort) transparent; accent-color: var(--rouge); }
+body { margin: 0; font: 15px/1.4 var(--police); color: var(--texte); background: var(--fond); min-height: calc(100dvh / var(--zoom)); caret-color: var(--rouge); }
+::selection { background: var(--rouge); color: var(--blanc); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--rouge-vif); outline-offset: 2px; }
+svg.i { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.pousse { flex: 1 1 0; }
+
+/* ============ Commandes : tout est en pilule ============ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--h); padding: 0 16px; border-radius: var(--rond); border: 1px solid transparent;
+  font-weight: 600; white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s var(--sortie);
+}
+.btn:active { transform: scale(.97); }
+.btn-rouge { background: var(--rouge); color: var(--blanc); }
+:where(html[data-geste=souris]) .btn-rouge:hover { background: var(--rouge-fonce); }
+.btn-bord { background: var(--surface-2); color: var(--texte); }
+:where(html[data-geste=souris]) .btn-bord:hover { background: var(--trait); color: var(--texte-fort); }
+.btn-nu { background: transparent; color: var(--texte-doux); }
+:where(html[data-geste=souris]) .btn-nu:hover { background: var(--surface-2); color: var(--texte-fort); }
+.btn-icone {
+  display: grid; place-items: center; width: var(--h); height: var(--h); flex-shrink: 0;
+  border: 0; border-radius: 50%; background: none; color: var(--texte-doux);
+  transition: background-color .15s ease, color .15s ease, transform .15s var(--sortie);
+}
+:where(html[data-geste=souris]) .btn-icone:hover { background: var(--surface-2); color: var(--texte-fort); }
+.btn-icone:active { transform: scale(.92); }
+:where(html[data-geste=doigt]) :is(.btn-icone, .btn-doux, .btn-lien, .filtre, .btn-copier, .btn-plus, .menu-item, .carte-ouvrir, .suggestion):active { opacity: .6; }
+.btn-doux {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--h); padding: 0 12px; border: 0; border-radius: var(--rond);
+  background: none; color: var(--texte-doux); font-size: 14px; font-weight: 600; white-space: nowrap;
+  transition: background-color .15s ease, color .15s ease;
+}
+.btn-doux svg.i { width: 16px; height: 16px; }
+:where(html[data-geste=souris]) .btn-doux:hover { background: var(--surface-2); color: var(--texte-fort); }
+.btn-doux[aria-expanded="true"] { background: var(--surface-2); color: var(--texte-fort); }
+
+/* ============ En-tête : noir dans les deux thèmes, recherche au centre ============ */
+.entete {
+  position: sticky; top: 0; z-index: 30;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 640px) minmax(0, 1fr); align-items: center; column-gap: 16px;
+  height: var(--entete); padding: 0 16px; background: var(--noir); color: var(--blanc);
+}
+.marque { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.marque-bloc { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--rouge); color: var(--blanc); font: 700 18px/1 var(--police-titre); }
+.marque h1 { margin: 0; font: 700 19px/1 var(--police-titre); letter-spacing: -.015em; }
+.pastille-modif { padding: 3px 10px; border-radius: var(--rond); background: var(--rouge); color: var(--blanc); font-size: 12px; font-weight: 600; }
+.champ-recherche { position: relative; display: flex; align-items: center; height: 44px; border-radius: var(--rond); background: var(--blanc); color: var(--encre); }
+.champ-recherche:focus-within { outline: 3px solid var(--rouge-vif); outline-offset: 2px; }
+.champ-recherche > svg.i { margin-left: 16px; color: var(--encre-douce); }
+#recherche { flex: 1; min-width: 0; height: 100%; padding: 0 10px; border: 0; outline: 0; background: transparent; color: var(--encre); font-size: 16px; caret-color: var(--rouge); }
+#recherche::placeholder { color: var(--encre-douce); opacity: 1; }
+#recherche::-webkit-search-cancel-button { appearance: none; }
+#btn-vider { color: var(--encre-douce); width: 36px; height: 36px; margin-right: 4px; }
+:where(html[data-geste=souris]) #btn-vider:hover { background: var(--gris-clair); color: var(--encre); }
+.entete-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.entete .btn-icone, .entete .btn-nu { color: var(--texte); }
+.suggestions {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 40; margin: 0; padding: 6px; list-style: none;
+  background: var(--surface); color: var(--texte); border: 1px solid var(--trait); border-radius: var(--r-grand); box-shadow: var(--ombre-forte);
+}
+.suggestion { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: var(--h); padding: 8px 12px; border-radius: 14px; cursor: pointer; }
+.suggestion[aria-selected="true"] { background: var(--surface-2); }
+
+/* ============ Barre : pastilles de filtres, nombre de forfaits, tri ============ */
+.barre {
+  position: sticky; top: var(--entete); z-index: 20;
+  display: flex; align-items: center; gap: 4px 16px; min-height: var(--barre); padding: 8px 16px; background: var(--fond);
+}
+.filtres { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.filtre {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; max-width: 100%; /* un nom très long se coupe, il ne pousse pas la page */
+  min-height: var(--h); padding: 0 10px 0 14px; border: 1px solid var(--trait); border-radius: var(--rond);
+  background: var(--surface); color: var(--texte); font-size: 14px; font-weight: 600; white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s var(--sortie);
+}
+.filtre svg.i { width: 14px; height: 14px; color: var(--texte-doux); transition: transform .2s var(--sortie); }
+.filtre[aria-expanded="true"] svg.i { transform: rotate(180deg); }
+.filtre:active { transform: scale(.97); }
+:where(html[data-geste=souris]) .filtre:hover { background: var(--surface-2); }
+/* La pastille pleine dit « choisi », partout. */
+.filtre.actif { background: var(--inverse); border-color: var(--inverse); color: var(--inverse-texte); }
+.filtre.actif svg.i { color: inherit; }
+:where(html[data-geste=souris]) .filtre.actif:hover { background: var(--inverse-survol); border-color: var(--inverse-survol); }
+.barre-suite { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
+#compte { margin: 0 8px 0 0; color: var(--texte-doux); white-space: nowrap; }
+#compte strong { color: var(--texte-fort); font-variant-numeric: tabular-nums; }
+.barre-suite > * { flex-shrink: 0; }
+.tri { display: flex; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+.select-pilule {
+  min-height: var(--h); padding: 0 12px; border: 1px solid var(--trait); border-radius: var(--rond);
+  background: var(--surface); color: var(--texte); font-size: 14px; font-weight: 600; min-width: 0; max-width: 100%; text-overflow: ellipsis;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+:where(html[data-geste=souris]) .select-pilule:hover { background: var(--surface-2); }
+#btn-ajouter { margin-left: 8px; }
+.court { display: none; }
+
+.menu {
+  position: absolute; z-index: 40; min-width: 232px; max-width: min(340px, calc(100% - 24px)); max-height: min(420px, calc(100dvh / var(--zoom) - 160px)); overflow: auto; padding: 6px;
+  border: 1px solid var(--trait); border-radius: var(--r-grand); background: var(--surface); box-shadow: var(--ombre-forte);
+  transform-origin: top left; animation: menu .18s var(--sortie);
+}
+@keyframes menu { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+.menu-titre { margin: 8px 12px 2px; font-size: 12px; font-weight: 600; color: var(--texte-doux); }
+.menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%;
+  min-height: 40px; padding: 6px 12px; border: 0; border-radius: 14px; background: none; color: var(--texte);
+  font-weight: 500; text-align: left; overflow-wrap: anywhere;
+  transition: background-color .15s ease;
+}
+.menu-item .nb { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--texte-doux); white-space: nowrap; }
+:where(html[data-geste=souris]) .menu-item:hover { background: var(--surface-2); }
+.menu-item[aria-pressed="true"] { background: var(--inverse); color: var(--inverse-texte); font-weight: 600; }
+.menu-item[aria-pressed="true"] .nb { color: inherit; }
+
+/* ============ Plan : la liste, puis la fiche et le total ============ */
+.plan { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; padding: 0 12px 12px; }
+.zone {
+  container: zone / inline-size; min-width: 0; min-height: calc(100dvh / var(--zoom) - var(--entete) - var(--barre) - 12px);
+  /* Sous la liste : la place des barres du bas (total, rappel d'export), pour atteindre le dernier forfait. */
+  padding: 6px 0 calc(32px + var(--bas-total, 0px) + var(--bas-rappel, 0px)); border-radius: var(--r-grand); background: var(--surface);
+}
+.bandeau { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 42px; margin: 0 6px 4px; padding: 4px 4px 4px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; color: var(--texte); }
+.bandeau svg.i { color: var(--ambre); }
+.bandeau p { margin: 0; flex: 1 1 120px; min-width: 0; }
+.bandeau .btn { min-height: 34px; padding: 0 14px; background: var(--surface); font-size: 14px; }
+:where(html[data-geste=souris]) .bandeau .btn:hover { background: var(--trait); }
+
+.resultats { list-style: none; margin: 0; padding: 0; }
+.carte {
+  position: relative; isolation: isolate;
+  display: grid; grid-template-columns: minmax(0, 1fr) 112px 156px 36px; column-gap: 14px; align-items: center;
+  min-height: 50px; padding: 5px 16px; /* serré le 16/11/2026 (choix de l'utilisateur) : un forfait de plus sur un portable */
+  scroll-margin-top: calc(var(--entete) + var(--barre) + 8px); /* un forfait rappelé par « Récents » ne se cache pas sous la barre */
+}
+.carte::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 1px; background: var(--trait); pointer-events: none; }
+.carte:last-child::after { display: none; }
+.carte::before { content: ""; position: absolute; inset: 2px 6px 3px; z-index: -1; border-radius: 14px; transition: background-color .15s ease; }
+:where(html[data-geste=souris]) .carte:hover::before { background: color-mix(in srgb, var(--surface-2) 55%, var(--surface)); }
+.resultats.entree .carte { animation: entre .36s var(--sortie) backwards; animation-delay: calc(min(var(--n), 12) * 22ms); }
+@keyframes entre { from { opacity: 0; transform: translateY(8px); } }
+.carte-corps { min-width: 0; }
+.carte-titre-h { margin: 0; font: 600 15px/1.3 var(--police-titre); letter-spacing: -.005em; }
+.carte-ouvrir { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: none; font: inherit; letter-spacing: inherit; text-align: left; color: var(--texte-fort); }
+.carte-ouvrir::after { content: ""; position: absolute; inset: 0; border-radius: 14px; }
+.carte-ouvrir:focus-visible { outline: none; }
+.carte-ouvrir:focus-visible::after { outline: 3px solid var(--rouge-vif); outline-offset: -3px; }
+.carte-ouvrir > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align: -1px; color: var(--ambre); fill: currentColor; }
+
+/* La ligne du forfait : chaque élément est un arrêt. */
+.carte-arrets { display: flex; align-items: center; min-width: 0; margin: 2px 0 0; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--texte); white-space: nowrap; overflow: hidden; }
+.arret { display: inline-flex; align-items: center; flex-shrink: 0; }
+.arret + .arret::before { content: ""; width: 14px; height: 2px; margin-left: 7px; background: var(--trait-fort); }
+.pt { display: block; flex-shrink: 0; width: 9px; height: 9px; margin-right: 6px; border: 2px solid var(--trait-fort); border-radius: 50%; }
+.carte-surnoms { margin-left: 10px; color: var(--texte-doux); font-weight: 400; font-style: italic; overflow: hidden; text-overflow: ellipsis; }
+
+.carte-prix { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; white-space: nowrap; font-family: var(--police-titre); font-variant-numeric: tabular-nums; }
+.prix-ttc { font-size: 19px; font-weight: 700; letter-spacing: -.015em; color: var(--rouge-vif); }
+.prix-ht { margin-top: 2px; font-size: 12.5px; color: var(--texte-doux); }
+
+/* La référence est toujours une pilule : un clic la copie. */
+.btn-copier {
+  position: relative; z-index: 1; justify-self: start;
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 32px; padding: 0 10px 0 12px;
+  border: 1px solid transparent; border-radius: var(--rond); background: var(--surface-2); color: var(--texte);
+  font: 600 13px/1.2 var(--police); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: left;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s var(--sortie);
+}
+/* Sa zone d'appui dépasse la pilule en hauteur (44 px), sans la grossir. */
+.btn-copier::after { content: ""; position: absolute; inset: -7px -1px; }
+.btn-copier.grand::after { display: none; }
+.btn-copier svg.i { width: 15px; height: 15px; color: var(--texte-doux); }
+.btn-copier .coche { display: none; }
+.btn-copier:active { transform: scale(.97); }
+:where(html[data-geste=souris]) .btn-copier:hover { border-color: var(--trait-fort); }
+.btn-copier.copie { background: var(--vert); border-color: var(--vert); color: var(--blanc); }
+/* La pilule garde sa largeur : la référence reste en place, cachée sous « Copié ». */
+.btn-copier.copie :is(.carte-ref, .fiche-ref) { visibility: hidden; }
+.btn-copier.copie::before { content: "Copié"; position: absolute; left: 12px; }
+.btn-copier.copie svg.i { color: var(--blanc); }
+.btn-copier.copie .copier { display: none; }
+.btn-copier.copie .coche { display: block; stroke-dasharray: 22; animation: trace .3s var(--sortie); }
+@keyframes trace { from { stroke-dashoffset: 22; } }
+.btn-copier.grand { flex: 1 1 0; justify-content: space-between; min-height: 46px; padding: 0 12px 0 14px; font-size: 15px; }
+.btn-copier.grand.copie::before { left: 14px; }
+
+.btn-plus {
+  position: relative; z-index: 1; justify-self: end;
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--surface-2); color: var(--texte); font: 700 14px/1 var(--police-titre); font-variant-numeric: tabular-nums;
+  transition: background-color .15s ease, color .15s ease, transform .15s var(--sortie);
+}
+.btn-plus::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; }
+.btn-plus svg.i { width: 17px; height: 17px; }
+.btn-plus:active { transform: scale(.9); }
+:where(html[data-geste=souris]) .btn-plus:hover { background: var(--trait); color: var(--texte-fort); }
+.btn-plus[data-qte] { background: var(--inverse); color: var(--inverse-texte); }
+:where(html[data-geste=souris]) .btn-plus[data-qte]:hover { background: var(--inverse-survol); color: var(--inverse-texte); }
+.btn-plus.vient { animation: vient .3s var(--sortie); }
+@keyframes vient { from { transform: scale(.6); } }
+
+.vide { padding: 56px 16px; text-align: center; color: var(--texte-doux); }
+.vide p { margin: 0 0 16px; font: 600 18px/1.3 var(--police-titre); color: var(--texte-fort); }
+
+/* Fenêtre sur une moitié d'écran : mêmes colonnes, plus serrées. */
+@container zone (max-width: 759px) {
+  .carte { grid-template-columns: minmax(0, 1fr) 104px 152px 36px; column-gap: 12px; }
+  .carte-arrets { flex-wrap: wrap; row-gap: 2px; overflow: visible; }
+}
+/* Téléphone : le nom, sa ligne, le prix et le « + » ; le reste est dans la fiche. */
+@container zone (max-width: 599px) {
+  .carte { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: start; min-height: 83px; padding: 11px 14px 11px 16px; }
+  .carte-corps { display: contents; }
+  .carte-titre-h { grid-column: 1; grid-row: 1; }
+  .carte-arrets { grid-column: 1; grid-row: 2; flex-wrap: wrap; row-gap: 2px; margin: 0; overflow: visible; }
+  .carte-surnoms { margin-left: 8px; }
+  .carte-prix { grid-column: 2; grid-row: 1; }
+  .carte-prix .prix-ht, .carte > .btn-copier { display: none; }
+  .btn-plus { grid-column: 2; grid-row: 1 / 3; align-self: end; width: 34px; height: 34px; }
+  .btn-plus::after { inset: -5px; }
+  .bandeau { margin: 0 8px 2px; }
+}
+
+/* ============ Fiche du forfait : sa ligne, arrêt par arrêt, jusqu'au prix ============ */
+.panneau { display: none; }
+.bloc { border-radius: var(--r-grand); background: var(--surface); }
+.fiche-int { padding: 10px 18px 16px; }
+.fiche-int.change { animation: change .24s var(--sortie); }
+@keyframes change { from { opacity: 0; transform: translateY(6px); } }
+.fiche-tete { display: flex; align-items: center; gap: 2px; min-height: 40px; margin-right: -8px; }
+.badge-exemple { padding: 2px 10px; border-radius: var(--rond); background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--texte-doux); }
+.btn-favori[aria-pressed="true"] { color: var(--ambre); }
+.btn-favori[aria-pressed="true"] svg.i { fill: currentColor; }
+.fiche-nom { margin: 6px 0 0; font: 600 20px/1.25 var(--police-titre); letter-spacing: -.015em; color: var(--texte-fort); overflow-wrap: anywhere; }
+.fiche-surnom { margin: 4px 0 0; font-size: 14px; font-style: italic; color: var(--texte-doux); }
+.trajet { list-style: none; margin: 18px 0 0; padding: 0; }
+.trajet li { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); padding-bottom: 10px; }
+.trajet li::before { content: ""; position: absolute; left: 7px; top: 12px; bottom: -6px; width: 2px; background: var(--trait-fort); }
+.trajet li:last-child { padding-bottom: 0; }
+.trajet li:last-child::before { display: none; }
+.trajet .pt { position: relative; z-index: 1; width: 16px; height: 16px; margin: 3px 0 0; border: 3px solid var(--texte); background: var(--surface); }
+.trajet .fam { display: block; font-size: 12px; line-height: 1.3; color: var(--texte-doux); }
+.trajet .el { display: block; font: 600 16px/1.25 var(--police-titre); color: var(--texte-fort); overflow-wrap: anywhere; }
+.fiche-int.change .trajet li { animation: arret .34s var(--sortie) backwards; animation-delay: calc(var(--n) * 45ms + 40ms); }
+@keyframes arret { from { opacity: 0; transform: translateX(-8px); } }
+/* Le terminus : le prix. */
+.trajet .terminus { padding-top: 4px; }
+.trajet .terminus .pt { margin-top: 12px; border-color: var(--rouge); background: var(--rouge); box-shadow: 0 0 0 4px var(--rouge-voile); }
+.ttc-grand { display: block; font: 700 42px/1 var(--police-titre); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--rouge-vif); white-space: nowrap; }
+.ttc-grand small { margin-left: 8px; font: 700 13px/1 var(--police); letter-spacing: 0; }
+.ht-fiche { display: block; margin-top: 6px; font: 500 15px/1.2 var(--police-titre); font-variant-numeric: tabular-nums; color: var(--texte-doux); }
+.fiche-gestes { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+/* Marges serrées : une référence de 13 caractères tient à côté du bouton dans le panneau (324 px). */
+.fiche-gestes .btn { position: relative; flex: 0 0 auto; min-height: 46px; padding: 0 14px 0 10px; }
+/* Quantité déjà au total : une pastille posée sur le coin du bouton, qui ne change pas sa largeur
+   (sinon le bouton sauterait à la ligne entre deux appuis). */
+.btn .deja {
+  position: absolute; top: -7px; right: -3px; min-width: 26px; padding: 2px 7px; border: 2px solid var(--surface); border-radius: var(--rond);
+  background: var(--inverse); color: var(--inverse-texte); font-size: 12px; line-height: 1.3; text-align: center; font-variant-numeric: tabular-nums;
+}
+
+/* ============ Total : sous la fiche sur grand écran, barre en bas sinon ============ */
+.total-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 14px 18px 4px; }
+.total-tete h2 { margin: 0; font: 600 17px var(--police-titre); letter-spacing: -.01em; color: var(--texte-fort); }
+.total-tete span { font-size: 13px; color: var(--texte-doux); }
+.total-lignes { margin: 0; padding: 0 18px; list-style: none; }
+.total-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--trait); animation: arrive .28s var(--sortie); }
+@keyframes arrive { from { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateY(-6px); } to { clip-path: inset(0); } }
+.total-ligne-nom { font: 600 14px/1.3 var(--police-titre); color: var(--texte-fort); overflow-wrap: anywhere; }
+.total-ligne-prix { font: 600 14px var(--police-titre); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.total-ligne-prix small { display: block; font: 400 12px var(--police); color: var(--texte-doux); } /* le HT de la ligne, sous son TTC */
+.total-ligne-commandes { grid-column: 1 / -1; display: flex; align-items: center; gap: 2px; }
+.total-ligne-commandes .btn-icone { width: var(--h-ligne, 30px); height: var(--h-ligne, 30px); background: var(--surface-2); color: var(--texte); }
+.total-ligne-commandes .btn-icone svg.i { width: 14px; height: 14px; }
+.total-qte { min-width: 30px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.total-ligne-commandes .total-retirer { margin-left: auto; background: none; color: var(--texte-doux); }
+.total-pied { padding: 10px 18px 16px; }
+.total-somme { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 12px; margin: 0 0 14px; font-family: var(--police-titre); font-variant-numeric: tabular-nums; }
+.total-somme dt { font: 700 12px var(--police); color: var(--texte-doux); }
+.total-somme dd { margin: 0; text-align: right; overflow: hidden; }
+.total-somme .s-ht { font-size: 15px; color: var(--texte-doux); }
+.total-somme .s-ttc { font-size: 30px; font-weight: 700; line-height: 1.1; letter-spacing: -.025em; color: var(--rouge-vif); }
+.total-somme dt.s-ttc-t { color: var(--rouge-vif); }
+.total-somme .roule { display: inline-block; animation: roule .28s var(--sortie); }
+@keyframes roule { from { opacity: 0; transform: translateY(45%); } }
+.total-boutons { display: flex; gap: 8px; }
+.total-boutons .btn { flex: 1; padding: 0 8px; font-size: 14px; }
+.barre-total {
+  position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 45; max-width: 560px; margin: 0 auto;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 14px; min-height: 54px; padding: 8px 20px;
+  border: 0; border-radius: 27px; background: var(--inverse); color: var(--inverse-texte); font-weight: 600; text-align: left; box-shadow: var(--ombre-forte);
+  animation: monte .3s var(--sortie);
+  transition: transform .15s var(--sortie);
+}
+.barre-total:active { transform: scale(.98); }
+/* En grands caractères sur un petit écran, les montants passent sous « Total · N articles » au lieu de sortir de la barre. */
+#barre-total-nb { white-space: nowrap; }
+.barre-total-montants { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 0 12px; margin-left: auto; font-family: var(--police-titre); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.barre-total-montants .b-ht { font-size: 13px; opacity: .72; }
+.barre-total-montants .b-ttc { font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 60; max-width: calc(100vw / var(--zoom) - 32px); padding: 10px 18px; border-radius: var(--rond);
+  background: var(--vert); color: var(--blanc); font-weight: 600; text-align: center; box-shadow: var(--ombre-forte);
+  opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .2s ease, transform .25s var(--sortie);
+}
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+/* Dans une fenêtre ouverte, le message passe en haut : le bas porte ses boutons. */
+dialog > .toast { top: 16px; bottom: auto; transform: translate(-50%, -12px); }
+dialog > .toast.visible { transform: translate(-50%, 0); }
+/* Titres qui reçoivent le focus à l'ouverture d'une feuille, pour l'annonce : pas de cadre autour. */
+.fiche-nom:focus, .total-tete h2:focus { outline: none; }
+
+@container page (min-width: 1040px) {
+  .plan { grid-template-columns: minmax(0, 1fr) 360px; padding: 0 16px 16px; }
+  .zone { min-height: calc(100dvh / var(--zoom) - var(--entete) - var(--barre) - 16px); padding-bottom: calc(6px + var(--bas-rappel, 0px)); }
+  .panneau {
+    display: flex; flex-direction: column; gap: 12px;
+    position: sticky; top: calc(var(--entete) + var(--barre)); max-height: calc(100dvh / var(--zoom) - var(--entete) - var(--barre) - 16px - var(--bas-colonne, 0px)); overflow: auto;
+  }
+  .panneau { scrollbar-width: thin; }
+  .panneau .fiche { flex: 0 0 auto; }
+  /* Le total se serre avant de sortir de l'écran : ses lignes défilent, les sommes restent visibles. */
+  .panneau .total { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 240px; overflow: hidden; }
+  .panneau .total-lignes { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; }
+  .carte.choisie::before { background: var(--surface-2); }
+  .carte.choisie .btn-copier:not(.copie), .carte.choisie .btn-plus:not([data-qte]) { background: var(--surface); }
+}
+@container page (max-width: 1039px) {
+  .barre { flex-wrap: wrap; align-items: center; padding: 8px 12px 6px; }
+  .filtres { flex: 1 1 100%; }
+  .entete { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; padding: 0 12px; }
+}
+@container page (max-width: 599px) {
+  .long { display: none; }
+  .court { display: inline; }
+  .marque-texte, .pastille-modif, #btn-importer { display: none; } /* l'état des données se lit dans le Menu */
+  .entete { column-gap: 8px; padding: 0 6px 0 12px; }
+  .barre { position: relative; top: auto; padding: 6px 10px 2px; }
+  .filtre { flex: 1 1 auto; padding: 0 10px; }
+  .filtre svg.i { display: none; }
+  .barre-suite { min-height: 44px; padding: 0 2px 0 6px; }
+  .barre-suite .btn-doux { min-height: 44px; padding: 0 10px; }
+  .select-pilule { min-height: 44px; border-color: transparent; background-color: transparent; color: var(--texte-doux); padding: 0 4px; }
+  #btn-ajouter { min-height: 36px; padding: 0 12px; }
+  .plan { padding: 0; }
+  .zone { border-radius: var(--r-grand) var(--r-grand) 0 0; min-height: calc(100dvh / var(--zoom) - var(--entete) - 100px); }
+}
+
+/* ============ Feuilles qui montent du bas (fiche et total, hors grand écran) ============ */
+.feuille-bas {
+  position: fixed; inset: auto 0 0 0; width: 100%; max-width: 560px; max-height: calc(100dvh / var(--zoom) - 40px); margin: 0 auto; padding: 0; overflow: auto;
+  border: 0; border-radius: 26px 26px 0 0; background: var(--surface); color: var(--texte); box-shadow: var(--ombre-forte);
+}
+.feuille-bas[open] { animation: glisse .32s var(--sortie); }
+.feuille-bas::backdrop { background: var(--voile); animation: voile .2s ease; }
+@keyframes glisse { from { transform: translateY(100%); } }
+@keyframes monte { from { opacity: 0; transform: translateY(10px); } }
+@keyframes voile { from { opacity: 0; } }
+.poignee { width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--trait-fort); }
+.feuille-bas .fiche-int { padding: 4px 20px 20px; }
+.feuille-bas .fiche-gestes .btn, .feuille-bas .btn-copier.grand { min-height: 50px; }.feuille-bas .total-tete { padding-top: 8px; align-items: center; }
+@media (min-width: 600px) { .feuille-bas { bottom: 16px; border-radius: 26px; } }
+
+/* ============ Fenêtres ============ */
+.dlg { padding: 0; width: min(720px, calc(100vw / var(--zoom) - 24px)); max-width: none; max-height: calc(100dvh / var(--zoom) - 24px); overflow: hidden; border: 1px solid var(--trait); border-radius: var(--r-grand); background: var(--surface); color: var(--texte); box-shadow: var(--ombre-forte); }
+.dlg[open] { display: flex; flex-direction: column; animation: monte .22s var(--sortie); }
+.dlg::backdrop { background: var(--voile); animation: voile .2s ease; }
+.dlg-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.dlg-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 22px; background: var(--noir); color: var(--blanc); border-bottom: 1px solid var(--trait); }
+.dlg-tete h2 { margin: 0; font: 600 18px/1.2 var(--police-titre); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.dlg-tete .btn-icone { width: 44px; height: 44px; color: var(--texte); }
+.dlg-corps { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 18px 22px 4px; }
+.dlg-pied { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 22px 18px; }
+.dlg-pied .btn { min-height: 46px; min-width: 140px; }
+.note-exemple { display: flex; gap: 10px; margin: 0 0 18px; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; }
+.note-exemple svg.i { margin-top: 1px; color: var(--ambre); }
+.champ-groupe { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.champ-groupe label { font-size: 14px; font-weight: 600; }
+.champ {
+  width: 100%; min-height: 46px; padding: 8px 14px; border: 1px solid var(--trait-fort); border-radius: var(--r);
+  background: var(--fond); color: var(--texte); font-size: 16px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+:where(html[data-geste=souris]) .champ:hover { border-color: var(--texte-doux); }
+.champ:focus { border-color: var(--rouge-vif); box-shadow: 0 0 0 3px var(--rouge-voile); outline: none; }
+.champ::placeholder { color: var(--texte-pale); opacity: 1; }
+textarea.champ { min-height: 76px; resize: vertical; }
+.ligne-prix { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.grille-familles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 12px; }
+.btn-lien { align-self: flex-start; min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--rond); background: var(--surface-2); color: var(--texte); font-size: 13px; font-weight: 600; transition: background-color .15s ease; }
+:where(html[data-geste=souris]) .btn-lien:hover { background: var(--trait); }
+@media (max-width: 599px) {
+  .dlg { width: calc(100vw / var(--zoom)); height: calc(100dvh / var(--zoom)); max-height: none; margin: 0; border: 0; border-radius: 0; }
+  .dlg-pied { flex-direction: column-reverse; }
+  .dlg-pied .btn { width: 100%; }
+  .btn-lien { min-height: 44px; }
+}
+@media (max-width: 440px) { .ligne-prix { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ============ Ce que la page ajoute au dessin de base ============ */
 /* Taille des caractères, réglée par appareil (Menu → Taille du texte) : tout grossit d'un bloc,
    boutons et espaces compris, et la page se remet en page (pas de défilement horizontal).
    Piège : les tailles données en vw, vh ou dvh restent celles de l'écran réel, elles ne sont pas
    grossies ; il faut donc les diviser par --zoom (sinon fenêtres et barres du bas débordent). */
 :root[data-texte="grand"] { --zoom: 1.15; zoom: 1.15; }
 :root[data-texte="tres-grand"] { --zoom: 1.3; zoom: 1.3; }
-html { -webkit-text-size-adjust: 100%; color-scheme: dark; background: var(--fond); }
-body {
-  margin: 0;
-  font-family: var(--police);
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--texte);
-  background: var(--fond);
-  min-height: calc(100vh / var(--zoom));
-  min-height: calc(100dvh / var(--zoom));
-}
-button, input, select, textarea { font: inherit; color: inherit; }
-[hidden] { display: none !important; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-:focus-visible { outline: 3px solid var(--rouge-vif); outline-offset: 2px; }
+html { -webkit-text-size-adjust: 100%; }
+.sprite { position: absolute; width: 0; height: 0; }
+/* La mise en page se règle sur la largeur de « page », pas sur celle de l'écran : en grands
+   caractères, un écran de 1280 px n'a plus la place d'un écran de 1280 px. Le script lit ce que
+   la feuille a décidé (panneau affiché ou non, nombre de filtres) au lieu de mesurer l'écran. */
+.page { container: page / inline-size; }
 
-/* ============ Boutons ============ */
-.btn {
-  min-height: var(--tactile);
-  padding: 10px 18px;
-  border-radius: 10px;
-  border: 2px solid transparent;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-  transition: transform .12s ease, background-color .12s ease, border-color .12s ease, color .12s ease;
-}
-:where(html[data-geste=souris]) .btn:hover { transform: translateY(-1px); }
-.btn:active { transform: translateY(0) scale(.98); }
-.btn:disabled { opacity: .35; cursor: default; transform: none; }
-/* Au doigt, le survol est éteint (il restait allumé après l'appui), donc le seul retour d'un appui
-   est « :active ». Sans lui, on ne sait pas s'il a été pris. Les « .btn » ont déjà le leur ; ceux-ci
-   n'en avaient aucun. « :is() » garde la spécificité d'une classe, comme la liste d'origine. */
-:where(html[data-geste=doigt]) :is(.btn-lien, .btn-icone, .filtre, .etiquette, .recent,
-  .recents-titre, .carte-ouvrir, .suggestion, .choix):active { opacity: .55; }
-.btn-rouge { background: var(--rouge); color: var(--blanc); }
-:where(html[data-geste=souris]) .btn-rouge:hover { background: var(--rouge-fonce); }
+.btn:disabled, .btn-icone:disabled { opacity: .35; cursor: default; transform: none; }
 /* « blanc » en sombre, noir en clair : le nom est resté, il est partagé avec la branche du serveur. */
 .btn-blanc { background: var(--inverse); color: var(--inverse-texte); }
 :where(html[data-geste=souris]) .btn-blanc:hover { background: var(--inverse-survol); }
-.btn-bord { background: transparent; color: var(--texte); border-color: var(--trait-fort); }
-:where(html[data-geste=souris]) .btn-bord:hover { border-color: var(--texte-fort); }
 .btn-danger { background: transparent; color: var(--rouge-vif); border-color: var(--rouge); }
 :where(html[data-geste=souris]) .btn-danger:hover { background: var(--rouge-voile); }
 .btn-carre { width: var(--tactile); min-width: var(--tactile); padding: 0; }
-/* Actions secondaires : un cadre, pas un texte souligné. Souligné, on les lisait comme des liens
-   et on ne voyait pas qu'elles s'appuient (remarque de l'utilisateur sur son téléphone). */
-.btn-lien {
-  background: var(--surface-2); border: 2px solid var(--trait-fort); border-radius: 8px;
-  padding: 6px 12px; min-height: 44px;
-  color: var(--rouge-vif); cursor: pointer; font-size: 14px; font-weight: 600;
-  transition: color .12s ease, border-color .12s ease;
-}
-:where(html[data-geste=souris]) .btn-lien:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
-.btn-icone {
-  width: var(--tactile); height: var(--tactile); flex-shrink: 0;
-  display: grid; place-items: center;
-  border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 20px;
-  transition: background-color .12s ease, border-color .12s ease;
-}
 
-/* ============ En-tête ============ */
-.entete {
-  background: var(--noir);
-  color: var(--blanc);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  /* bords alignés sur ceux des cartes, même sur grand écran */
-  padding: 12px max(16px, calc((100% - 1068px) / 2));
-}
-.marque { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.marque-bloc {
-  display: grid; place-items: center; flex-shrink: 0;
-  width: 46px; height: 44px; padding-right: 6px;
-  background: var(--rouge); color: var(--blanc);
-  font-family: var(--police-titre); font-weight: 700; font-size: 26px;
-  clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
-}
 .marque-texte { min-width: 0; }
-.marque h1 {
-  margin: 0;
-  font-family: var(--police-titre);
-  font-size: 24px; line-height: 1;
-  letter-spacing: .05em; text-transform: uppercase;
-  /* En grands caractères sur un petit téléphone, le titre se coupe plutôt que de passer sous les boutons. */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.etat { margin: 4px 0 0; font-size: 13px; color: var(--texte-doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entete-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.entete .btn-icone { color: var(--blanc); border: 2px solid var(--trait-fort); }
-:where(html[data-geste=souris]) .entete .btn-icone:hover { border-color: var(--blanc); }
-/* Bande en damier, clin d'œil aux taxis */
-.damier {
-  height: 12px;
-  background: repeating-conic-gradient(var(--rouge) 0 25%, var(--noir) 0 50%) 0 0 / 12px 12px;
-}
-.barre-modif {
-  background: var(--rouge); color: var(--blanc);
-  text-align: center; font-weight: 700; font-size: 14px; padding: 6px 16px;
-}
+.etat { margin: 3px 0 0; font-size: 12px; line-height: 1; color: var(--texte-doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggestions { max-height: calc(60vh / var(--zoom)); overflow: auto; }
+:where(html[data-geste=souris]) .suggestion:hover { background: var(--surface-2); }
+.suggestion-nom { font: 600 15px var(--police-titre); color: var(--texte-fort); }
+.suggestion-surnom { margin-right: auto; font-size: 13px; font-style: italic; color: var(--texte-doux); }
+.suggestion-info { font-size: 13px; color: var(--texte-doux); white-space: nowrap; }
 
-/* ============ Bandeaux d'information ============ */
-.bandeaux { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
-.bandeau {
-  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
-  margin-top: 12px; padding: 8px 8px 8px 14px; border-radius: 10px;
-  background: var(--surface); border: 1px solid var(--trait); border-left: 4px solid var(--rouge);
-  font-weight: 600;
-}
-.bandeau p { margin: 0; flex: 1 1 220px; font-size: 15px; }
-.bandeau-erreur { background: var(--rouge-voile); border-color: var(--rouge); }
-
-/* ============ Recherche ============ */
-.zone-recherche {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--fond);
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--trait);
-}
-.zone-recherche > * { max-width: 1068px; margin-left: auto; margin-right: auto; }
-/* La barre reste blanche dans les deux thèmes : en sombre c'est le seul grand aplat clair, l'œil y va tout de suite. */
-.champ-recherche {
-  position: relative;
-  display: flex; align-items: center;
-  background: var(--blanc); color: var(--encre);
-  border-radius: 14px;
-  box-shadow: 6px 6px 0 var(--rouge);
-  transition: box-shadow .15s ease, transform .15s ease;
-}
-.champ-recherche:focus-within { box-shadow: 3px 3px 0 var(--rouge); transform: translate(3px, 3px); }
-.loupe { width: 24px; height: 24px; margin-left: 16px; flex-shrink: 0; color: var(--encre-douce); }
-#recherche {
-  flex: 1; min-width: 0;
-  border: 0; outline: 0; background: transparent; color: var(--encre);
-  font-size: 20px; padding: 16px 10px;
-}
-#recherche::placeholder { color: var(--encre-douce); opacity: 1; }
-#recherche::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-#btn-vider { color: var(--encre-douce); margin-right: 4px; }
-:where(html[data-geste=souris]) #btn-vider:hover { background: var(--gris-clair); }
-.suggestions {
-  position: absolute; left: 0; right: 0; top: calc(100% + 10px); z-index: 30;
-  margin: 0; padding: 6px; list-style: none;
-  background: var(--surface); color: var(--texte);
-  border: 1px solid var(--trait-fort); border-radius: 12px;
-  max-height: calc(60vh / var(--zoom)); overflow: auto;
-}
-.suggestion {
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  min-height: var(--tactile); padding: 8px 12px; border-radius: 8px; cursor: pointer;
-}
-.suggestion[aria-selected="true"] { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--rouge); }
-:where(html[data-geste=souris]) .suggestion:hover { background: var(--surface-2); box-shadow: inset 4px 0 0 var(--rouge); }
-.suggestion-nom { font-weight: 700; font-size: 18px; }
-.suggestion-famille { font-size: 13px; color: var(--texte-doux); }
-.etiquettes, .filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-/* Téléphone (écran tactile) : dès qu'une recherche est tapée, les familles cèdent leurs deux
-   lignes aux forfaits — clavier ouvert, on n'en voyait plus qu'un. Les filtres posés restent
-   visibles dans « .etiquettes ». Le déclencheur est le texte du champ et NON son focus : sur le
-   focus, la rangée revenait entre le doigt qui touche et le doigt qui part, le contenu
-   redescendait de 116 px et l'appui sur la carte était perdu (mesuré sur les 3 moteurs).
-   La croix du champ efface le texte : la rangée revient, et elle est au-dessus, donc rien ne bouge
-   sous le doigt. Un navigateur sans « :has() » garde simplement la rangée.
+/* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) ne doit pas élargir la
+   page : la pastille se coupe par des points de suspension. */
+.filtre { min-width: 0; max-width: 100%; }
+.filtre-nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Téléphone (écran tactile) : dès qu'une recherche est tapée, les familles cèdent leur place aux
+   forfaits — clavier ouvert, on n'en voyait plus qu'un. Les filtres posés restent visibles.
+   Le déclencheur est le texte du champ et NON son focus : sur le focus, la rangée revenait entre
+   le doigt qui touche et le doigt qui part, le contenu redescendait et l'appui sur le forfait
+   était perdu (mesuré sur les 3 moteurs). Un navigateur sans « :has() » garde simplement la rangée.
    `data-recherche` et non `data-geste` : voir `rendreResultats`. */
-:where(html[data-recherche=doigt]) .zone-recherche:has(#recherche:not(:placeholder-shown)) .filtres { display: none; }
-/* Un nom d'élément d'une seule traite (le champ en accepte 60 caractères) couperait sinon le mot
-   nulle part et ferait défiler toute la page en largeur : 24 caractères y suffisent sur un
-   téléphone. L'étiquette et le bouton de filtre portent tous deux ce nom. */
-.etiquette, .filtre { overflow-wrap: anywhere; }
-.etiquette {
-  display: inline-flex; align-items: center; gap: 8px;
-  min-height: 44px; padding: 6px 8px 6px 14px;
-  background: var(--inverse); color: var(--inverse-texte);
-  border: 0; border-radius: 999px; font-weight: 600; cursor: pointer;
-  transition: transform .12s ease;
-}
-:where(html[data-geste=souris]) .etiquette:hover { transform: translateY(-1px); }
-.croix { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--rouge); color: var(--blanc); font-size: 14px; }
-.filtre {
-  min-height: var(--tactile); padding: 8px 14px;
-  border: 2px solid var(--trait-fort); border-radius: 10px;
-  background: var(--surface); color: var(--texte); font-weight: 600; cursor: pointer;
-  transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
-}
-:where(html[data-geste=souris]) .filtre:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
-.filtre[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
+:where(html[data-recherche=doigt]) .page:has(#recherche:not(:placeholder-shown)) .filtre:not(.actif) { display: none; }
+/* Sous 16 px, l'iPhone zoome la page quand on touche une liste. */
+:where(html[data-tactile]) .select-pilule { font-size: 16px; }
 
-/* ============ Résultats ============ */
-main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 140px; }
-.barre-resultats { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.barre-resultats-gauche { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-#btn-ajouter { gap: 0; } /* « + » et son texte sont deux morceaux (le texte se cache sur téléphone) : pas d'écart entre eux */
-#compte { margin: 0; font-weight: 700; color: var(--texte-doux); }
-.tri { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texte-doux); }
-.tri .champ { width: auto; padding: 6px 10px; font-size: 16px; } /* sous 16 px, l'iPhone zoome la page au toucher */
-.resultats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
-.vide { grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--texte-doux); }
-/* Repli : rien ne contient tous les filtres, on montre les forfaits de chaque filtre. */
-.note-groupes { grid-column: 1 / -1; margin: 0; color: var(--texte-doux); }
-/* Derniers forfaits consultés sur cet appareil : la liste complète est longue, celui qu'on vient
-   de regarder revient souvent deux minutes plus tard. */
-.recents { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 2px; }
-/* Le titre replie la rangée (réglage de l'appareil) : même hauteur que les pastilles à côté,
-   pour que le repli ne coûte pas la place qu'il fait gagner. */
-.recents-titre {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin: 0; padding: 6px 12px; min-height: 44px;
-  background: none; border: 2px solid var(--trait-fort); border-radius: 8px;
-  color: var(--texte-doux); font: inherit; font-size: 14px;
-  text-align: left; cursor: pointer; transition: color .12s ease, border-color .12s ease;
-}
-:where(html[data-geste=souris]) .recents-titre:hover { color: var(--texte-fort); border-color: var(--texte-fort); }
-.recents-liste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.recents:not(.recents-plies) .recents-titre .chevron { transform: rotate(180deg); }
-.recent {
-  max-width: 100%; min-height: 44px; padding: 6px 12px;
-  background: var(--surface-2); border: 2px solid var(--trait-fort); border-radius: 999px;
-  color: var(--texte); font-size: 14px; text-align: left; cursor: pointer;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-:where(html[data-geste=souris]) .recent:hover { border-color: var(--texte-fort); color: var(--texte-fort); }
-.titre-groupe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 17px; }
-.titre-groupe-compte { font-size: 14px; font-weight: 400; color: var(--texte-doux); }
-.vide p { margin: 0 0 12px; font-size: 18px; }
-.vide-boutons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.carte {
-  display: flex; flex-direction: column; gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--trait); border-radius: 12px;
-  padding: 10px 12px 10px 14px;
-}
-.carte-exemple { border-style: dashed; border-color: var(--trait-fort); }
-/* Cartes repliées : le nom et le TTC, le reste au premier appui (réglage « Cartes entières »). */
-.carte-compacte { gap: 0; padding: 0; }
-.carte-titre-h { margin: 0; font: inherit; }
-.carte-ouvrir {
-  display: flex; align-items: center; gap: 6px 12px; width: 100%;
-  margin: 0; padding: 8px 12px 8px 14px; min-height: var(--tactile);
-  background: none; border: 0; border-radius: 12px; color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-:where(html[data-geste=souris]) .carte-ouvrir:hover { background: var(--surface-2); }
-.carte-ouvrir .carte-tete { flex: 1 1 auto; min-width: 0; }
-/* Repliée, le badge reste sur la ligne du nom. Trois lignes au maximum : une désignation monte
-   jusqu'à une soixantaine de caractères, et deux lignes en coupaient une sur trois — un nom coupé
-   est la première chose que lit un vendeur. Les noms courts tiennent sur une ligne : la carte ne
-   grandit que quand il le faut (61 px, 82 px pour un nom long). */
-.carte-ouvrir .carte-nom { flex: 1 1 auto; min-width: 0; font-size: 17px; -webkit-line-clamp: 3; }
-/* Le badge EXEMPLE passe au-dessus du nom quand il ne reste pas la place (données réelles : pas de badge). */
-.carte-ouvrir .badge-exemple { font-size: 11px; padding: 0 5px; }
-/* Repliée, « TTC » passe SOUS le montant : à côté, il prenait 30 px sur la largeur du nom, et sans
-   ces 30 px une désignation de 62 caractères ne tenait pas en 3 lignes. La carte ne grandit pas
-   (le montant seul fait déjà la hauteur), et le prix garde le rouge et sa taille. */
-.carte-ouvrir .prix-ttc { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
-.carte-ouvrir .prix-ttc .prix-montant { font-size: 20px; }
-.carte-ouvrir .prix-ttc .prix-type { font-size: 11px; }
-.chevron {
-  flex-shrink: 0; width: 0; height: 0; margin-right: 2px;
-  border: 6px solid transparent; border-top: 7px solid var(--texte-doux); border-bottom: 0;
-  transition: transform .15s ease;
-}
-.carte-ouverte .chevron { transform: rotate(180deg); }
-.carte-details { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 10px 14px; }
-/* Le nom du forfait en premier et en grand : les techniciens se repèrent au nom et aux éléments.
-   La référence (petite, en bas) sert à l'accueil et au magasin, avec le bouton Copier. */
-.carte-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
-.carte-nom {
-  margin: 0; flex: 1 1 100%;
-  font-family: var(--police-titre); font-size: 19px; line-height: 1.25; letter-spacing: .02em;
-  color: var(--texte-fort); overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-}
-.badge-exemple {
-  display: inline-block; padding: 0 7px; border-radius: 6px;
-  border: 1px solid var(--trait-fort); color: var(--texte-doux);
-  font-size: 12px; font-weight: 700; letter-spacing: .08em;
-}
-/* Prix à gauche, actions à droite : une seule rangée au lieu de deux. */
-.carte-bas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: auto; }
-.carte-boutons { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
-.carte-boutons .btn { min-height: var(--tactile); } /* boutons plus petits, zone de toucher gardée */
-.btn-favori { min-width: 44px; padding: 4px 11px; font-size: 20px; line-height: 1; background: var(--surface-2); color: var(--texte-doux); border-color: var(--trait-fort); }
-:where(html[data-geste=souris]) .btn-favori:hover { border-color: var(--ambre); }
-.btn-favori[aria-pressed="true"] { color: var(--ambre); }
-.btn-copier { flex-shrink: 0; padding: 6px 12px; background: var(--surface-2); color: var(--texte); border-color: var(--trait-fort); }
-:where(html[data-geste=souris]) .btn-copier:hover { border-color: var(--rouge); }
-.btn-copier.copie { background: var(--vert); border-color: var(--vert); color: var(--blanc); }
-.icone-copier { position: relative; width: 17px; height: 17px; flex-shrink: 0; }
-.icone-copier::before, .icone-copier::after {
-  content: ""; position: absolute; width: 12px; height: 12px;
-  border: 2px solid var(--rouge-vif); border-radius: 3px;
-}
-.icone-copier::before { left: 0; top: 0; }
-.icone-copier::after { right: 0; bottom: 0; background: var(--surface-2); }
-/* Une fois copié, les deux carrés deviennent une coche. */
-.copie .icone-copier::before {
-  left: 5px; top: 0; width: 7px; height: 13px; border-radius: 0;
-  border-width: 0 3px 3px 0; border-color: var(--blanc); transform: rotate(45deg);
-}
-.copie .icone-copier::after { display: none; }
-/* Le TTC est le prix qu'on donne au client : en rouge et en gros. Le HT reste lisible à côté. */
-.carte-prix { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
-.prix { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
-.prix-montant { font-family: var(--police-titre); font-weight: 700; font-variant-numeric: tabular-nums; }
-.prix-type { font-weight: 700; color: var(--texte-doux); }
-.prix-ttc .prix-montant { font-size: 23px; color: var(--rouge-vif); }
-.prix-ttc .prix-type { font-size: 14px; color: var(--rouge-vif); }
-.prix-ht .prix-montant { font-size: 15px; color: var(--texte-doux); }
-.prix-ht .prix-type { font-size: 13px; }
-.carte-elements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
-.carte-elements li { padding: 2px 9px; border-radius: 7px; background: var(--surface-2); font-size: 14px; }
-/* La famille (Taximètre, Boîtier…) n'est plus affichée : l'équipe reconnaît ses éléments au nom.
-   Gardée pour les lecteurs d'écran et les filtres, qui eux nomment les familles. */
+.bandeaux:empty { display: none; }
+.bandeau-erreur { background: var(--rouge-voile); }
+.bandeau-erreur svg.i { color: var(--rouge-vif); }
+/* Le rappel des exemples laisse sa place aux forfaits pendant une recherche. */
+.bandeaux.en-recherche .bandeau-discret { display: none; }
+
+.carte-elements { display: contents; list-style: none; margin: 0; padding: 0; }
+.prix { display: flex; align-items: baseline; gap: 4px; }
+.carte-prix .prix-ttc .prix-type { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+/* La famille (Taximètre, Boîtier…) n'est pas affichée dans la liste : l'équipe reconnaît ses
+   éléments au nom. Gardée pour les lecteurs d'écran ; la fiche et les filtres, eux, la nomment. */
 .el-famille { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.el-nom { font-weight: 700; }
-.carte-maj { margin: 0; }
-.carte-surnoms { margin: 0; font-size: 13px; color: var(--texte-doux); font-style: italic; overflow-wrap: anywhere; }
-.carte-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; font-size: 13px; color: var(--texte-doux); }
-.carte-pied .carte-ref { font-family: var(--police-titre); letter-spacing: .02em; overflow-wrap: anywhere; }
-/* Discret : sur la carte, le nom et le prix passent avant le surnom. */
-.carte-pied .btn-lien { margin-left: auto; color: var(--texte-doux); }
-.suggestion-surnom { margin-left: 8px; color: var(--texte-doux); font-style: italic; }
-.surnom-mien { flex: 1; overflow-wrap: anywhere; }
-.surnom-conflit { font-size: 13px; color: var(--ambre); }
-.titre-recap { margin: 18px 0 6px; font-size: 15px; }
-.recap-surnoms { margin: 0; padding-left: 18px; color: var(--texte-doux); }
-.carte-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 2px; }
-.carte-actions .btn { flex: 1 1 auto; }
+.note-groupes { margin: 0; padding: 12px 16px 4px; color: var(--texte-doux); }
+.titre-groupe { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 14px 16px 4px; }
+.titre-groupe h3 { margin: 0; font: 600 15px/1.3 var(--police-titre); color: var(--texte-fort); }
+.titre-groupe-compte { font-size: 13px; color: var(--texte-doux); }
+.vide-boutons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.carte-maj { margin: 14px 0 0; font-size: 13px; color: var(--texte-doux); }
+/* Une référence trop longue pour tenir à côté du bouton passe au-dessus, entière. */
+.fiche-gestes { flex-wrap: wrap; }
+.fiche-gestes .btn-copier.grand { flex: 1 1 120px; }
+.fiche-gestes .btn { flex: 1 0 auto; }
 
-/* ============ Rappel d'export et messages ============ */
-.rappel {
-  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 40;
-  width: calc(100vw / var(--zoom) - 24px); max-width: 720px; margin: 0 auto;
-  display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; justify-content: space-between;
-  padding: 12px 14px;
-  background: var(--rouge); color: var(--blanc);
-  border-radius: 14px;
-  box-shadow: var(--ombre-forte);
-}
-.rappel p { margin: 0; flex: 1 1 220px; font-weight: 600; }
-.rappel :focus-visible { outline-color: var(--blanc); } /* le contour rouge disparaîtrait sur le fond rouge */
-.toast {
-  position: fixed; left: 50%; bottom: 96px; z-index: 60;
-  max-width: calc(100vw / var(--zoom) - 32px);
-  padding: 12px 18px; border-radius: 999px;
-  background: var(--vert); color: var(--blanc); font-weight: 600; text-align: center;
-  box-shadow: var(--ombre-forte);
-  opacity: 0; pointer-events: none; transform: translate(-50%, 20px);
-  transition: opacity .2s ease, transform .2s ease;
-}
-.toast.visible { opacity: 1; transform: translate(-50%, 0); }
-.toast.erreur { background: var(--rouge); }
-
-/* ============ Total (addition de plusieurs lignes, par appareil) ============ */
-.barre-total {
-  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 45;
-  width: calc(100vw / var(--zoom) - 24px); max-width: 720px; margin: 0 auto; min-height: var(--tactile);
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 14px;
-  padding: 10px 16px; border: 0; border-radius: 14px; cursor: pointer; text-align: left;
-  background: var(--inverse); color: var(--inverse-texte); font: inherit; font-weight: 700;
-  box-shadow: var(--ombre-forte);
-}
-.barre-total[hidden] { display: none; }
-.barre-total-montants { display: flex; gap: 14px; flex-wrap: wrap; }
-body.avec-total .rappel { bottom: 96px; } /* la barre peut passer sur 2 lignes : 70 px de haut */
-body.avec-total .toast { bottom: 170px; }
-body.avec-total main { padding-bottom: 230px; }
-.btn-total { flex-shrink: 0; padding: 8px 14px; background: var(--surface-2); color: var(--texte); border-color: var(--trait-fort); }
-:where(html[data-geste=souris]) .btn-total:hover { border-color: var(--rouge); }
-.total-ligne { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--trait); }
-.total-ligne-nom { font-weight: 700; overflow-wrap: anywhere; }
-.total-ligne-prix { text-align: right; font-weight: 700; white-space: nowrap; }
-.total-ligne-unite { color: var(--texte-doux); font-size: 14px; }
-.total-ligne-commandes { display: flex; align-items: center; gap: 6px; grid-column: 1 / -1; }
-.total-ligne-commandes .btn-carre { background: var(--surface-2); color: var(--texte); border-color: var(--trait-fort); }
-.total-qte { min-width: 32px; text-align: center; font-weight: 700; }
-.total-retirer { margin-left: auto; min-height: var(--tactile); min-width: var(--tactile); }
-.carte-pied .btn-lien { min-height: var(--tactile); }
+/* Total : pièce ou service ajouté à la main, et messages. */
+.total-ligne-unite { flex: 1 1 auto; min-width: 0; padding: 0 8px; font-size: 13px; color: var(--texte-doux); font-variant-numeric: tabular-nums; }
+.total-libre { display: grid; gap: 8px; margin: 0 0 14px; }
+.total-libre .champ { min-height: 42px; }
+.total-libre-prix { display: flex; gap: 8px; }
 .total-libre .msg-erreur { margin: 0; }
 .total-libre .msg-erreur:empty { display: none; }
-.total-somme { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin-top: 14px; font-size: 22px; font-weight: 800; }
-.total-somme dd { margin: 0; text-align: right; }
-.total-libre { display: grid; gap: 8px; margin-top: 14px; }
-.total-libre .champ { width: 100%; }
-.total-libre-prix { display: flex; gap: 8px; }
-.total-vide { color: var(--texte-doux); margin: 8px 0; }
 
-/* ============ Fenêtres (dialogues) ============ */
-.dlg {
-  border: 1px solid var(--trait); padding: 0;
-  width: min(600px, calc(100vw / var(--zoom) - 24px)); max-width: none;
-  max-height: calc(100vh / var(--zoom) - 24px); max-height: calc(100dvh / var(--zoom) - 24px);
-  border-radius: 16px;
-  background: var(--surface); color: var(--texte);
-  box-shadow: var(--ombre-forte);
+/* Rappel d'export (responsables) : au-dessus de la barre du total, sans la couvrir. */
+.rappel {
+  position: fixed; left: 10px; right: 10px; bottom: calc(10px + var(--bas-total, 0px)); z-index: 40;
+  width: calc(100vw / var(--zoom) - 20px); max-width: 560px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 54px; padding: 6px 6px 6px 18px; border: 1px solid var(--trait-fort); border-radius: 27px;
+  background: var(--surface-2); color: var(--texte); font-size: 14px; box-shadow: var(--ombre-forte);
 }
-.dlg[open] { display: flex; flex-direction: column; animation: monte .18s ease-out; }
-.dlg::backdrop { background: var(--voile); }
-.dlg-large { width: min(820px, calc(100vw / var(--zoom) - 24px)); }
-.dlg-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-.dlg-tete {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 10px 10px 20px;
-  background: var(--noir); color: var(--blanc);
-  border-bottom: 4px solid var(--rouge);
-}
-.dlg-tete h2 { margin: 0; font-family: var(--police-titre); font-size: 22px; overflow-wrap: anywhere; }
-.dlg-tete .btn-icone { color: var(--blanc); }
-:where(html[data-geste=souris]) .dlg-tete .btn-icone:hover { background: var(--surface-2); }
-/* flex: 1 seul vaut « base 0 » : Safari écrase alors le corps à sa marge dans une fenêtre sans hauteur fixée. */
-.dlg-corps { padding: 16px 20px; overflow: auto; flex: 1 1 auto; min-height: 0; }
-.dlg-pied { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--trait); }
-.dlg-pied .btn { flex: 1 1 150px; }
+.rappel p { margin: 0; flex: 1 1 0; min-width: 0; font-weight: 600; line-height: 1.25; }
+.rappel .btn { min-height: 40px; }
+body.avec-rappel { --bas-rappel: 64px; }
+.barre-total { width: calc(100vw / var(--zoom) - 20px); }
+.toast { bottom: calc(24px + var(--bas-total, 0px) + var(--bas-rappel, 0px)); }
+.toast.erreur { background: var(--rouge); }
+
+/* ============ Fenêtres : ce qui ne sert qu'à certaines ============ */
+.dlg-large { width: min(720px, calc(100vw / var(--zoom) - 24px)); }
+.dlg .btn { min-height: 46px; }
 .dlg-message { margin: 0 0 10px; }
 .dlg-liste { margin: 0 0 10px; padding-left: 20px; }
 .dlg-liste li { margin-bottom: 6px; }
-
-/* Formulaire */
-.champ-groupe { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.champ-groupe label { font-weight: 700; }
-.champ {
-  width: 100%; min-height: var(--tactile);
-  padding: 10px 12px;
-  border: 2px solid var(--trait-fort); border-radius: 10px;
-  background: var(--fond); color: var(--texte); font-size: 17px;
-  transition: border-color .12s ease, box-shadow .12s ease;
-}
-:where(html[data-geste=souris]) .champ:hover { border-color: var(--texte-doux); }
-.champ:focus { border-color: var(--rouge-vif); box-shadow: 0 0 0 3px var(--rouge-voile); outline: none; }
-.champ::placeholder { color: var(--texte-pale); opacity: 1; }
 .champ[aria-invalid="true"] { border-color: var(--rouge-vif); } /* saisie refusée, laissée là pour être corrigée */
-textarea.champ { resize: vertical; min-height: 90px; }
-.ligne-prix { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
-.grille-familles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
 .msg-champ { margin: 0; font-size: 14px; font-weight: 600; }
 .msg-champ.erreur, .msg-erreur { color: var(--rouge-vif); }
 .msg-champ.attention { color: var(--ambre); }
-.msg-erreur { margin: 0 0 10px; font-weight: 700; }
+.msg-erreur { margin: 0 0 10px; font-weight: 600; }
 /* Le message reste visible en haut de la fenêtre même quand le formulaire a défilé. */
 .dlg-corps > .msg-reserve:not(:empty) { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 /* Place gardée : si le message disparaît pendant un clic, la liste ne remonte pas (Safari perdrait le clic). */
 .msg-reserve { min-height: 1.5em; }
-.note-exemple { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; background: var(--surface-2); border-left: 4px solid var(--ambre); font-weight: 600; }
-
-/* Choix d'un filtre */
-.grille-choix { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.choix {
-  min-height: 56px; padding: 8px 12px;
-  border: 2px solid var(--trait-fort); border-radius: 12px;
-  background: var(--surface-2); font-weight: 700; font-size: 17px; cursor: pointer;
-  transition: transform .12s ease, border-color .12s ease;
-}
-:where(html[data-geste=souris]) .choix:hover { transform: translateY(-1px); border-color: var(--texte-fort); }
-.choix[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: var(--blanc); }
 
 /* Menu */
-.menu-liste { display: flex; flex-direction: column; gap: 10px; }
-.menu-liste > .btn { justify-content: flex-start; text-align: left; }
-.menu-mode { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
-.menu-mode p { margin: 2px 0 0; font-size: 14px; color: var(--texte-doux); }
-.groupe-theme { display: flex; flex: 1 1 260px; gap: 8px; }
-.groupe-theme .btn { flex: 1; padding: 8px 10px; }
-.menu-info { margin: 6px 0 0; font-size: 14px; color: var(--texte-doux); }
+.menu-liste { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; }
+.menu-liste > .btn { justify-content: flex-start; text-align: left; white-space: normal; border-radius: 14px; }
+.menu-mode { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 12px 12px 16px; border-radius: 14px; background: var(--surface-2); }
+.menu-mode p { margin: 2px 0 0; font-size: 13px; color: var(--texte-doux); }
+.groupe-theme { display: flex; flex: 1 1 260px; gap: 6px; }
+.groupe-theme .btn { flex: 1; padding: 0 10px; }
+.menu-mode .btn-bord { background: var(--surface); }
+.menu-info { margin: 6px 0 0; font-size: 13px; color: var(--texte-doux); }
 
-/* Listes des éléments */
 /* Ordre des filtres (Menu) : une ligne par famille, sa place puis ses flèches. */
 .ordre-ligne { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--trait); }
 .ordre-place { min-width: 60px; font-size: 13px; color: var(--texte-doux); }
-.ordre-nom { flex: 1; font-weight: 700; color: var(--texte-fort); }
-.famille-bloc { border: 1px solid var(--trait-fort); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+.ordre-nom { flex: 1; font-weight: 600; color: var(--texte-fort); }
+/* Listes des éléments */
+.famille-bloc { border-radius: 14px; background: var(--surface-2); padding: 12px; margin-bottom: 12px; }
 .famille-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.famille-tete .champ { flex: 1 1 160px; width: auto; font-weight: 700; }
+.famille-tete .champ { flex: 1 1 160px; width: auto; font-weight: 600; }
+.famille-bloc .btn-bord { background: var(--surface); }
 .liste-elements { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .liste-elements li { display: flex; gap: 8px; align-items: center; }
 .element-ligne { flex-wrap: wrap; }
 .element-ligne > .champ:first-child { flex: 1; width: auto; min-width: 0; }
-.element-ligne .champ-surnoms { order: 3; flex-basis: 100%; font-size: 16px; } /* sous le nom ; 16 px : pas de zoom sur iPhone */
+.element-ligne .champ-surnoms { order: 3; flex-basis: 100%; }
 .ajout-ligne { display: flex; gap: 8px; }
 .ajout-ligne .champ { flex: 1; width: auto; min-width: 0; }
 .aide-texte { margin: 0 0 14px; color: var(--texte-doux); }
-.etapes { margin: 0; padding-left: 22px; }
+.etapes { margin: 0; padding: 0 0 14px 22px; }
 .etapes li { margin-bottom: 10px; }
+.surnom-mien { flex: 1; overflow-wrap: anywhere; }
+.surnom-conflit { font-size: 13px; color: var(--ambre); }
+.titre-recap { margin: 18px 0 6px; font: 600 15px var(--police-titre); }
+.recap-surnoms { margin: 0; padding: 0 0 14px 18px; color: var(--texte-doux); }
 
-@keyframes monte { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-}
-
-/* ============ Téléphone ============ */
-@media (max-width: 600px) {
-  .dlg, .dlg-large { width: calc(100vw / var(--zoom)); height: calc(100vh / var(--zoom)); height: calc(100dvh / var(--zoom)); max-height: none; border-radius: 0; border: 0; margin: 0; }
-  /* Sur téléphone, les boutons de filtre passent à la ligne : tout est visible d'un coup.
-     (Une rangée qui défile du doigt laissait « Autres » hors de l'écran, sans rien qui le signale.)
-     Boutons un peu plus serrés pour qu'ils tiennent souvent sur une seule ligne ; la zone tactile
-     de 44 px est gardée par min-height. */
-  .filtre { padding: 8px 12px; font-size: 15px; }
-  /* Le rappel d'export tient sur une ligne. Sur deux, il couvrait 128 px du bas de l'écran : avec le total,
-     plus aucun forfait n'était visible sur le téléphone d'un responsable. La consigne cachée ici est redite
-     par la fenêtre d'export. */
-  .rappel { flex-wrap: nowrap; padding: 8px 8px 8px 14px; }
-  .rappel p { flex: 1 1 0; min-width: 0; line-height: 1.25; }
+@media (max-width: 599px) {
+  /* Le bouton principal en premier, sous le pouce ; les autres dessous. */
+  .dlg-pied .btn-rouge, .dlg-pied .btn-blanc { order: -1; }
+  /* Le rappel d'export tient sur une ligne : sur deux, avec le total, plus aucun forfait n'était
+     visible sur le téléphone d'un responsable. La consigne cachée ici est redite par la fenêtre d'export. */
   .rappel-suite { display: none; }
+  /* Les feuilles du bas sont hors de « page » : même taille de commandes que le reste du téléphone. */
+  .feuille-bas { --h: 44px; --h-ligne: 44px; }
 }
-/* En mode modification, « + Ajouter un forfait » passait sous le compteur et prenait 58 px de haut (mesuré de
-   441 à 519 px de large, et en dessous) : il reste sur la même ligne, réduit à « + » (le texte reste lu par les
-   lecteurs d'écran, et le Menu a le bouton entier). Le mot « Trier » laisse sa place de la même façon. */
-@media (max-width: 540px) {
-  .barre-resultats { flex-wrap: nowrap; align-items: flex-start; }
-  .barre-resultats-gauche { flex: 1 1 0; min-width: 0; }
-  #btn-ajouter { flex-shrink: 0; width: var(--tactile); padding: 0; justify-content: center; font-size: 24px; }
-  .btn-ajouter-texte, .tri-mot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
-@media (max-width: 440px) {
-  .ligne-prix { grid-template-columns: 1fr; }
-  #recherche { font-size: 18px; }
-}
-@media (max-width: 400px) {
-  .marque-bloc { display: none; }
-}
-/* Téléphone tourné : l'écran ne fait plus que ~375 px de haut. On rend l'en-tête et la
-   recherche plus plats pour garder des forfaits visibles ; tout revient en se retournant. */
+/* Téléphone tourné : l'écran ne fait plus que ~375 px de haut. L'en-tête s'aplatit et la barre des
+   filtres ne reste plus collée, pour garder des forfaits visibles ; tout revient en se retournant. */
 @media (orientation: landscape) and (max-height: 540px) {
-  .entete { padding-top: 6px; padding-bottom: 6px; }
-  .marque h1 { font-size: 20px; }
-  .marque-bloc { width: 36px; height: 34px; font-size: 20px; }
+  .entete, .barre, .plan { --entete: 52px; }
+  .champ-recherche { height: 40px; }
+  /* Trois pastilles et « Autres » : les filtres, le nombre de forfaits et le tri tiennent sur une ligne. */
+  .barre { --filtres: 3; position: relative; top: auto; min-height: 0; padding-top: 6px; padding-bottom: 4px; }
+  .filtres { flex: 0 1 auto; }
+  .filtre { padding: 0 12px; }
+  .filtre svg.i, #btn-ajouter .long, .rappel-suite { display: none; } /* même chez un responsable, la barre tient sur une ligne */
   .etat { display: none; }
-  .damier { height: 6px; }
-  .zone-recherche { padding: 8px 16px; }
-  #recherche { font-size: 17px; padding: 9px 10px; }
-  .loupe { width: 20px; height: 20px; margin-left: 12px; }
-  .etiquettes, .filtres { margin-top: 8px; }
-  .bandeau { margin-top: 8px; padding: 6px 6px 6px 12px; }
-  .bandeau p { font-size: 14px; }
-  main { padding-top: 10px; padding-bottom: 120px; }
-  .barre-resultats { margin-bottom: 8px; }
-  .resultats { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
+  /* Rappel d'export et total à la fois : côte à côte, pas empilés (l'un sur l'autre ils prenaient
+     128 px des 375 de l'écran, et il restait 41 px du premier forfait). */
+  body.avec-rappel:has(#barre-total:not([hidden])) { --bas-rappel: 0px; }
+  body.avec-rappel:has(#barre-total:not([hidden])) .rappel { left: 10px; right: auto; bottom: 10px; width: calc(50vw / var(--zoom) - 15px); max-width: none; margin: 0; }
+  body.avec-rappel .barre-total { left: auto; right: 10px; width: calc(50vw / var(--zoom) - 15px); max-width: none; margin: 0; }
+  /* La fiche sur deux colonnes : la ligne et son prix à gauche, copier et ajouter à droite, qui
+     restent à l'écran sans passer devant le prix quand la fiche est plus haute que le téléphone. */
+  .feuille-bas { max-height: calc(100dvh / var(--zoom) - 12px); }
+  .feuille-bas .fiche-int { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 42%); column-gap: 20px; }
+  .feuille-bas .fiche-int > * { grid-column: 1 / -1; }
+  .feuille-bas .fiche-int > .trajet { grid-column: 1; }
+  .feuille-bas .fiche-int > .fiche-gestes { grid-column: 2; align-self: end; position: sticky; bottom: 16px; margin: 0; }
   .suggestions { max-height: calc(45vh / var(--zoom)); }
 }
+
+/* Page d'ordi peu haute : la fiche et le total ne tiennent pas l'un sous l'autre (le total sortait de
+   l'écran). Le total devient la barre, rangée sous le panneau, qui ouvre sa feuille. Le script lit
+   --total et pose data-total et .colonne. Seuil : 900 px de haut, multiplié par la taille du texte. */
+@media (max-height: 899px) { .panneau { --total: barre; } }
+@media (max-height: 1034px) { :root[data-texte="grand"] .panneau { --total: barre; } }
+@media (max-height: 1169px) { :root[data-texte="tres-grand"] .panneau { --total: barre; } }
+body .barre-total.colonne { left: auto; right: 16px; bottom: 16px; width: 360px; max-width: none; margin: 0; }
+body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rappel reste sous la liste */
+.panneau[data-total="barre"] .fiche-int { padding: 6px 18px 12px; }
+.panneau[data-total="barre"] .fiche-nom { font-size: 18px; }
+.panneau[data-total="barre"] .trajet { margin-top: 12px; }
+.panneau[data-total="barre"] .trajet li { padding-bottom: 6px; }
+.panneau[data-total="barre"] .trajet li:last-child { padding-bottom: 0; }
+.panneau[data-total="barre"] .fiche-gestes { margin-top: 12px; }
 </style>
 </head>
 <body>
 
+<!-- Pictogrammes : dessinés ici une fois, repris partout par icone() (aucune image à télécharger). -->
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-copier" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V7a3 3 0 0 1 3-3h8"/></symbol>
+  <symbol id="i-coche" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-moins" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-etoile" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></symbol>
+  <symbol id="i-crayon" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></symbol>
+  <symbol id="i-corbeille" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-croix" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-surnom" viewBox="0 0 24 24"><path d="M3.5 12.2V5.5a2 2 0 0 1 2-2h6.7l8.3 8.3-8.7 8.7z"/><circle cx="8" cy="8" r="1.2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.2"/></symbol>
+  <symbol id="i-horloge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+</svg>
+
+<!-- « page » mesure la largeur réelle de la mise en page (taille du texte comprise) : la feuille de
+     style s'y règle par des requêtes de conteneur, pas par la largeur de l'écran. -->
+<div class="page">
 <header class="entete">
   <div class="marque">
     <span class="marque-bloc" aria-hidden="true">F</span>
@@ -631,55 +721,62 @@ textarea.champ { resize: vertical; min-height: 90px; }
       <h1>Forfaits</h1>
       <p class="etat" id="etat-donnees"></p>
     </div>
+    <span class="pastille-modif" id="barre-modif" hidden>Modification</span>
   </div>
-  <div class="entete-actions">
-    <button type="button" class="btn btn-bord" id="btn-importer">Importer</button>
-    <button type="button" class="btn-icone" id="btn-menu" aria-label="Menu" aria-haspopup="dialog">☰</button>
-  </div>
-</header>
-<div class="damier" aria-hidden="true"></div>
-<div class="barre-modif" id="barre-modif" hidden>Mode modification activé</div>
-<div class="bandeaux" id="bandeaux"></div>
-
-<section class="zone-recherche" role="search">
-  <div class="champ-recherche">
-    <svg class="loupe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+  <div class="champ-recherche" role="search">
+    <svg class="i" aria-hidden="true"><use href="#i-loupe"/></svg>
     <label for="recherche" class="sr">Rechercher un forfait</label>
     <input id="recherche" type="search" placeholder="Référence, taximètre, imprimante, surnom…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
-    <button type="button" class="btn-icone" id="btn-vider" aria-label="Effacer la recherche" hidden>✕</button>
+    <button type="button" class="btn-icone" id="btn-vider" aria-label="Effacer la recherche" hidden><svg class="i" aria-hidden="true"><use href="#i-croix"/></svg></button>
     <ul class="suggestions" id="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
   </div>
-  <div class="etiquettes" id="etiquettes" hidden></div>
-  <div class="filtres" id="filtres" role="group" aria-label="Filtrer par élément"></div>
-</section>
-
-<main>
-  <div class="barre-resultats">
-    <div class="barre-resultats-gauche">
-      <p id="compte" aria-live="polite"></p>
-      <button type="button" class="btn-lien" id="btn-tout-effacer" title="Effacer la recherche et les filtres" hidden>Tout effacer</button>
-      <label class="tri" id="zone-tri" hidden><span class="tri-mot">Trier</span>
-        <select id="tri" class="champ">
-          <option value="ref">par référence</option>
-          <option value="prix-croissant">prix croissant</option>
-          <option value="prix-decroissant">prix décroissant</option>
-        </select>
-      </label>
-    </div>
-    <button type="button" class="btn btn-rouge" id="btn-ajouter" hidden>+<span class="btn-ajouter-texte">&nbsp;Ajouter un forfait</span></button>
+  <div class="entete-actions">
+    <button type="button" class="btn btn-nu" id="btn-importer">Importer</button>
+    <button type="button" class="btn-icone" id="btn-menu" aria-label="Menu" aria-haspopup="dialog"><svg class="i" aria-hidden="true"><use href="#i-menu"/></svg></button>
   </div>
-  <div class="resultats" id="resultats"></div>
-</main>
+</header>
+
+<div class="barre" id="barre">
+  <div class="filtres" id="filtres" role="group" aria-label="Filtrer par élément"></div>
+  <div class="barre-suite">
+    <p id="compte" aria-live="polite"></p>
+    <button type="button" class="btn-doux" id="btn-tout-effacer" title="Effacer la recherche et les filtres" hidden>Tout effacer</button>
+    <button type="button" class="btn-doux" id="btn-recents" aria-expanded="false" aria-haspopup="true" hidden><svg class="i" aria-hidden="true"><use href="#i-horloge"/></svg>Récents</button>
+    <label class="tri" id="zone-tri" hidden><span class="sr">Trier</span>
+      <select id="tri" class="select-pilule">
+        <option value="ref">Par référence</option>
+        <option value="prix-croissant">Prix croissant</option>
+        <option value="prix-decroissant">Prix décroissant</option>
+      </select>
+    </label>
+    <button type="button" class="btn btn-rouge" id="btn-ajouter" aria-label="Ajouter un forfait" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span class="long">Ajouter un forfait</span></button>
+  </div>
+</div>
+
+<div class="plan">
+  <main class="zone">
+    <div class="bandeaux" id="bandeaux"></div>
+    <ul class="resultats" id="resultats"></ul>
+  </main>
+  <aside class="panneau" id="panneau" aria-label="Forfait choisi et total">
+    <section class="bloc fiche" id="fiche" aria-label="Forfait choisi" hidden></section>
+    <section class="bloc total" id="total" aria-label="Total" hidden></section>
+  </aside>
+</div>
+</div>
 
 <div class="rappel" id="rappel" role="status" hidden>
   <p id="rappel-texte"></p>
-  <button type="button" class="btn btn-blanc" id="btn-rappel-exporter">Exporter</button>
+  <button type="button" class="btn btn-rouge" id="btn-rappel-exporter">Exporter</button>
 </div>
 <button type="button" class="barre-total" id="barre-total" hidden>
   <span id="barre-total-nb"></span>
-  <span class="barre-total-montants"><span id="barre-total-ht"></span><span id="barre-total-ttc"></span></span>
+  <span class="barre-total-montants"><span class="b-ht" id="barre-total-ht"></span><span class="b-ttc" id="barre-total-ttc"></span></span>
 </button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- Hors grand écran, la fiche d'un forfait et le total montent du bas. -->
+<dialog class="feuille-bas" id="dlg-fiche" aria-label="Forfait"><div id="feuille-fiche"></div></dialog>
+<dialog class="feuille-bas" id="dlg-total" aria-label="Total"><div id="feuille-total"></div></dialog>
 <input type="file" id="fichier-import" hidden>
 
 <script>
@@ -692,9 +789,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const CLE_APPAREIL = 'forfaits.appareil.v1'; // réglages propres à cet appareil
   const THEMES = [{ valeur: 'sombre', libelle: 'Sombre' }, { valeur: 'clair', libelle: 'Clair' }, { valeur: 'auto', libelle: 'Auto' }];
   const TAILLES = [{ valeur: 'normal', libelle: 'Normal' }, { valeur: 'grand', libelle: 'Grand' }, { valeur: 'tres-grand', libelle: 'Très grand' }];
-  const CARTES = [{ valeur: 'repliees', libelle: 'Repliées' }, { valeur: 'entieres', libelle: 'Entières' }];
   const RECENTS_MAX = 4;           // derniers forfaits consultés (par appareil, jamais exporté)
-  const FILTRES_VISIBLES = 3;      // familles en boutons de filtre ; les suivantes vont dans « Autres »
   const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
   const QTE_MAX = 99;
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
@@ -991,7 +1086,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', compact: true, recentsOuverts: false, tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -1015,12 +1110,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
         dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
         texte: TAILLES.some((t) => t.valeur === lu.texte) ? lu.texte : 'normal',
-        compact: lu.compact !== false, // cartes repliées au départ, sauf si l'appareil a choisi le contraire
-        // Repliée tant que CET appareil ne l'a pas ouverte : la place va aux forfaits. Nouvelle
-        // clé, et l'ancienne (`recentsPlies`) est ignorée exprès : `sauverAppareil()` réécrit
-        // tout l'objet, donc tout appareil déjà en service avait déjà enregistré l'ancien
-        // défaut — le relire aurait gardé la rangée dépliée partout.
-        recentsOuverts: lu.recentsOuverts === true,
         // Tri choisi sur cet appareil : une des valeurs de la liste « Trier », sinon l'ordre des références.
         tri: [...$('tri').options].some((o) => o.value === lu.tri) ? lu.tri : 'ref',
       };
@@ -1048,8 +1137,8 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (autres.length >= USAGE_MAX) delete compteurs[autres.reduce((a, b) => (compteurs[b] < compteurs[a] ? b : a))]; // oublie le moins utilisé
     sauverAppareil();
   }
-  // Forfait qu'on vient de regarder (carte dépliée, référence copiée, ajout au total) : il revient
-  // en haut des résultats quand la recherche est vide, le temps des quelques suivants.
+  // Forfait qu'on vient de regarder (fiche ouverte, référence copiée, ajout au total) : le bouton
+  // « Récents » de la barre le retrouve, le temps des quelques suivants.
   function noterConsulte(id) {
     appareil.recents = [id, ...appareil.recents.filter((x) => x !== id)].slice(0, RECENTS_MAX);
     sauverAppareil();
@@ -1113,6 +1202,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
   // Au démarrage, faute de geste : un appareil qui n'a aucun pointeur fin est un téléphone.
   noterGeste(matchMedia('(any-pointer: fine)').matches ? 'mouse' : 'touch');
+  // La taille des commandes, elle, se décide ici une fois pour toutes (voir --h) : un écran qu'on
+  // peut toucher, même avec une souris branchée, garde des commandes de 44 px.
+  if (matchMedia('(any-pointer: coarse)').matches) racine.dataset.tactile = '';
   addEventListener('pointerdown', (ev) => noterGeste(ev.pointerType), { capture: true, passive: true });
   // La souris qui bouge suffit : sur un PC hybride, le survol revient sans attendre un clic.
   addEventListener('pointermove', (ev) => { if (ev.pointerType === 'mouse') noterGeste('mouse'); },
@@ -1219,7 +1311,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
   /* =====================================================================
      RECHERCHE
      ===================================================================== */
-  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, ouvertes: new Set() };
+  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true };
 
   const decouper = (texte) => texte.split(/[\s,;+]+/).filter((m) => norm(m) !== '');
 
@@ -1339,6 +1431,34 @@ textarea.champ { resize: vertical; min-height: 90px; }
   /* =====================================================================
      AFFICHAGE
      ===================================================================== */
+  // Pictogramme repris de la planche dessinée en tête de page (aucune image à télécharger).
+  function icone(nom, classe) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'i' + (classe ? ' ' + classe : ''));
+    svg.setAttribute('aria-hidden', 'true');
+    const dessin = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    dessin.setAttribute('href', '#i-' + nom);
+    svg.append(dessin);
+    return svg;
+  }
+
+  // La feuille de style décide de la mise en page d'après la largeur de la page (taille du texte
+  // comprise) ; le script lui demande ce qu'elle a décidé au lieu de mesurer l'écran.
+  // Grand écran : la fiche du forfait choisi et le total sont à droite de la liste.
+  const large = () => getComputedStyle($('panneau')).display !== 'none';
+  // Le total est sous la fiche si la page est assez haute (--total, décidé par la feuille de style) ;
+  // sinon c'est la barre du bas, qui ouvre une feuille.
+  const totalSousFiche = () => large() && getComputedStyle($('panneau')).getPropertyValue('--total').trim() !== 'barre';
+  // Familles en boutons de filtre ; les suivantes vont dans « Autres ».
+  const filtresVisibles = () => Number(getComputedStyle($('barre')).getPropertyValue('--filtres')) || 3;
+
+  // Redessine une zone sans perdre le clavier : le focus revient au bouton de même rang.
+  function redessiner(zone, dessiner) {
+    const rang = [...zone.querySelectorAll('button')].indexOf(document.activeElement);
+    dessiner();
+    if (rang >= 0) zone.querySelectorAll('button')[rang]?.focus({ preventScroll: true });
+  }
+
   function rafraichir() {
     index = construireIndex();
     // Retire les filtres devenus invalides (élément ou famille supprimés).
@@ -1349,12 +1469,11 @@ textarea.champ { resize: vertical; min-height: 90px; }
     rendreBandeaux();
     rendreRecherche();
     rendreRappel();
-    rendreBarreTotal();
+    rendreTotal();
   }
 
   function rendreRecherche() {
     rendreFiltres();
-    rendreEtiquettes();
     rendreResultats();
     majSuggestions();
   }
@@ -1365,8 +1484,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('barre-modif').hidden = !appareil.modeModif;
   }
 
-  function bandeau(texte, bouton, erreur) {
-    return h('div', { class: 'bandeau' + (erreur ? ' bandeau-erreur' : '') }, h('p', {}, texte), bouton);
+  // discret : laisse sa place aux forfaits pendant une recherche (voir « en-recherche »).
+  function bandeau(texte, bouton, erreur, discret) {
+    return h('div', { class: 'bandeau' + (erreur ? ' bandeau-erreur' : '') + (discret ? ' bandeau-discret' : '') },
+      icone('info'), h('p', {}, texte), bouton);
   }
 
   function rendreBandeaux() {
@@ -1374,45 +1495,120 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (!stockageOk) liste.push(bandeau("Cet appareil n'enregistre pas les données (navigation privée ?). Exporte avant de fermer la page.", null, true));
     if (donneesFutures) {
       // Un seul message : importer, exporter ou supprimer des exemples n'a pas de sens tant que la page est en retard.
-      liste.push(bandeau(MSG_FUTUR, h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger-futur', onclick: () => location.reload() }, 'Recharger'), true));
+      liste.push(bandeau(MSG_FUTUR, h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-recharger-futur', onclick: () => location.reload() }, 'Recharger'), true));
       $('bandeaux').replaceChildren(...liste);
       return;
     }
-    if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer'), true));
+    if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-bord', onclick: lancerImport }, 'Importer'), true));
     // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
-    if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
+    if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
     const exemples = index.forfaits.some((f) => f.exemple);
     if (exemples) {
       liste.push(bandeau(
-        'Les forfaits marqués EXEMPLE sont faux (références et prix inventés).',
+        // Sur un téléphone, la phrase courte tient sur la ligne du bouton.
+        [h('span', { class: 'long' }, 'Les forfaits « EXEMPLE » sont faux : références et prix inventés.'), h('span', { class: 'court' }, 'Exemples : prix inventés.')],
         appareil.modeModif
-          ? h('button', { type: 'button', class: 'btn btn-blanc', id: 'btn-suppr-exemples', onclick: supprimerExemples }, 'Supprimer les exemples')
-          : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le vrai fichier'),
+          ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-suppr-exemples', onclick: supprimerExemples }, 'Supprimer les exemples')
+          : h('button', { type: 'button', class: 'btn btn-bord', onclick: lancerImport }, h('span', {}, 'Importer', h('span', { class: 'long' }, ' le vrai fichier'))),
+        false, true,
       ));
     } else if (!appareil.modeModif && appareil.dernierImport) {
       const jours = Math.floor((Date.now() - appareil.dernierImport) / 86400000);
-      if (jours >= JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer')));
+      if (jours >= JOURS_RAPPEL_IMPORT) liste.push(bandeau(`Dernier import il y a ${jours} jours : vérifie s'il existe un fichier plus récent dans OneDrive.`, h('button', { type: 'button', class: 'btn btn-bord', onclick: lancerImport }, 'Importer')));
     }
     $('bandeaux').replaceChildren(...liste);
   }
 
+  /* ---------- Menus de la barre (filtres, récents) : un seul ouvert à la fois ---------- */
+  let menuOuvert = null;
+  function fermerMenu(rendreFocus) {
+    if (!menuOuvert) return;
+    const { el, ancre } = menuOuvert;
+    menuOuvert = null;
+    el.remove();
+    ancre.setAttribute('aria-expanded', 'false');
+    if (rendreFocus && ancre.isConnected) ancre.focus();
+  }
+  // Le menu se pose sous le bouton qui l'ouvre (l'ancre), sans sortir de la barre.
+  function ouvrirMenuBarre(ancre, titre, enfants) {
+    const deja = menuOuvert?.ancre === ancre;
+    fermerMenu();
+    if (deja) return;
+    const barre = $('barre');
+    const el = h('div', { class: 'menu', role: 'group', 'aria-label': titre }, enfants);
+    barre.append(el);
+    const a = ancre.getBoundingClientRect();
+    const b = barre.getBoundingClientRect();
+    // En grands caractères, les mesures de l'écran et celles de la feuille de style n'ont pas la
+    // même échelle : on la déduit de la barre elle-même (1 quand le texte est à sa taille normale).
+    const echelle = b.width / barre.offsetWidth || 1;
+    el.style.top = `${(a.bottom - b.top) / echelle + 6}px`;
+    el.style.left = `${Math.max(8, Math.min((a.left - b.left) / echelle, barre.offsetWidth - el.offsetWidth - 8))}px`;
+    ancre.setAttribute('aria-expanded', 'true');
+    menuOuvert = { el, ancre };
+    // Le clavier entre dans le menu ; en sortir par Tab le referme.
+    el.addEventListener('focusout', (ev) => {
+      if (menuOuvert?.el === el && ev.relatedTarget && !el.contains(ev.relatedTarget) && ev.relatedTarget !== ancre) fermerMenu();
+    });
+    (el.querySelector('[aria-pressed="true"]') || el.querySelector('button'))?.focus({ preventScroll: true });
+  }
+
+  /* ---------- Filtres (pastilles de la barre) ---------- */
+  const nomSans = (fam) => `Sans ${fam.nom.toLocaleLowerCase('fr')}`;
+
+  // Les choix d'une famille : « Tous », ses éléments, « Sans … », chacun avec son nombre de forfaits.
+  function choixFiltre(fam) {
+    const actuel = etatUi.filtres.get(fam.id);
+    const nb = (valeur) => index.forfaits.filter((f) => {
+      const present = index.elementsForfait.get(f.id).find((e) => e.familleId === fam.id);
+      return valeur === SANS ? !present : present?.id === valeur;
+    }).length;
+    const choix = [
+      { valeur: undefined, nom: 'Tous' },
+      ...elementsDe(fam.id).map((e) => ({ valeur: e.id, nom: e.nom })),
+      { valeur: SANS, nom: nomSans(fam) },
+    ];
+    return choix.map((c) => h('button', {
+      type: 'button', class: 'menu-item choix', 'aria-pressed': String(c.valeur === actuel),
+      onclick: () => {
+        if (c.valeur === undefined) etatUi.filtres.delete(fam.id); else etatUi.filtres.set(fam.id, c.valeur);
+        if (c.valeur !== undefined && c.valeur !== SANS) noterUsage('usageElements', c.valeur);
+        rendreRecherche();
+        // Le clavier revient à la pastille de la famille (ou à « Autres », si elle y est retournée).
+        ($('filtres').querySelector(`[data-fam="${CSS.escape(fam.id)}"]`) || $('btn-autres-filtres'))?.focus({ preventScroll: true });
+      },
+    // Le nombre est un repère pour l'œil : le nom du bouton reste celui de l'élément.
+    }, h('span', {}, c.nom), c.valeur === undefined ? null : h('span', { class: 'nb', 'aria-hidden': 'true' }, String(nb(c.valeur)))));
+  }
+
+  // Pastille d'une famille. Pleine quand un filtre est posé : elle affiche alors l'élément choisi.
   function boutonFiltre(fam) {
     const valeur = etatUi.filtres.get(fam.id);
-    const libelle = valeur === undefined ? fam.nom : `${fam.nom} : ${valeur === SANS ? 'sans' : index.elParId.get(valeur).nom}`;
-    return h('button', { type: 'button', class: 'filtre', 'aria-pressed': String(valeur !== undefined), onclick: () => ouvrirChoixFiltre(fam) }, libelle, ' ▾');
+    return h('button', {
+      type: 'button', class: 'filtre' + (valeur === undefined ? '' : ' actif'), 'data-fam': fam.id, 'aria-expanded': 'false', 'aria-haspopup': 'true',
+      onclick: (ev) => ouvrirMenuBarre(ev.currentTarget, fam.nom, choixFiltre(fam)),
+    }, valeur === undefined
+      ? h('span', { class: 'filtre-nom' }, fam.nom)
+      : [h('span', { class: 'sr' }, `${fam.nom} : `), h('span', { class: 'filtre-nom' }, valeur === SANS ? nomSans(fam) : index.elParId.get(valeur).nom)],
+    icone('chevron'));
   }
 
   // Les premières familles de l'appareil sont des boutons ; les suivantes passent dans « Autres »,
   // sinon un magasin qui a quinze familles n'a plus que des filtres à l'écran. Un filtre posé reste
   // toujours visible, et une seule famille de reste s'affiche telle quelle (« Autres » n'y sert à rien).
   function rendreFiltres() {
+    fermerMenu();
     const fams = index.fams;
-    const cachee = (fam, i) => i >= FILTRES_VISIBLES && !etatUi.filtres.has(fam.id);
+    const visibles = filtresVisibles();
+    const cachee = (fam, i) => i >= visibles && !etatUi.filtres.has(fam.id);
     const caches = fams.filter(cachee);
     $('filtres').replaceChildren(
       ...fams.filter((fam, i) => !cachee(fam, i)).map(boutonFiltre),
       ...(caches.length > 1
-        ? [h('button', { type: 'button', class: 'filtre', id: 'btn-autres-filtres', onclick: () => ouvrirAutresFiltres(caches) }, 'Autres', ' ▾')]
+        ? [h('button', {
+          type: 'button', class: 'filtre', id: 'btn-autres-filtres', 'aria-expanded': 'false', 'aria-haspopup': 'true',
+          onclick: (ev) => ouvrirMenuBarre(ev.currentTarget, 'Autres filtres', caches.map((fam) => h('div', { role: 'group', 'aria-label': fam.nom }, h('p', { class: 'menu-titre', 'aria-hidden': 'true' }, fam.nom), choixFiltre(fam)))),
+        }, h('span', { class: 'filtre-nom' }, 'Autres'), icone('chevron'))]
         : caches.map(boutonFiltre)),
     );
   }
@@ -1437,48 +1633,26 @@ textarea.champ { resize: vertical; min-height: 90px; }
       const rendue = fleche(sens, id);
       (rendue && !rendue.disabled ? rendue : fleche(-sens, id))?.focus();
     };
+    const visibles = filtresVisibles();
     const dessiner = () => {
       // Une seule famille de reste n'irait pas dans « Autres » : la rangée la montre telle quelle.
-      const groupees = index.fams.length - FILTRES_VISIBLES > 1;
+      const groupees = index.fams.length - visibles > 1;
       liste.replaceChildren(...index.fams.map((fam, i) => h('div', { class: 'ordre-ligne' },
-        h('span', { class: 'ordre-place' }, i < FILTRES_VISIBLES || !groupees ? 'Filtre' : 'Autres'),
+        h('span', { class: 'ordre-place' }, i < visibles || !groupees ? 'Filtre' : 'Autres'),
         h('span', { class: 'ordre-nom' }, fam.nom),
         h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'data-fleche': 'haut-' + fam.id, 'aria-label': `Monter ${fam.nom}`, disabled: i === 0, onclick: () => deplacer(i, -1) }, '↑'),
         h('button', { type: 'button', class: 'btn btn-bord btn-carre', 'data-fleche': 'bas-' + fam.id, 'aria-label': `Descendre ${fam.nom}`, disabled: i === index.fams.length - 1, onclick: () => deplacer(i, 1) }, '↓'))));
     };
     const dlg = ouvrirDialogue({
       titre: 'Ordre des filtres',
-      corps: [h('p', { class: 'aide-texte' }, `Les ${FILTRES_VISIBLES} premières sont les boutons de filtre sous la recherche ; les autres se rangent dans « Autres ». Sur cet appareil seulement.`), liste],
+      corps: [h('p', { class: 'aide-texte' }, `Sur cet écran, les ${visibles} premières sont les boutons de filtre sous la recherche ; les autres se rangent dans « Autres ». Sur cet appareil seulement.`), liste],
       pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
     });
     dessiner();
   }
 
-  // La liste des familles rangées dans « Autres » : on en choisit une, sa fenêtre de filtre s'ouvre.
-  function ouvrirAutresFiltres(caches) {
-    const dlg = ouvrirDialogue({
-      titre: 'Autres filtres',
-      corps: h('div', { class: 'grille-choix' }, caches.map((fam) => h('button', {
-        type: 'button', class: 'choix', onclick: () => { dlg.close(); ouvrirChoixFiltre(fam); },
-      }, fam.nom))),
-    });
-  }
-
-  function rendreEtiquettes() {
-    const zone = $('etiquettes');
-    zone.replaceChildren(...[...etatUi.filtres].map(([familleId, valeur]) => {
-      const fam = index.famParId.get(familleId);
-      const nom = valeur === SANS ? 'sans' : index.elParId.get(valeur).nom;
-      return h('button', {
-        type: 'button', class: 'etiquette', 'aria-label': `Retirer le filtre ${fam.nom} : ${nom}`,
-        onclick: () => { etatUi.filtres.delete(familleId); rendreRecherche(); },
-      }, h('span', {}, `${fam.nom} : ${nom}`), h('span', { class: 'croix', 'aria-hidden': 'true' }, '✕'));
-    }));
-    zone.hidden = etatUi.filtres.size === 0;
-  }
-
   // Les forfaits de chaque filtre pris tout seul, quand aucun forfait ne les contient tous
-  // (au comptoir : un boîtier d'un forfait + un lumineux d'un autre, à additionner avec « + Total »).
+  // (au comptoir : un boîtier d'un forfait + un lumineux d'un autre, à additionner avec le « + »).
   // Les filtres « sans » ne font pas de groupe : ils ne désignent aucun élément à retrouver.
   function groupesParFiltre(contraintes, classer) {
     const choisis = [...etatUi.filtres].filter(([, valeur]) => valeur !== SANS);
@@ -1490,44 +1664,35 @@ textarea.champ { resize: vertical; min-height: 90px; }
     return groupes.length < 2 ? [] : groupes;
   }
 
-  // Les derniers forfaits consultés, quand la recherche est vide : un appui remet le forfait seul
-  // à l'écran (la liste complète est longue, celui qu'on vient de regarder revient souvent).
-  // Le titre replie la rangée pour rendre la place aux forfaits : réglage de cet appareil.
-  function rangeeRecents(liste) {
-    const plies = !appareil.recentsOuverts;
-    const pastilles = h('div', { class: 'recents-liste', hidden: plies },
-      ...liste.map((f) => h('button', {
-        type: 'button', class: 'recent', title: f.designation || f.ref,
+  /* ---------- Derniers consultés (bouton « Récents » de la barre) ---------- */
+  // Le bouton n'existe que si la recherche est vide et qu'aucun filtre n'est posé : tous les
+  // forfaits sont alors dans la liste, un appui rouvre la fiche sans toucher à la recherche.
+  function montrerRecents() {
+    $('btn-recents').hidden = etatUi.actif || donneesFutures || !appareil.recents.some((id) => index.forfaitParId.has(id));
+  }
+  // Forfait qu'on vient de regarder (fiche ouverte, référence copiée, ajout au total).
+  function consulter(f) {
+    noterConsulte(f.id);
+    montrerRecents();
+  }
+  function ouvrirRecents(ancre) {
+    const liste = appareil.recents.map((id) => index.forfaitParId.get(id)).filter(Boolean);
+    ouvrirMenuBarre(ancre, 'Derniers consultés', [h('p', { class: 'menu-titre' }, 'Derniers consultés'),
+      liste.map((f) => h('button', {
+        type: 'button', class: 'menu-item recent',
         onclick: () => {
-          $('recherche').value = f.ref;
-          etatUi.ouvertes.add(f.id);
-          rendreRecherche();
-          window.scrollTo({ top: 0 });
+          choisir(f);
+          $('resultats').querySelector('.carte.choisie')?.scrollIntoView({ block: 'nearest' });
         },
-      }, f.designation || f.ref)));
-    return h('div', { class: 'recents' + (plies ? ' recents-plies' : '') },
-      h('button', {
-        type: 'button', class: 'recents-titre', id: 'btn-recents',
-        'aria-expanded': String(!plies),
-        onclick: (ev) => {
-          const plie = appareil.recentsOuverts;
-          appareil.recentsOuverts = !plie;
-          sauverAppareil();
-          // Tout de suite, sans tout redessiner : la rangée est au-dessus des forfaits, on voit la place rendue.
-          ev.currentTarget.setAttribute('aria-expanded', String(!plie));
-          ev.currentTarget.closest('.recents').classList.toggle('recents-plies', plie);
-          pastilles.hidden = plie;
-        },
-      }, 'Derniers consultés', h('span', { class: 'chevron', 'aria-hidden': 'true' })),
-      pastilles);
+      }, h('span', {}, f.designation || f.ref), h('span', { class: 'nb' }, formatPrix(f.ttc))))]);
   }
 
   function rendreResultats() {
     const texte = $('recherche').value;
     // Le repli de la rangée des familles se décide au moment où le champ passe de vide à rempli,
     // puis ne bouge plus. S'il suivait `data-geste`, un appui du doigt après un mouvement de
-    // souris replierait la rangée AU CONTACT : le contenu monterait de 116 px et l'appui serait
-    // perdu (mesuré sur Chromium et WebKit). Rien ne doit bouger entre le doigt qui touche et le
+    // souris replierait la rangée AU CONTACT : le contenu monterait et l'appui serait perdu
+    // (mesuré sur Chromium et WebKit). Rien ne doit bouger entre le doigt qui touche et le
     // doigt qui part.
     if (!texte.trim()) racine.removeAttribute('data-recherche');
     else if (!racine.dataset.recherche) racine.dataset.recherche = auDoigt() ? 'doigt' : 'souris';
@@ -1545,36 +1710,36 @@ textarea.champ { resize: vertical; min-height: 90px; }
       || sens * (a.ttc - b.ttc) || sens * (a.ht - b.ht) || usage(b) - usage(a) || tri.compare(a.ref, b.ref));
     classer(resultats);
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
+    etatUi.actif = actif;
     const groupes = resultats.length === 0 && total > 0 ? groupesParFiltre(analyse.contraintes, classer) : [];
 
-    $('compte').textContent = total === 0 ? '' : groupes.length ? 'Aucun forfait ne contient tout'
-      : resultats.length === 0 ? 'Aucun forfait ne correspond'
-      : pluriel(resultats.length, 'forfait') + (actif ? ` sur ${total}` : '');
-    // Avec une recherche seule, la croix du champ efface déjà : le bouton ne sort que pour les
-    // filtres, sinon la barre passait sur deux lignes et mangeait une carte sur un téléphone.
-    $('btn-tout-effacer').hidden = etatUi.filtres.size === 0;
+    $('compte').replaceChildren(...(total === 0 ? [] : groupes.length ? ['Aucun forfait ne contient tout']
+      : resultats.length === 0 ? ['Aucun forfait ne correspond']
+      : [h('strong', {}, String(resultats.length)), ` forfait${resultats.length > 1 ? 's' : ''}${actif ? ` sur ${total}` : ''}`]));
+    // « Tout effacer » prend la place de « Récents » : la barre garde sa longueur.
+    $('btn-tout-effacer').hidden = !actif;
+    montrerRecents();
     $('zone-tri').hidden = total < 2;
     $('btn-ajouter').hidden = !appareil.modeModif || donneesFutures;
     $('btn-vider').hidden = texte === '';
+    $('bandeaux').classList.toggle('en-recherche', actif);
 
-    const recents = actif ? [] : appareil.recents.map((id) => index.forfaitParId.get(id)).filter(Boolean);
-
-    let contenu;
+    const vide = (...enfants) => h('li', { class: 'vide' }, ...enfants);
+    let montres = []; // les forfaits affichés, dans l'ordre de l'écran
+    let contenu = null;
     if (donneesFutures) {
-      contenu = [h('div', { class: 'vide' }, h('p', {}, 'Les forfaits de cet appareil ne sont pas affichés : cette page doit être rechargée.'))];
+      contenu = [vide(h('p', {}, 'Les forfaits de cet appareil ne sont pas affichés : cette page doit être rechargée.'))];
     } else if (total === 0) {
-      contenu = [h('div', { class: 'vide' },
+      contenu = [vide(
         h('p', {}, 'Aucun forfait enregistré sur cet appareil.'),
         appareil.modeModif
-          ? h('button', { type: 'button', class: 'btn btn-rouge', onclick: () => ouvrirFormulaire(null) }, '+ Ajouter un forfait')
+          ? h('button', { type: 'button', class: 'btn btn-rouge', onclick: () => ouvrirFormulaire(null) }, icone('plus'), 'Ajouter un forfait')
           : h('button', { type: 'button', class: 'btn btn-blanc', onclick: lancerImport }, 'Importer le fichier des forfaits'))];
     } else if (groupes.length) {
-      contenu = [h('p', { class: 'note-groupes' },
-        'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec « + Total ».'),
-        ...groupes.flatMap((g) => [h('h3', { class: 'titre-groupe' }, g.titre, h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))), ...g.liste.map(carte)])];
+      montres = groupes.flatMap((g) => g.liste);
     } else if (resultats.length === 0) {
       const corrige = analyse.mots.length ? corrigerRecherche(texte) : null;
-      contenu = [h('div', { class: 'vide' },
+      contenu = [vide(
         h('p', {}, 'Aucun forfait ne correspond à cette recherche.'),
         h('div', { class: 'vide-boutons' },
           corrige ? h('button', {
@@ -1583,75 +1748,151 @@ textarea.champ { resize: vertical; min-height: 90px; }
           }, `Chercher « ${corrige} » ?`) : null,
           h('button', { type: 'button', class: 'btn btn-bord', onclick: toutEffacer }, 'Effacer la recherche')))];
     } else {
-      contenu = [...(recents.length ? [rangeeRecents(recents)] : []), ...resultats.map(carte)];
+      montres = resultats;
     }
+    // Le forfait choisi reste choisi tant qu'il est à l'écran. Sur grand écran, la fiche n'est
+    // jamais vide : le premier de la liste y est montré d'office (sans compter comme « consulté »).
+    if (!montres.some((f) => f.id === etatUi.choisi)) etatUi.choisi = large() && montres.length ? montres[0].id : null;
+    if (!contenu) {
+      let n = 0;
+      contenu = groupes.length
+        ? [h('li', { class: 'note-groupes' },
+          'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec leur « + ».'),
+        ...groupes.flatMap((g) => [
+          h('li', { class: 'titre-groupe' }, h('h3', {}, g.titre), h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))),
+          ...g.liste.map((f) => carte(f, n++))])]
+        : montres.map((f) => carte(f, n++));
+    }
+    // Les rangées n'arrivent en cascade qu'à l'ouverture de la page : ensuite, la liste change sans délai.
+    $('resultats').classList.toggle('entree', etatUi.premier);
+    etatUi.premier = false;
     $('resultats').replaceChildren(...contenu);
+    rendreFiche();
   }
 
   const prix = (type, centimes) => h('span', { class: `prix prix-${type}` },
     h('span', { class: 'prix-montant' }, formatPrix(centimes)), h('span', { class: 'prix-type' }, type.toUpperCase()));
 
-  function carte(f) {
-    const elements = index.elementsForfait.get(f.id);
-    // Repliée (réglage de l'appareil) : le nom et le TTC seulement, le reste au premier appui.
-    // Repliée, le titre vit dans le bouton qui déroule : des <span>, car un <button> n'accepte
-    // ni <h2> ni <div>, et c'est le <h2> autour du bouton qui porte le titre.
-    const compact = appareil.compact;
-    const balise = compact ? 'span' : 'h2';
-    // Titre = le nom du forfait (sa désignation) ; sans désignation, la référence fait le titre.
-    // Dans les deux cas, un seul élément porte la classe carte-ref avec la référence.
-    const titre = f.designation
-      ? h(balise, { class: 'carte-nom carte-designation', title: f.designation }, f.designation)
-      : h(balise, { class: 'carte-nom carte-ref' }, f.ref);
-    const tete = h(compact ? 'span' : 'div', { class: 'carte-tete' },
-      f.exemple ? h('span', { class: 'badge-exemple' }, 'EXEMPLE') : null,
-      titre);
-    const ouvert = etatUi.ouvertes.has(f.id);
-    const details = [
-      elements.length ? h('ul', { class: 'carte-elements' }, elements.map((e) =>
-        h('li', {}, h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
-      index.surnomsDe.has(f.id) ? h('p', { class: 'carte-surnoms' }, `Aussi appelé : ${index.surnomsDe.get(f.id).join(', ')}`) : null,
-      h('div', { class: 'carte-bas' },
-        h('div', { class: 'carte-prix' },
-          compact ? null : prix('ttc', f.ttc),
-          prix('ht', f.ht)),
-        h('div', { class: 'carte-boutons' },
-          h('button', {
-            type: 'button', class: 'btn btn-favori', 'aria-pressed': String(appareil.favoris.includes(f.id)),
-            'aria-label': `Favori : ${f.ref}`, title: 'Favori : en tête de liste sur cet appareil', onclick: () => basculerFavori(f),
-          }, appareil.favoris.includes(f.id) ? '★' : '☆'),
-          // Pas de nouveau classement tout de suite : la carte ne doit pas bouger sous le doigt.
-          h('button', {
-            type: 'button', class: 'btn btn-total', 'aria-label': `Ajouter ${f.ref} au total`, title: 'Ajouter au total (additionner plusieurs lignes)',
-            onclick: (ev) => { ajouterAuTotal(f); noterConsulte(f.id); ev.currentTarget.textContent = texteBoutonTotal(f); },
-          }, texteBoutonTotal(f)),
-          h('button', { type: 'button', class: 'btn btn-copier', 'aria-label': `Copier la référence ${f.ref}`, onclick: (ev) => { noterUsage('usageForfaits', f.id); noterConsulte(f.id); copier(f.ref, ev.currentTarget); } },
-            h('span', { class: 'icone-copier', 'aria-hidden': 'true' }), h('span', { class: 'btn-copier-texte' }, 'Copier')))),
-      h('div', { class: 'carte-pied' },
-        f.designation ? h('span', { class: 'carte-ref' }, f.ref) : null, // sinon la référence est déjà le titre
-        f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null, // 0 : exemple jamais touché
-        h('button', { type: 'button', class: 'btn-lien', 'aria-label': `Surnoms de ${f.ref}`, onclick: () => ouvrirSurnoms(f.id) }, '+ Mon surnom')),
-      appareil.modeModif ? h('div', { class: 'carte-actions' },
-        h('button', { type: 'button', class: 'btn btn-bord', onclick: () => ouvrirFormulaire(f) }, 'Modifier'),
-        h('button', { type: 'button', class: 'btn btn-danger', onclick: () => supprimerForfait(f) }, 'Supprimer')) : null,
-    ];
-    const classes = 'carte' + (f.exemple ? ' carte-exemple' : '') + (compact ? ' carte-compacte' : '') + (compact && ouvert ? ' carte-ouverte' : '');
-    if (!compact) return h('article', { class: classes, 'data-id': f.id }, tete, ...details);
-    const corps = h('div', { class: 'carte-details', hidden: !ouvert }, ...details);
-    return h('article', { class: classes, 'data-id': f.id },
-      h('h2', { class: 'carte-titre-h' }, h('button', {
-        type: 'button', class: 'carte-ouvrir', 'aria-expanded': String(ouvert),
-        onclick: (ev) => {
-          const ouvre = !etatUi.ouvertes.has(f.id);
-          if (ouvre) etatUi.ouvertes.add(f.id); else etatUi.ouvertes.delete(f.id);
-          if (ouvre) noterConsulte(f.id); // la carte ne bouge pas : la rangée « Derniers consultés » sert à la prochaine recherche vide
+  // La référence est une pilule : un appui la copie. `grand` : celle de la fiche.
+  // Dans une rangée, c'est elle qui porte la classe carte-ref (une seule par rangée : les tests lisent la liste par là).
+  const boutonRef = (f, grand) => h('button', {
+    type: 'button', class: 'btn-copier' + (grand ? ' grand' : ''), title: 'Copier la référence',
+    'aria-label': grand ? `Référence ${f.ref} : copier` : `Copier la référence ${f.ref}`,
+    onclick: (ev) => { noterUsage('usageForfaits', f.id); consulter(f); copier(f.ref, ev.currentTarget); },
+  }, h('span', { class: grand ? 'fiche-ref' : 'carte-ref' }, f.ref), icone('copier', 'copier'), icone('coche', 'coche'));
 
-          ev.currentTarget.setAttribute('aria-expanded', String(ouvre));
-          ev.currentTarget.closest('.carte').classList.toggle('carte-ouverte', ouvre);
-          corps.hidden = !ouvre;
-        },
-      }, tete, prix('ttc', f.ttc), h('span', { class: 'chevron', 'aria-hidden': 'true' }))),
-      corps);
+  // Le « + » d'une rangée : ajoute au total, puis affiche la quantité déjà comptée.
+  function boutonPlus(f) {
+    const q = qteDansTotal(f);
+    return h('button', {
+      type: 'button', class: 'btn-plus', 'data-qte': q || null, title: 'Ajouter au total', 'aria-label': `Ajouter ${f.ref} au total`,
+      onclick: () => { if (ajouterAuTotal(f)) consulter(f); },
+    }, q ? String(q) : icone('plus'));
+  }
+
+  // Une rangée de la liste, dans l'ordre voulu : le nom, ses éléments (un arrêt de la ligne par
+  // élément), le prix, la référence. Le reste (favori, surnoms, modification) est dans la fiche,
+  // qu'un appui sur la rangée ouvre. Le nom est dans un <h2> ; tout ce que contient son bouton est
+  // en <span> (un <button> n'accepte ni <h2> ni <div>).
+  function carte(f, n) {
+    const elements = index.elementsForfait.get(f.id);
+    const surnoms = index.surnomsDe.get(f.id);
+    const li = h('li', { class: 'carte' + (f.exemple ? ' carte-exemple' : '') + (etatUi.choisi === f.id ? ' choisie' : ''), 'data-id': f.id },
+      h('div', { class: 'carte-corps' },
+        h('h2', { class: 'carte-titre-h' }, h('button', { type: 'button', class: 'carte-ouvrir', 'aria-haspopup': 'dialog', onclick: () => choisir(f) },
+          // Titre = le nom du forfait (sa désignation) ; sans désignation, la référence fait le titre.
+          h('span', { class: 'carte-nom' + (f.designation ? ' carte-designation' : '') },
+            appareil.favoris.includes(f.id) ? [icone('etoile', 'marque-favori'), h('span', { class: 'sr' }, 'Favori : ')] : null,
+            f.designation || f.ref))),
+        elements.length || surnoms ? h('div', { class: 'carte-arrets' },
+          elements.length ? h('ul', { class: 'carte-elements', role: 'list' }, elements.map((e) => h('li', { class: 'arret' },
+            h('i', { class: 'pt' }), h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
+          surnoms ? h('span', { class: 'carte-surnoms' }, `dit « ${surnoms.join(', ')} »`) : null) : null),
+      h('div', { class: 'carte-prix' }, prix('ttc', f.ttc), prix('ht', f.ht)),
+      boutonRef(f, false),
+      boutonPlus(f));
+    li.style.setProperty('--n', n);
+    return li;
+  }
+
+  /* ---------- Fiche du forfait choisi : sa ligne, arrêt par arrêt, jusqu'au prix ---------- */
+  // À droite de la liste sur grand écran ; ailleurs, dans une feuille qui monte du bas (`dansFeuille`).
+  function ficheContenu(f, dansFeuille) {
+    const elements = index.elementsForfait.get(f.id);
+    const surnoms = index.surnomsDe.get(f.id);
+    const q = qteDansTotal(f);
+    const fermer = () => $('dlg-fiche').close();
+    // Modifier et supprimer ouvrent une fenêtre : la feuille lui laisse la place.
+    const puis = (action) => () => { if (dansFeuille) fermer(); action(); };
+    const arret = (n, classe, ...enfants) => {
+      const li = h('li', { class: classe }, h('i', { class: 'pt' }), h('div', {}, ...enfants));
+      li.style.setProperty('--n', n);
+      return li;
+    };
+    return h('div', { class: 'fiche-int' },
+      h('div', { class: 'fiche-tete' },
+        f.exemple ? h('span', { class: 'badge-exemple' }, 'Exemple') : null,
+        h('span', { class: 'pousse' }),
+        h('button', {
+          type: 'button', class: 'btn-icone btn-favori', 'aria-pressed': String(appareil.favoris.includes(f.id)),
+          'aria-label': `Favori : ${f.ref}`, title: 'Favori : en tête de liste sur cet appareil', onclick: () => basculerFavori(f),
+        }, icone('etoile')),
+        h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Surnoms de ${f.ref}`, title: 'Mon surnom', onclick: () => ouvrirSurnoms(f.id) }, icone('surnom')),
+        appareil.modeModif ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Modifier ${f.ref}`, title: 'Modifier', onclick: puis(() => ouvrirFormulaire(f)) }, icone('crayon')) : null,
+        appareil.modeModif ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Supprimer ${f.ref}`, title: 'Supprimer', onclick: puis(() => supprimerForfait(f)) }, icone('corbeille')) : null,
+        dansFeuille ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: fermer }, icone('croix')) : null),
+      h('h2', { class: 'fiche-nom', tabindex: dansFeuille ? -1 : null }, f.designation || f.ref),
+      surnoms ? h('p', { class: 'fiche-surnom' }, `dit « ${surnoms.join(', ')} »`) : null,
+      h('ol', { class: 'trajet' },
+        elements.map((e, n) => arret(n, null, h('span', { class: 'fam' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el' }, e.nom))),
+        // Le terminus : le prix.
+        arret(elements.length, 'terminus',
+          h('span', { class: 'ttc-grand' }, formatPrix(f.ttc), h('small', {}, 'TTC')),
+          h('span', { class: 'ht-fiche' }, `${formatPrix(f.ht)} HT`))),
+      h('div', { class: 'fiche-gestes' },
+        boutonRef(f, true),
+        h('button', { type: 'button', class: 'btn btn-rouge btn-total', onclick: () => { if (ajouterAuTotal(f)) consulter(f); } },
+          icone('plus'), 'Ajouter au total', q ? h('span', { class: 'deja' }, `×${q}`) : null)),
+      f.maj ? h('p', { class: 'carte-maj' }, `Modifié le ${dateCourte(f.maj)}`) : null); // 0 : exemple jamais touché
+  }
+
+  let ficheMontree = null; // forfait du panneau : l'arrivée n'est animée que lorsqu'il change
+  function rendreFiche() {
+    const f = etatUi.choisi ? index.forfaitParId.get(etatUi.choisi) : null;
+    const panneau = $('fiche');
+    const feuille = $('dlg-fiche');
+    const grand = large();
+    // La fiche est à un seul endroit à la fois : le panneau sur grand écran, sinon la feuille.
+    if (feuille.open && (!f || grand)) feuille.close();
+    panneau.hidden = !f || !grand;
+    if (panneau.hidden) {
+      ficheMontree = null;
+      panneau.replaceChildren();
+    } else {
+      const int = ficheContenu(f, false);
+      if (ficheMontree !== f.id) int.classList.add('change');
+      ficheMontree = f.id;
+      redessiner(panneau, () => panneau.replaceChildren(int));
+    }
+    if (feuille.open) redessiner(feuille, () => $('feuille-fiche').replaceChildren(h('div', { class: 'poignee' }), ficheContenu(f, true)));
+  }
+
+  function ouvrirFiche(f) {
+    const feuille = $('dlg-fiche');
+    const int = ficheContenu(f, true);
+    int.classList.add('change');
+    $('feuille-fiche').replaceChildren(h('div', { class: 'poignee' }), int);
+    if (!feuille.open) feuille.showModal();
+    int.querySelector('.fiche-nom').focus(); // le lecteur d'écran annonce le forfait ; aucun bouton n'est mis en avant
+  }
+
+  function choisir(f) {
+    etatUi.choisi = f.id;
+    fermerMenu();
+    consulter(f);
+    if (!large()) { ouvrirFiche(f); return; }
+    for (const li of $('resultats').querySelectorAll('.carte')) li.classList.toggle('choisie', li.dataset.id === f.id);
+    rendreFiche();
   }
 
   /* ---------- Surnoms ---------- */
@@ -1701,7 +1942,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
         const pris = index.surnomPris.get(norm(s));
         return h('li', {}, h('span', { class: 'surnom-mien' }, s),
           pris?.id === id ? null : h('span', { class: 'surnom-conflit' }, 'déjà pris : ignoré'),
-          h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Retirer le surnom ${s}`, onclick: () => enregistrer(miens.filter((x) => x !== s)) }, '✕'));
+          h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Retirer le surnom ${s}`, onclick: () => enregistrer(miens.filter((x) => x !== s)) }, icone('croix')));
       })),
       message,
       h('div', { class: 'ajout-ligne' }, champ, h('button', { type: 'button', class: 'btn btn-blanc', onclick: ajouter }, 'Ajouter')));
@@ -1737,7 +1978,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const dlg = ouvrirDialogue({
       titre: 'Mes surnoms',
       corps: [
-        h('p', { class: 'aide-texte' }, "Donne tes propres noms aux appareils : la recherche les reconnaît. Ils restent sur cet appareil. Pour un forfait : « + Mon surnom » en bas de sa carte."),
+        h('p', { class: 'aide-texte' }, "Donne tes propres noms aux appareils : la recherche les reconnaît. Ils restent sur cet appareil. Pour un forfait : l'étiquette en haut de sa fiche."),
         choix, zone, h('h3', { class: 'titre-recap' }, 'Tous mes surnoms'), recap,
       ],
       pied: [h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
@@ -1751,9 +1992,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     if (i < 0 && appareil.favoris.length >= USAGE_MAX) { toast(`${USAGE_MAX} favoris au maximum : retires-en un d'abord`, true); return; }
     if (i < 0) appareil.favoris.push(f.id); else appareil.favoris.splice(i, 1);
     sauverAppareil();
-    rendreResultats();
-    // La carte a changé de place : le clavier reste sur son étoile.
-    $('resultats').querySelector(`[data-id="${CSS.escape(f.id)}"] .btn-favori`)?.focus();
+    rendreResultats(); // la rangée change de place ; la fiche est redessinée, le clavier reste sur son étoile
     toast(i < 0 ? `${f.ref} en favori : en tête de liste` : `${f.ref} retiré des favoris`);
   }
 
@@ -1761,38 +2000,58 @@ textarea.champ { resize: vertical; min-height: 90px; }
   const sommeTotal = () => appareil.total.reduce((s, l) => ({ ht: s.ht + l.ht * l.qte, ttc: s.ttc + l.ttc * l.qte }), { ht: 0, ttc: 0 });
   const nbArticlesTotal = () => appareil.total.reduce((n, l) => n + l.qte, 0);
   const qteDansTotal = (f) => appareil.total.find((l) => l.id === f.id)?.qte || 0;
-  const texteBoutonTotal = (f) => (qteDansTotal(f) ? `Total ×${qteDansTotal(f)}` : '+ Total');
 
-  function rendreBarreTotal() {
-    const vide = appareil.total.length === 0;
-    $('barre-total').hidden = vide;
-    document.body.classList.toggle('avec-total', !vide);
-    if (vide) return;
-    const { ht, ttc } = sommeTotal();
-    $('barre-total-nb').textContent = `Total · ${pluriel(nbArticlesTotal(), 'article')}`;
-    $('barre-total-ht').textContent = `${formatPrix(ht)} HT`;
-    $('barre-total-ttc').textContent = `${formatPrix(ttc)} TTC`;
-    $('barre-total').setAttribute('aria-label', `Voir le total : ${pluriel(nbArticlesTotal(), 'article')}, ${formatPrix(ht)} HT, ${formatPrix(ttc)} TTC`);
-  }
-
+  // Renvoie la ligne touchée, ou null si l'ajout est refusé.
   function ajouterAuTotal(f) {
-    const ligne = appareil.total.find((l) => l.id === f.id);
+    let ligne = appareil.total.find((l) => l.id === f.id);
     if (ligne) {
-      if (ligne.qte >= QTE_MAX) { toast(`${QTE_MAX} au maximum pour ${f.ref}`, true); return; }
+      if (ligne.qte >= QTE_MAX) { toast(`${QTE_MAX} au maximum pour ${f.ref}`, true); return null; }
       ligne.qte += 1; // le prix reste celui de la première fois : les unités déjà comptées ne changent pas
     } else {
-      if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : ouvre le total et retire-en`, true); return; }
-      appareil.total.push({ id: f.id, nom: f.ref, qte: 1, ht: f.ht, ttc: f.ttc });
+      if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : ouvre le total et retire-en`, true); return null; }
+      ligne = { id: f.id, nom: f.ref, qte: 1, ht: f.ht, ttc: f.ttc };
+      appareil.total.push(ligne);
     }
     sauverAppareil();
-    rendreBarreTotal();
-    toast(`${f.ref} ajouté au total${qteDansTotal(f) > 1 ? ` (×${qteDansTotal(f)})` : ''}`);
+    rendreTotal(ligne);
+    majQuantites(f.id);
+    toast(`${f.ref} ajouté au total${ligne.qte > 1 ? ` (×${ligne.qte})` : ''}`);
+    return ligne;
   }
 
-  function ouvrirTotal() {
-    const lignes = h('div', {});
-    const somme = h('dl', { class: 'total-somme' });
-    const btnVider = h('button', { type: 'button', class: 'btn btn-danger', onclick: async () => {
+  // Après un changement du total : les « + » des rangées et la fiche se mettent à jour sur place.
+  // Pas de nouveau classement : rien ne doit bouger sous le doigt.
+  function majQuantites(idAjoute) {
+    for (const li of $('resultats').querySelectorAll('.carte[data-id]')) {
+      const f = index.forfaitParId.get(li.dataset.id);
+      const bouton = li.querySelector('.btn-plus');
+      if (!f || !bouton) continue;
+      const q = qteDansTotal(f);
+      if ((bouton.dataset.qte || '') === (q ? String(q) : '')) continue;
+      if (q) bouton.dataset.qte = q; else delete bouton.dataset.qte;
+      bouton.replaceChildren(q ? String(q) : icone('plus'));
+      bouton.classList.remove('vient');
+      if (f.id === idAjoute) {
+        void bouton.offsetWidth; // l'animation repart à chaque ajout
+        bouton.classList.add('vient');
+      }
+    }
+    rendreFiche();
+  }
+
+  // Le contenu du total : ses lignes, les deux sommes, « Ligne libre » et « Vider ».
+  // `ajoutee` : la ligne qui vient d'arriver ou de grossir (elle seule est animée) ; `roule` : la somme a changé.
+  function totalContenu(hote, dansFeuille, ajoutee, roule) {
+    // La ligne l peut avoir disparu si le total a changé dans un autre onglet : on redessine sans rien toucher.
+    // Le bouton touché est recréé : le focus y revient (le « + » si le « − » vient de se désactiver).
+    const changer = (l, action, cmd, i) => {
+      if (appareil.total.includes(l)) { action(); sauverAppareil(); }
+      rendreTotal(null, true);
+      majQuantites();
+      const bouton = (c) => hote.querySelector(`[data-cmd="${c}"][data-i="${i}"]`);
+      ((bouton(cmd)?.disabled ? bouton('plus') : bouton(cmd)) || hote.querySelector('.total-boutons .btn'))?.focus();
+    };
+    const vider = async () => {
       const ok = await demander({
         titre: 'Vider le total ?', message: `${pluriel(appareil.total.length, 'ligne')} ${appareil.total.length > 1 ? 'seront retirées' : 'sera retirée'}.`,
         boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Vider', valeur: true, classe: 'btn-rouge' }],
@@ -1800,74 +2059,138 @@ textarea.champ { resize: vertical; min-height: 90px; }
       if (!ok) return;
       appareil.total = [];
       sauverAppareil();
-      redessiner();
-    } }, 'Tout vider');
-    // La ligne l peut avoir disparu si le total a changé dans un autre onglet : on redessine sans rien toucher.
-    // Le bouton touché est recréé : le focus y revient (le « + » si le « − » vient de se désactiver).
-    const changer = (l, action, cmd, i) => {
-      if (appareil.total.includes(l)) { action(); sauverAppareil(); }
-      redessiner();
-      const bouton = (c) => lignes.querySelector(`[data-cmd="${c}"][data-i="${i}"]`);
-      (bouton(cmd)?.disabled ? bouton('plus') : bouton(cmd))?.focus();
+      rendreTotal();
+      majQuantites();
     };
+    const { ht, ttc } = sommeTotal();
+    return [
+      h('div', { class: 'total-tete' },
+        h('h2', { tabindex: dansFeuille ? -1 : null }, 'Total'), h('span', {}, pluriel(nbArticlesTotal(), 'article')),
+        dansFeuille ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => $('dlg-total').close() }, icone('croix')) : null),
+      h('ul', { class: 'total-lignes' }, appareil.total.map((l, i) => {
+        const li = h('li', { class: 'total-ligne' },
+          h('span', { class: 'total-ligne-nom' }, l.nom),
+          h('span', { class: 'total-ligne-prix' }, formatPrix(l.ttc * l.qte), h('small', {}, `${formatPrix(l.ht * l.qte)} HT`)),
+          h('span', { class: 'total-ligne-commandes' },
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
+            h('span', { class: 'total-qte', role: 'status', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
+            l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
+            h('button', { type: 'button', class: 'btn-icone total-retirer', 'data-cmd': 'retirer', 'data-i': i, 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, icone('croix'))));
+        if (l !== ajoutee) li.style.animation = 'none';
+        return li;
+      })),
+      h('div', { class: 'total-pied' },
+        h('dl', { class: 'total-somme' },
+          h('dt', {}, 'HT'), h('dd', { class: 's-ht' }, formatPrix(ht)),
+          h('dt', { class: 's-ttc-t' }, 'TTC'), h('dd', { class: 's-ttc' }, h('span', { class: roule ? 'roule' : null }, formatPrix(ttc)))),
+        h('div', { class: 'total-boutons' },
+          h('button', { type: 'button', class: 'btn btn-bord', onclick: ouvrirLigneLibre }, icone('plus'), 'Ligne libre'),
+          h('button', { type: 'button', class: 'btn btn-nu', onclick: vider }, 'Vider')))];
+  }
 
-    function redessiner() {
-      rendreBarreTotal();
-      btnVider.disabled = appareil.total.length === 0;
-      lignes.replaceChildren(...(appareil.total.length ? appareil.total.map((l, i) => h('div', { class: 'total-ligne' },
-        h('span', { class: 'total-ligne-nom' }, l.nom),
-        h('span', { class: 'total-ligne-prix' }, `${formatPrix(l.ttc * l.qte)} TTC`,
-          h('div', { class: 'total-ligne-unite' }, `${formatPrix(l.ht * l.qte)} HT`)),
-        h('div', { class: 'total-ligne-commandes' },
-          h('button', { type: 'button', class: 'btn btn-carre', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, '−'),
-          h('span', { class: 'total-qte', role: 'status', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
-          h('button', { type: 'button', class: 'btn btn-carre', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, '+'),
-          l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
-          h('button', { type: 'button', class: 'btn-lien total-retirer', 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, 'Retirer'))))
-        : [h('p', { class: 'total-vide' }, 'Rien dans le total. Sur un forfait, appuie sur « + Total ».')]));
+  // Le total est à deux endroits, jamais en même temps : sous la fiche sur un grand écran assez haut ;
+  // ailleurs, une barre qui ouvre une feuille (en bas de l'écran, ou rangée sous le panneau sur un
+  // grand écran peu haut). Il disparaît quand il est vide.
+  function rendreTotal(ajoutee, roule = Boolean(ajoutee)) {
+    const vide = appareil.total.length === 0;
+    const grand = totalSousFiche();
+    // Grand écran peu haut : la barre se range sous le panneau, et la fiche se serre (data-total).
+    const colonne = large() && !grand;
+    $('panneau').dataset.total = colonne ? 'barre' : 'panneau';
+    $('barre-total').classList.toggle('colonne', colonne);
+    $('barre-total').hidden = vide || grand;
+    calerBas();
+    if (!vide) {
       const { ht, ttc } = sommeTotal();
-      somme.replaceChildren(h('dt', {}, 'Total HT'), h('dd', {}, formatPrix(ht)), h('dt', {}, 'Total TTC'), h('dd', {}, formatPrix(ttc)));
+      $('barre-total-nb').textContent = `Total · ${pluriel(nbArticlesTotal(), 'article')}`;
+      $('barre-total-ht').textContent = `${formatPrix(ht)} HT`;
+      $('barre-total-ttc').textContent = `${formatPrix(ttc)} TTC`;
+      $('barre-total').setAttribute('aria-label', `Voir le total : ${pluriel(nbArticlesTotal(), 'article')}, ${formatPrix(ht)} HT, ${formatPrix(ttc)} TTC`);
     }
+    // Redessiné, le total garde le défilement de ses lignes, et montre celle qui vient d'arriver
+    // (sans scrollIntoView : il ferait aussi défiler la page sous la souris).
+    const poser = (hote, enfants) => {
+      const avant = hote.querySelector('.total-lignes')?.scrollTop || 0;
+      hote.replaceChildren(...enfants);
+      const lignes = hote.querySelector('.total-lignes');
+      if (!lignes) return;
+      lignes.scrollTop = avant;
+      const li = ajoutee ? lignes.children[appareil.total.indexOf(ajoutee)] : null;
+      if (!li) return;
+      const haut = li.offsetTop - (li.offsetParent === lignes ? 0 : lignes.offsetTop);
+      const bas = haut + li.offsetHeight;
+      if (haut < lignes.scrollTop) lignes.scrollTop = haut;
+      else if (bas > lignes.scrollTop + lignes.clientHeight) lignes.scrollTop = Math.min(haut, bas - lignes.clientHeight);
+    };
+    const panneau = $('total');
+    panneau.hidden = vide || !grand;
+    poser(panneau, panneau.hidden ? [] : totalContenu(panneau, false, ajoutee, roule));
+    const feuille = $('dlg-total');
+    if (!feuille.open) return;
+    if (vide || grand) { feuille.close(); return; }
+    const hote = $('feuille-total');
+    poser(hote, [h('div', { class: 'poignee' }), ...totalContenu(hote, true, ajoutee, roule)]);
+  }
 
-    // Pièce ou service qui n'est pas un forfait : on tape un nom et un prix (l'autre prix se calcule).
+  // La barre du total grandit avec la taille du texte (ses montants passent sur deux lignes) : le
+  // rappel d'export et le bas de la liste se calent sur sa vraie hauteur, pas sur une hauteur supposée.
+  // Rangée sous le panneau (.colonne), elle ne couvre plus la liste : c'est le panneau qui lui laisse la place.
+  function calerBas() {
+    const barre = $('barre-total');
+    const haut = barre.offsetHeight; // 0 quand elle est cachée
+    const colonne = barre.classList.contains('colonne');
+    document.body.style.setProperty('--bas-total', haut && !colonne ? `${haut + 10}px` : '0px');
+    document.body.style.setProperty('--bas-colonne', haut && colonne ? `${haut + 12}px` : '0px');
+  }
+
+  function ouvrirTotal() {
+    if (appareil.total.length === 0 || totalSousFiche()) return;
+    const feuille = $('dlg-total');
+    if (!feuille.open) feuille.showModal();
+    rendreTotal();
+    feuille.querySelector('h2')?.focus();
+  }
+
+  // Pièce ou service qui n'est pas un forfait : on tape un nom et un prix (l'autre prix se calcule).
+  // La fenêtre reste ouverte après un ajout : on en saisit souvent plusieurs de suite.
+  function ouvrirLigneLibre() {
     const nom = h('input', { class: 'champ', maxlength: 80, placeholder: 'Nom (pièce, service…)', 'aria-label': 'Nom de la ligne libre' });
     const ht = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix HT', 'aria-label': 'Prix HT de la ligne libre' });
     const ttc = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix TTC', 'aria-label': 'Prix TTC de la ligne libre' });
     ht.addEventListener('input', () => { const v = lirePrix(ht.value); ttc.value = v === null ? '' : prixSaisie(ttcDepuisHt(v)); });
     ttc.addEventListener('input', () => { const v = lirePrix(ttc.value); ht.value = v === null ? '' : prixSaisie(htDepuisTtc(v)); });
-    const erreur = h('p', { class: 'msg-erreur', role: 'alert' });
-    const libre = h('form', { class: 'total-libre', novalidate: true, onsubmit: (ev) => {
-      ev.preventDefault();
-      const prixHt = lirePrix(ht.value);
-      const prixTtc = lirePrix(ttc.value);
-      // Message dans la fenêtre même : un toast passerait sous la fenêtre modale.
-      erreur.textContent = '';
-      if (prixHt === null || prixTtc === null) { erreur.textContent = 'Tape un prix (exemple : 45,50).'; (prixHt === null ? ht : ttc).focus(); return; }
-      if (appareil.total.length >= TOTAL_MAX) { erreur.textContent = `${TOTAL_MAX} lignes au maximum : retires-en une.`; return; }
-      appareil.total.push({ id: null, nom: nom.value.trim().slice(0, 80) || 'Divers', qte: 1, ht: prixHt, ttc: prixTtc });
-      sauverAppareil();
-      nom.value = ht.value = ttc.value = '';
-      redessiner();
-      nom.focus();
-    } },
-      h('strong', {}, 'Ajouter une pièce ou un service'),
-      nom,
-      h('div', { class: 'total-libre-prix' }, ht, ttc),
-      erreur,
-      h('button', { type: 'submit', class: 'btn btn-bord' }, '+ Ajouter à la liste'));
-
+    const erreur = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const dlg = ouvrirDialogue({
-      titre: 'Total',
-      corps: [lignes, somme, libre],
-      pied: [btnVider, h('button', { type: 'button', class: 'btn btn-blanc', onclick: () => dlg.close() }, 'Terminé')],
+      titre: 'Ligne libre',
+      corps: h('div', { class: 'total-libre' },
+        h('p', { class: 'aide-texte' }, "Une pièce ou un service qui n'est pas un forfait : tape un des deux prix, l'autre se calcule."),
+        nom, h('div', { class: 'total-libre-prix' }, ht, ttc), erreur),
+      pied: [
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Terminé'),
+        h('button', { type: 'submit', class: 'btn btn-rouge' }, icone('plus'), 'Ajouter à la liste'),
+      ],
+      surEnvoi: () => {
+        const prixHt = lirePrix(ht.value);
+        const prixTtc = lirePrix(ttc.value);
+        erreur.textContent = '';
+        if (prixHt === null || prixTtc === null) { erreur.textContent = 'Tape un prix (exemple : 45,50).'; (prixHt === null ? ht : ttc).focus(); return; }
+        if (appareil.total.length >= TOTAL_MAX) { erreur.textContent = `${TOTAL_MAX} lignes au maximum : retires-en une.`; return; }
+        const ligne = { id: null, nom: nom.value.trim().slice(0, 80) || 'Divers', qte: 1, ht: prixHt, ttc: prixTtc };
+        appareil.total.push(ligne);
+        sauverAppareil();
+        nom.value = ht.value = ttc.value = '';
+        rendreTotal(ligne);
+        toast(`${ligne.nom} ajouté au total`);
+        nom.focus();
+      },
     });
-    dlg.addEventListener('close', rendreResultats); // remet à jour le compteur des boutons « Total »
-    redessiner();
   }
 
   function rendreRappel() {
     const n = appareil.modifsEnAttente;
     $('rappel').hidden = n === 0 || donneesFutures;  // exporter est refusé sur une page en retard : pas de rappel
+    document.body.classList.toggle('avec-rappel', !$('rappel').hidden); // la liste garde de la place sous le rappel
     // La consigne est à part : sur un téléphone elle est cachée (CSS), pour que le rappel tienne sur une ligne.
     $('rappel-texte').replaceChildren(`${pluriel(n, 'modification')} pas encore ${n > 1 ? 'exportées' : 'exportée'}`,
       h('span', { class: 'rappel-suite' }, ' : exporte et range le fichier dans OneDrive.'));
@@ -1885,7 +2208,9 @@ textarea.champ { resize: vertical; min-height: 90px; }
       id: 'sugg-' + i, role: 'option', class: 'suggestion', 'aria-selected': 'false',
       onpointerdown: (ev) => ev.preventDefault(), // garde le clavier ouvert le temps du clic
       onclick: () => choisirSuggestion(i, false),
-    }, h('span', { class: 'suggestion-nom' }, e.nom), via.has(e.id) ? h('span', { class: 'suggestion-surnom' }, `« ${via.get(e.id)} »`) : null, h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom))));
+    }, h('span', { class: 'suggestion-nom' }, e.nom), via.has(e.id) ? h('span', { class: 'suggestion-surnom' }, `« ${via.get(e.id)} »`) : null,
+    h('span', { class: 'suggestion-info' }, h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom),
+      ` · ${pluriel(index.forfaits.filter((f) => f.elements[e.familleId] === e.id).length, 'forfait')}`))));
     liste.hidden = suggestions.length === 0;
     champ.setAttribute('aria-expanded', String(suggestions.length > 0));
     champ.removeAttribute('aria-activedescendant');
@@ -1898,7 +2223,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     $('sugg-' + i)?.scrollIntoView({ block: 'nearest' });
   }
 
-  // Transforme la suggestion en étiquette et retire les mots correspondants de la barre.
+  // Transforme la suggestion en filtre et retire les mots correspondants de la recherche.
   function choisirSuggestion(i, auClavier) {
     const e = etatUi.suggestions[i];
     if (!e) return;
@@ -1927,7 +2252,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
     const dlg = h('dialog', { class: 'dlg ' + (classe || ''), 'aria-labelledby': idTitre },
       h('div', { class: 'dlg-tete' },
         h('h2', { id: idTitre }, titre),
-        h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => dlg.close() }, '✕')),
+        h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => dlg.close() }, icone('croix'))),
       surEnvoi
         ? h('form', { class: 'dlg-form', novalidate: true, onsubmit: (ev) => { ev.preventDefault(); surEnvoi(); } }, contenu)
         : contenu);
@@ -1957,37 +2282,24 @@ textarea.champ { resize: vertical; min-height: 90px; }
   }
   const informer = (titre, message, liste) => demander({ titre, message, liste, boutons: [{ texte: 'Compris', valeur: true, classe: 'btn-blanc' }] });
 
+  // Le message s'affiche dans la fenêtre ouverte, s'il y en a une : derrière elle, on ne le verrait
+  // pas et un lecteur d'écran ne l'annoncerait pas (le reste de la page est mis hors d'usage).
+  const elToast = $('toast');
   let minuteurToast = 0;
   function toast(message, erreur = false) {
-    const t = $('toast');
-    t.textContent = message;
-    t.classList.toggle('erreur', erreur);
-    t.classList.add('visible');
+    const ouvertes = document.querySelectorAll('dialog[open]');
+    const hote = ouvertes[ouvertes.length - 1] || document.body;
+    if (elToast.parentNode !== hote) hote.append(elToast);
+    elToast.textContent = message;
+    elToast.classList.toggle('erreur', erreur);
+    elToast.classList.add('visible');
     clearTimeout(minuteurToast);
-    minuteurToast = setTimeout(() => t.classList.remove('visible'), 3000);
+    minuteurToast = setTimeout(() => elToast.classList.remove('visible'), 3000);
   }
-
-  /* ---------- Choix d'un filtre (boutons sous la barre) ---------- */
-  function ouvrirChoixFiltre(fam) {
-    const actuel = etatUi.filtres.get(fam.id);
-    const choix = [
-      { valeur: undefined, nom: 'Tous' },
-      ...elementsDe(fam.id).map((e) => ({ valeur: e.id, nom: e.nom })),
-      { valeur: SANS, nom: `Sans ${fam.nom.toLocaleLowerCase('fr')}` },
-    ];
-    const dlg = ouvrirDialogue({
-      titre: fam.nom,
-      corps: h('div', { class: 'grille-choix' }, choix.map((c) => h('button', {
-        type: 'button', class: 'choix', 'aria-pressed': String(c.valeur === actuel),
-        onclick: () => {
-          if (c.valeur === undefined) etatUi.filtres.delete(fam.id); else etatUi.filtres.set(fam.id, c.valeur);
-          if (c.valeur !== undefined && c.valeur !== SANS) noterUsage('usageElements', c.valeur);
-          dlg.close();
-          rendreRecherche();
-        },
-      }, c.nom))),
-    });
-  }
+  // La fenêtre se ferme : le message en cours retourne dans la page.
+  document.addEventListener('close', (ev) => {
+    if (ev.target instanceof Element && ev.target.contains(elToast)) document.body.append(elToast);
+  }, true);
 
   /* ---------- Copier la référence ---------- */
   const minuteursCopie = new WeakMap();
@@ -1997,22 +2309,21 @@ textarea.champ { resize: vertical; min-height: 90px; }
       await navigator.clipboard.writeText(texte);
       ok = true;
     } catch {
-      // Ancienne méthode, pour les navigateurs qui refusent la première.
+      // Ancienne méthode, pour les navigateurs qui refusent la première. La zone va dans la fenêtre
+      // ouverte s'il y en a une : en dehors, rien ne peut être sélectionné.
       const zone = h('textarea', { class: 'sr', readonly: true }, texte);
-      document.body.append(zone);
+      (bouton.closest('dialog') || document.body).append(zone);
       zone.select();
       try { ok = document.execCommand('copy'); } catch { ok = false; }
       zone.remove();
     }
     toast(ok ? `Référence ${texte} copiée` : 'Copie impossible : sélectionne la référence à la main', !ok);
     if (ok) {
-      // Le bouton confirme aussi, là où le regard se trouve.
-      const libelle = bouton.querySelector('.btn-copier-texte');
+      // Le bouton confirme aussi, là où le regard se trouve : sa coche remplace l'icône un instant.
       bouton.classList.add('copie');
-      libelle.textContent = 'Copié';
       // Un second clic repart pour 1,5 s au lieu d'hériter du premier minuteur.
       clearTimeout(minuteursCopie.get(bouton));
-      minuteursCopie.set(bouton, setTimeout(() => { bouton.classList.remove('copie'); libelle.textContent = 'Copier'; }, 1500));
+      minuteursCopie.set(bouton, setTimeout(() => bouton.classList.remove('copie'), 1500));
     }
   }
 
@@ -2288,7 +2599,7 @@ textarea.champ { resize: vertical; min-height: 90px; }
             changer(false);
           });
           return h('li', { class: 'element-ligne' }, champ, champSurnoms,
-            h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Supprimer ${e.nom}`, onclick: () => supprimerElement(e, fam, changer) }, '✕'));
+            h('button', { type: 'button', class: 'btn btn-danger btn-carre', 'aria-label': `Supprimer ${e.nom}`, onclick: () => supprimerElement(e, fam, changer) }, icone('croix')));
         })),
         h('div', { class: 'ajout-ligne' }, champNouveau, h('button', { type: 'button', class: 'btn btn-blanc', onclick: ajouter }, 'Ajouter')));
     });
@@ -2847,13 +3158,6 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('div', { class: 'menu-mode' },
           h('div', {}, h('strong', {}, 'Taille du texte'), h('p', {}, 'Tout grossit, sur cet appareil seulement.')),
           choixReglage('texte', TAILLES, 'Taille du texte')),
-        h('div', { class: 'menu-mode' },
-          h('div', {}, h('strong', {}, 'Cartes'), h('p', {}, "Repliées : plus de forfaits à l'écran.")),
-          choixReglage('compact', CARTES, 'Cartes', {
-            lire: (v) => (v ? 'repliees' : 'entieres'),
-            ecrire: (v) => v === 'repliees',
-            apres: () => { etatUi.ouvertes.clear(); rendreResultats(); },
-          })),
         index.fams.length > 1 ? h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-ordre-filtres', onclick: fermerPuis(ouvrirOrdreFiltres) }, 'Ordre des filtres (sur cet appareil)') : null,
         h('button', { type: 'button', class: 'btn btn-bord', onclick: fermerPuis(ouvrirAide) }, "Mode d'emploi"),
         h('p', { class: 'menu-info' }, h('strong', {}, 'Responsables')),
@@ -2868,23 +3172,22 @@ textarea.champ { resize: vertical; min-height: 90px; }
         h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-menu-exporter', onclick: fermerPuis(ouvrirExport) }, 'Exporter (sauvegarde ou Excel)'),
         appareil.modeModif && exemples ? h('button', { type: 'button', class: 'btn btn-danger', onclick: fermerPuis(supprimerExemples) }, 'Supprimer les exemples') : null,
         h('p', { class: 'menu-info' },
-          `${pluriel(index.forfaits.length, 'forfait')} · dernier export : ${appareil.dernierExport ? dateCourte(appareil.dernierExport) : 'jamais'}`
+          `${$('etat-donnees').textContent} · ${pluriel(index.forfaits.length, 'forfait')} · dernier export : ${appareil.dernierExport ? dateCourte(appareil.dernierExport) : 'jamais'}`
           + ` · dernier import : ${appareil.dernierImport ? dateCourte(appareil.dernierImport) : 'jamais'} · version ${VERSION_OUTIL}`)),
     });
   }
 
-  // Deux ou trois boutons (thème, taille du texte, cartes) ; le choix s'applique tout de suite et la
-  // fenêtre reste ouverte pour voir le résultat (l'événement « close » d'un dialogue part en différé).
-  // Réglages de l'appareil : jamais exportés. `lire`/`écrire` servent au réglage des cartes, qui est un
-  // booléen et non une chaîne ; `après` remplace l'effet par défaut (thème et taille).
-  function choixReglage(cle, choix, libelleGroupe, { lire = (v) => v, ecrire = (v) => v, apres = appliquerApparence } = {}) {
+  // Deux ou trois boutons (thème, taille du texte) ; le choix s'applique tout de suite et la fenêtre
+  // reste ouverte pour voir le résultat (l'événement « close » d'un dialogue part en différé).
+  // Réglages de l'appareil : jamais exportés.
+  function choixReglage(cle, choix, libelleGroupe) {
     const boutons = choix.map(({ valeur, libelle }) => h('button', {
       type: 'button', 'data-choix': valeur,
-      onclick: () => { appareil[cle] = ecrire(valeur); sauverAppareil(); apres(); marquer(); },
+      onclick: () => { appareil[cle] = valeur; sauverAppareil(); appliquerApparence(); marquer(); },
     }, libelle));
     const marquer = () => boutons.forEach((b) => {
-      const actif = b.dataset.choix === lire(appareil[cle]);
-      b.className = 'btn ' + (actif ? 'btn-rouge' : 'btn-bord');
+      const actif = b.dataset.choix === appareil[cle];
+      b.className = 'btn ' + (actif ? 'btn-blanc' : 'btn-bord'); // plein = choisi, comme les filtres
       b.setAttribute('aria-pressed', String(actif));
     });
     marquer();
@@ -2915,10 +3218,10 @@ textarea.champ { resize: vertical; min-height: 90px; }
       titre: "Mode d'emploi",
       corps: h('ol', { class: 'etapes' },
         h('li', {}, h('strong', {}, 'Ouvrir : '), "sur PC, mets cette page en favori. Sur Android, ouvre-la dans Chrome, puis menu ⋮ → « Ajouter à l'écran d'accueil ». Sur iPhone, ouvre-la dans Safari, puis Partager → « Sur l'écran d'accueil » ; importe le fichier depuis l'icône ainsi créée (elle garde ses propres données, à part de Safari). Elle marche ensuite sans internet."),
-        h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire une étiquette, ou utilise les boutons sous la barre.'),
-        h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou « + Mon surnom » en bas d'une carte (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
-        h('li', {}, h('strong', {}, 'Boutons de filtre : '), `les ${FILTRES_VISIBLES} premières familles sont des boutons, les autres sont dans « Autres ». Pour les ranger dans ton ordre : Menu → Ordre des filtres. C'est propre à cet appareil, personne d'autre n'est touché.`),
-        h('li', {}, h('strong', {}, 'Favoris : '), "touche ☆ sur une carte pour la garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
+        h('li', {}, h('strong', {}, 'Chercher : '), 'tape une référence, « 3Q », « T1 DEMO »… Chaque mot réduit la liste. Touche une suggestion pour en faire un filtre, ou utilise les filtres sous la recherche. Touche un forfait pour ouvrir sa fiche.'),
+        h('li', {}, h('strong', {}, 'Surnoms : '), "tape le nom que les techniciens donnent à un appareil ou à un forfait. Les tiens : Menu → Mes surnoms, ou l'étiquette en haut de la fiche d'un forfait (ils restent sur ce poste). Ceux de toute l'équipe : colonne Surnoms du tableau Excel, ou en mode modification."),
+        h('li', {}, h('strong', {}, 'Filtres : '), `les ${filtresVisibles()} premières familles sont des boutons sur cet écran, les autres sont dans « Autres ». Pour les ranger dans ton ordre : Menu → Ordre des filtres. C'est propre à cet appareil, personne d'autre n'est touché.`),
+        h('li', {}, h('strong', {}, 'Favoris : '), "touche l'étoile en haut de la fiche d'un forfait pour le garder en tête de liste. Les éléments choisis et les références copiées souvent remontent aussi. C'est propre à cet appareil."),
         h('li', {}, h('strong', {}, 'Être à jour : '), 'bouton Importer → choisis le fichier le plus récent du dossier OneDrive des forfaits → Mettre à jour.'),
         h('li', {}, h('strong', {}, 'Remplir avec Excel : '), 'remplis le modèle de tableau, enregistre-le en « CSV UTF-8 », puis Importer → choisis ce fichier .csv. Une colonne ou un élément nouveau est créé tout seul (annoncé avant de valider) ; un forfait dont la référence existe déjà est mis à jour.'),
         h('li', {}, h('strong', {}, 'Responsables : '), 'Menu → Mode modification. Importe avant de modifier ; après, Menu → Exporter → range le fichier dans OneDrive.'),
@@ -2969,6 +3272,47 @@ textarea.champ { resize: vertical; min-height: 90px; }
   $('btn-menu').addEventListener('click', ouvrirMenu);
   $('btn-rappel-exporter').addEventListener('click', ouvrirExport);
   $('barre-total').addEventListener('click', ouvrirTotal);
+  $('btn-recents').addEventListener('click', (ev) => ouvrirRecents(ev.currentTarget));
+
+  // Menus de la barre (filtres, récents) : un appui ailleurs ou Échap les referme.
+  addEventListener('pointerdown', (ev) => {
+    if (menuOuvert && !menuOuvert.el.contains(ev.target) && !menuOuvert.ancre.contains(ev.target)) fermerMenu();
+  });
+  addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && menuOuvert) { ev.preventDefault(); fermerMenu(true); }
+  });
+
+  // Feuilles du bas (fiche et total, hors grand écran) : un appui à côté les referme.
+  for (const feuille of [$('dlg-fiche'), $('dlg-total')]) {
+    feuille.addEventListener('click', (ev) => {
+      const r = feuille.getBoundingClientRect();
+      if (ev.target === feuille && (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom)) feuille.close();
+    });
+  }
+  // La liste a pu être redessinée sous la fiche (favori) : le clavier revient au forfait qu'on regardait.
+  // À cet instant le focus est encore sur un bouton de la fiche fermée (il ne retombe sur la page qu'au rendu suivant).
+  $('dlg-fiche').addEventListener('close', () => {
+    const actif = document.activeElement;
+    if ((actif === document.body || $('dlg-fiche').contains(actif)) && etatUi.choisi) {
+      $('resultats').querySelector(`.carte[data-id="${CSS.escape(etatUi.choisi)}"] .carte-ouvrir`)?.focus({ preventScroll: true });
+    }
+  });
+
+  // La mise en page change (fenêtre élargie, téléphone tourné, taille du texte) : la fiche et le
+  // total changent de place, et le nombre de filtres en boutons aussi.
+  const miseEnPage = () => `${large()}|${filtresVisibles()}|${totalSousFiche()}`;
+  let miseEnPageVue = miseEnPage();
+  const suivreMiseEnPage = () => {
+    if (miseEnPage() === miseEnPageVue) return;
+    miseEnPageVue = miseEnPage();
+    rendreFiltres();
+    rendreResultats();
+    rendreTotal();
+  };
+  new ResizeObserver(suivreMiseEnPage).observe(document.querySelector('.page'));
+  // La hauteur de la fenêtre seule ne change pas la taille de .page quand la liste est longue.
+  window.addEventListener('resize', suivreMiseEnPage);
+  new ResizeObserver(calerBas).observe($('barre-total'));
   $('fichier-import').addEventListener('change', (ev) => importerFichier(ev.target.files[0]));
 
   // Si la page est ouverte dans deux onglets, ils restent d'accord.

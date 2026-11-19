@@ -169,7 +169,7 @@ En-tête noir collant (64 px ; 60 px sous 600 px de large, 52 px en paysage bas)
 La mise en page suit la largeur de la page (requêtes de conteneur), pas l'appareil :
 - **1040 px et plus** : la liste à gauche, la fiche du forfait choisi et le total à droite. Cinq familles en pastilles. Si la page fait moins de 900 px de haut (portable, écran à 125 % ; seuil multiplié par la taille du texte), le total ne tient plus sous la fiche : il devient une barre rangée sous le panneau, qui ouvre sa feuille, et la fiche se serre (validé le 16/11/2026).
 - **En dessous** : la liste seule ; la fiche monte du bas au premier appui, le total tient dans une barre en bas qui ouvre sa feuille.
-- **Sous 600 px** : trois pastilles puis « Autres » ; la rangée ne garde que le nom, la ligne d'arrêts, le TTC et le « + ».
+- **Sous 600 px** : trois pastilles puis « Autres » (resserrées sous 375 px pour tenir sur une ligne à 360 px, validé le 19/11/2026) ; la rangée ne garde que le nom, la ligne d'arrêts, le TTC et le « + ».
 
 Une rangée fait 50 px au moins (58 px sur la maquette, serrée le 16/11/2026 pour montrer un forfait de plus) : nom (trois lignes au plus), ligne d'arrêts dessous, puis TTC et HT, référence à copier, « + ». Les commandes font 36 px de haut à la souris et 44 px dès que l'écran se touche ; ce choix se fait une fois, à l'ouverture, jamais en cours de route.
 

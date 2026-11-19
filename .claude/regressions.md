@@ -155,3 +155,9 @@
 - Bug : avec des commandes de 44 px la barre des filtres fait 60 px, mais `--barre` disait 56 : la liste dépassait l'écran de 4 px et le panneau collait 4 px trop haut (mesuré sur Firefox, qui lit la dalle tactile du PC).
 - À garder : `--barre` vaut 60 px quand `data-tactile` est posé.
 - Test : `test_total_du_panneau_garde_son_defilement_et_montre_la_ligne_ajoutee` (`scrollY` reste à 0 ; Firefox lit la vraie dalle).
+
+## 2026-11-19 — Téléphone de 360 px : « Autres » seul sur une 2e ligne de filtres
+- Où : `index.html`, `@container page (max-width: 374px)` (`.filtres`, `.filtre`).
+- Bug : à 360 px de large (courant sur Android) il manquait quelques pixels pour les trois pastilles et « Autres » ; « Autres » passait seul sur une 2e ligne et prenait la place d'un forfait (50 px). Reste de la refonte (roadmap#1032).
+- À garder : sous 375 px, pastilles resserrées (marges de 6 px, écart de 4 px, texte inchangé). À 320 px la 2e ligne reste, choix de l'utilisateur.
+- Test : `test_telephone_etroit_garde_les_filtres_sur_une_ligne`.

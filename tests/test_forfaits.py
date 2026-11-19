@@ -1536,6 +1536,17 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-7-total.png")
 
 
+def test_telephone_etroit_garde_les_filtres_sur_une_ligne(appareils):
+    """À 360 px de large (courant sur Android), « Autres » passait seul sur une 2e ligne de filtres et
+    prenait la place d'un forfait."""
+    page = appareils(viewport={"width": 360, "height": 640}).page
+    hauts = page.eval_on_selector_all(
+        "#filtres .filtre", "fs => fs.map(f => Math.round(f.getBoundingClientRect().top))"
+    )
+    assert len(hauts) == 4 and len(set(hauts)) == 1, hauts
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+
 def test_telephone_une_rangee_par_forfait_puis_sa_fiche_en_feuille(navigateur, appareils):
     """Sur un téléphone, une rangée : le nom, les éléments, le TTC et le « + ». Le reste est dans la
     fiche, qui monte du bas au premier appui."""

@@ -444,6 +444,11 @@ dialog > .toast.visible { transform: translate(-50%, 0); }
   .plan { padding: 0; }
   .zone { border-radius: var(--r-grand) var(--r-grand) 0 0; min-height: calc(100dvh / var(--zoom) - var(--entete) - 100px); }
 }
+/* Téléphone étroit (360 px, courant sur Android) : pastilles resserrées, sinon « Autres » passe seul sur une 2e ligne et prend la place d'un forfait. */
+@container page (max-width: 374px) {
+  .filtres { gap: 4px; }
+  .filtre { padding: 0 6px; }
+}
 
 /* ============ Feuilles qui montent du bas (fiche et total, hors grand écran) ============ */
 .feuille-bas {

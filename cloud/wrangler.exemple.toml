@@ -1,0 +1,28 @@
+# Modèle de configuration du cloud de synchro. À copier en « cloud/wrangler.toml »
+# (ignoré par git) en remplaçant « name » par le vrai nom du Worker.
+#
+# PIÈGE : le nom exact du Worker ne doit JAMAIS entrer dans ce dépôt public — c'est l'adresse
+# à attaquer. La page, elle, n'autorise que « https://*.<compte>.workers.dev » (CSP), donc un
+# faux lien d'appairage ne peut pas détourner un appareil vers un autre cloud.
+#
+# Déploiement :  cd cloud && pnpm dlx wrangler@4.157.0 deploy
+# Code de secours (jamais dans le dépôt) :
+#                cd cloud && pnpm dlx wrangler@4.157.0 secret put CODE_SECOURS
+
+name = "nom-a-choisir"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[observability]
+enabled = true
+
+[vars]
+ORIGINE = "https://nationaliste.github.io"
+
+[[durable_objects.bindings]]
+name = "EQUIPE"
+class_name = "Equipe"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Equipe"]

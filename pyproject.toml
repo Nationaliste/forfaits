@@ -3,6 +3,16 @@ name = "forfaits"
 version = "1.0"
 requires-python = ">=3.12"
 
+# Ce qu'il faut pour lancer les tests et fabriquer le modèle Excel : python -m pip install --group dev
+# (versions minimales = celles essayées sur le PC de développement ; pas de fichier de verrouillage)
+[dependency-groups]
+dev = [
+    "openpyxl>=3.1.5",
+    "pillow>=10.4.0",
+    "playwright>=1.59.0",
+    "pytest>=9.0.3",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

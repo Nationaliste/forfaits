@@ -913,11 +913,11 @@ def test_export_csv_lisible_dans_excel(page, tmp_path):
     lignes = brut.decode("utf-8-sig").split("\r\n")
     assert (
         lignes[0]
-        == "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Lumineux;Imprimante;Boîtier;Installation;Exemple;Modifié le"
+        == "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Lumineux;Imprimante;Boîtier;Installation;Contenu;Exemple;Modifié le"
     )
     assert len(lignes) == 12
     ligne = next(x for x in lignes if x.startswith("EX-T1-Z5-3Q;"))
-    assert ";1234,50;1481,40;;T1 DEMO;;3Q;Zorba 5;;oui;" in ligne  # colonnes dans l'ordre des familles
+    assert ";1234,50;1481,40;;T1 DEMO;;3Q;Zorba 5;;;oui;" in ligne  # colonnes dans l'ordre des familles, Contenu vide
 
 
 # ---------------------------------------------------------------- tableau Excel (.csv)

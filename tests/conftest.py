@@ -30,6 +30,16 @@ WRANGLER = "wrangler@4.157.0"
 CODE_SECOURS = "code-de-secours-des-tests"
 # Après 5 codes de secours faux, le cloud fait attendre 1 min (puis 2, 4…) : ramené à 1,5 s pour les essais (DEV seulement).
 ATTENTE_SECOURS_TESTS = 1500
+# SYNCHRO_EXIGEE=1 : un cloud qui ne démarre pas fait ÉCHOUER les tests de synchro au lieu de les sauter
+# (avant une livraison de la synchro, pour ne pas prendre « sautés » pour « passés »).
+SYNCHRO_EXIGEE = os.environ.get("SYNCHRO_EXIGEE") == "1"
+
+
+def sauter_ou_echouer(raison):
+    """Sans cloud, les tests de synchro sont sautés (raison affichée par -rs) ; avec SYNCHRO_EXIGEE=1, ils échouent."""
+    if SYNCHRO_EXIGEE:
+        pytest.fail(raison)
+    pytest.skip(raison)
 
 
 # Les fichiers que la page et son service worker demandent vraiment (voir `FICHIERS` dans sw.js) : rien d'autre n'est servi.
@@ -233,11 +243,14 @@ def appel_cloud(adresse, chemin, methode="GET", corps=None, jeton=None, code_sec
 def cloud():
     """Le vrai Worker et son Durable Object, lancés en local par wrangler (ni compte ni réseau)."""
     if not shutil.which("pnpm"):
-        pytest.skip("pnpm absent : le cloud ne peut pas être lancé")
+        sauter_ou_echouer("pnpm absent : le cloud de synchro ne peut pas être lancé (tests de synchro sautés)")
     port = _port_libre()
     adresse = f"http://127.0.0.1:{port}"
+    # cloud/wrangler.toml (le vrai nom du Worker) n'est pas dans le dépôt : sur un PC qui ne l'a pas, le modèle suffit
+    # pour lancer le Worker en local.
+    config = "" if (RACINE / "cloud" / "wrangler.toml").exists() else " --config wrangler.exemple.toml"
     commande = (
-        f"pnpm dlx {WRANGLER} dev --port {port} --inspector-port {_port_libre()} "
+        f"pnpm dlx {WRANGLER} dev{config} --port {port} --inspector-port {_port_libre()} "
         f"--var DEV:1 --var CODE_SECOURS:{CODE_SECOURS} --var ATTENTE_SECOURS_MS:{ATTENTE_SECOURS_TESTS}"
     )
     journal = (RACINE / "captures" / "wrangler-tests.log").open("w", encoding="utf-8", errors="replace")
@@ -249,14 +262,14 @@ def cloud():
         for _ in range(120):  # jusqu'à 2 min : le premier pnpm dlx télécharge wrangler
             if proc.poll() is not None:
                 journal.close()
-                pytest.skip("wrangler n'a pas démarré (voir captures/wrangler-tests.log)")
+                sauter_ou_echouer("wrangler n'a pas démarré (voir captures/wrangler-tests.log) : tests de synchro sautés")
             try:
                 appel_cloud(adresse, "/api/donnees")
                 break
             except OSError:
                 threading.Event().wait(1)
         else:
-            pytest.skip("wrangler n'a pas répondu (voir captures/wrangler-tests.log)")
+            sauter_ou_echouer("wrangler n'a pas répondu (voir captures/wrangler-tests.log) : tests de synchro sautés")
         yield adresse
     finally:
         if os.name == "nt":

@@ -137,12 +137,17 @@ def test_import_json_qui_casserait_le_stockage_est_refuse(page, tmp_path):
 
 
 def test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union(page, tmp_path):
-    trop = [forfait(f"fft-n{i:05d}", f"N-{i}") for i in range(20001)]
+    # Forfaits affichés : 5 000 au plus, comme le tableau (à 20 000, l'ouverture prenait 40 s).
+    trop = [forfait(f"fft-n{i:05d}", f"N-{i}") for i in range(5001)]
     texte = refus(page, ecrire_fichier(tmp_path / "trop.json", forfaits=trop))
     assert "beaucoup trop d'enregistrements" in texte
+    # Les marques de suppression ne comptent que dans le plafond total de 20 000.
+    supprimes = [{**forfait(f"fft-s{i:05d}", f"S-{i}"), "supprime": True} for i in range(20001)]
+    texte = refus(page, ecrire_fichier(tmp_path / "total.json", forfaits=supprimes))
+    assert "beaucoup trop d'enregistrements" in texte
 
-    # 19 995 forfaits passent seuls, mais pas avec les 11 de l'appareil.
-    juste = ecrire_fichier(tmp_path / "juste.json", forfaits=trop[:19995])
+    # 4 995 forfaits passent seuls, mais pas avec les 11 de l'appareil.
+    juste = ecrire_fichier(tmp_path / "juste.json", forfaits=trop[:4995])
     page.set_input_files("#fichier-import", [])
     page.set_input_files("#fichier-import", str(juste))
     dialogue(page).get_by_role("button", name="Mettre à jour", exact=True).click()
@@ -151,6 +156,10 @@ def test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union(page, 
     expect(d).to_contain_text("beaucoup trop d'enregistrements")
     d.get_by_role("button", name="Compris").click()
     assert refs(page) == TOUS
+
+    # 6 000 suppressions et 10 forfaits : accepté (un appareil en service accumule les suppressions).
+    importer(page, ecrire_fichier(tmp_path / "supprimes.json", forfaits=trop[:10] + supprimes[:6000]))
+    assert len(stockage(page)["forfaits"]) == 11 + 10 + 6000
 
 
 def test_ancien_fichier_sans_surnoms_ni_plafond_reste_lisible(page, tmp_path):

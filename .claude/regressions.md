@@ -161,3 +161,27 @@
 - Bug : à 360 px de large (courant sur Android) il manquait quelques pixels pour les trois pastilles et « Autres » ; « Autres » passait seul sur une 2e ligne et prenait la place d'un forfait (50 px). Reste de la refonte (roadmap#1032).
 - À garder : sous 375 px, pastilles resserrées (marges de 6 px, écart de 4 px, texte inchangé). À 320 px la 2e ligne reste, choix de l'utilisateur.
 - Test : `test_telephone_etroit_garde_les_filtres_sur_une_ligne`.
+
+## 2026-11-26 — Recherche : un nom d'élément cachait les références et désignations qui l'écrivent
+- Où : `index.html`, `analyserRecherche`, `correspond`, `construireIndex` (`motsRefDes`).
+- Bug : un mot égal au nom ou au surnom d'un élément devenait un filtre exact sur l'élément ; un forfait dont la référence ou la désignation contenait ce mot, sans avoir l'élément, disparaissait (roadmap#752).
+- À garder : l'élément OU le mot entier dans la référence ou la désignation (`suiteDeMots` : « 3Q » ne ramène pas « 13Q »), jamais par le nom d'un autre élément.
+- Test : `test_nom_d_element_trouve_aussi_la_reference_ou_la_designation_qui_l_ecrit`.
+
+## 2026-11-26 — Total jeté à la relecture au-dessus d'un plafond plus bas que la saisie
+- Où : `index.html`, `lireLigneTotal`.
+- Bug : la relecture refusait un prix que la saisie et `valider` acceptaient ; au rechargement, la ligne (et le total) disparaissait (roadmap#751).
+- À garder : un seul plafond, `PRIX_MAX`, pour la saisie, la relecture et `valider`.
+- Test : `test_total_relu_jusqu_au_plafond_de_la_saisie`.
+
+## 2026-11-26 — « + » au total : l'ancien prix gardé sans le dire
+- Où : `index.html`, `ajouterAuTotal`, `totalContenu`, `prixChange`.
+- Bug : un forfait dont le prix a changé depuis l'ajout restait à l'ancien prix dans le total, sans que rien ne le montre (roadmap#751).
+- À garder : l'ancien prix reste (voulu), mais la ligne l'écrit en ambre avec le prix du moment, et le message du « + » le dit.
+- Test : `test_prix_change_depuis_l_ajout_se_voit_dans_le_total`.
+
+## 2026-11-26 — Message avec « Annuler » serré dans la moitié de l'écran
+- Où : `index.html`, `.toast` (`width: max-content`).
+- Bug : le message, posé à `left: 50 %`, prenait la largeur qui restait à droite ; au téléphone il passait sur trois lignes.
+- À garder : `.toast { width: max-content; }` (la largeur maximale le garde dans l'écran).
+- Test : `test_message_de_suppression_tient_dans_le_telephone_en_tres_grand`.

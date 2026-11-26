@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fyPodyZ6lmaI3pvWqpj2ibvFiBg0tPSR4E3WAwCDjSA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-w+2fgfBOne8KImy87hkG3Va3yUCcIpkSieXdRBrfvDU='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -306,6 +306,9 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 
 .vide { padding: 56px 16px; text-align: center; color: var(--texte-doux); }
 .vide p { margin: 0 0 16px; font: 600 18px/1.3 var(--police-titre); color: var(--texte-fort); }
+/* Bas d'une longue liste : les rangées suivantes arrivent à la place du bouton. */
+.plus-liste { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 16px 24px; }
+.plus-liste p { margin: 0; font-size: 13px; color: var(--texte-doux); font-variant-numeric: tabular-nums; }
 
 /* Fenêtre sur une moitié d'écran : mêmes colonnes, plus serrées. */
 @container zone (max-width: 759px) {
@@ -379,6 +382,7 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 .total-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--trait); animation: arrive .28s var(--sortie); }
 @keyframes arrive { from { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateY(-6px); } to { clip-path: inset(0); } }
 .total-ligne-nom { font: 600 14px/1.3 var(--police-titre); color: var(--texte-fort); overflow-wrap: anywhere; }
+.total-ligne-ref { display: block; font: 500 12px/1.3 var(--police); color: var(--texte-doux); } /* deux lignes au même nom */
 .total-ligne-prix { font: 600 14px var(--police-titre); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .total-ligne-prix small { display: block; font: 400 12px var(--police); color: var(--texte-doux); } /* le HT de la ligne, sous son TTC */
 .total-ligne-ecart { grid-column: 1 / -1; font-size: 13px; line-height: 1.3; color: var(--ambre); } /* prix gardé ≠ prix du jour */
@@ -822,6 +826,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const QTE_MAX = 99;
   const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
+  // Rangées rendues d'un coup dans la liste, puis « Afficher plus » : rendre les 5 000 forfaits prenait 13 s
+  // à l'ouverture et 1 à 7 s par lettre tapée (PC chargé, mesuré par outils/mesure_liste.py) ; 100 : 0,4 s et 80 ms.
+  const LIGNES_LISTE = 100;
   // Plafonds des données, vérifiés par valider (donc au chargement) : tout ce qui écrit doit les respecter,
   // sinon l'ouverture suivante déclarerait les données illisibles. Ici, avant le premier chargement.
   const FORFAITS_MAX = 5000;       // forfaits affichés (non supprimés) ; à 20 000, l'ouverture prenait 40 s
@@ -1532,7 +1539,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   /* =====================================================================
      RECHERCHE
      ===================================================================== */
-  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true };
+  // limite : rangées rendues pour la recherche décrite par cleListe (une autre recherche repart de LIGNES_LISTE).
+  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true, limite: LIGNES_LISTE, cleListe: null };
 
   // La virgule sépare deux mots, sauf dans un prix tapé (« 1140,50 », « 1.140,50 ») : il reste un seul mot.
   const decouper = (texte) => texte.split(/[\s;+]+/)
@@ -1559,7 +1567,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // seulement un autre élément qui le contient (« 3Q » ne ramène pas un élément « 13Q »). Tout le reste
   // cherche un morceau de texte dans la référence, la désignation, les surnoms et les éléments.
   // Un mot qui se lit comme un prix (« 1140 », « 1140,50 ») trouve en plus les forfaits dont le TTC
-  // ou le HT vaut exactement ce montant.
+  // ou le HT vaut exactement ce montant. Un prix écrit par milliers (« 1 140 », « 1 140,50 », copié
+  // d'une fiche) le trouve aussi : voir prixParMilliers.
   function analyserRecherche(texte) {
     const bruts = decouper(texte);
     const mots = bruts.map(norm);
@@ -1571,20 +1580,47 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         const valeur = mots.slice(i, j).join('');
         const elements = index.parNom.get(valeur);
         if (elements) {
-          contraintes.push({ type: 'element', ids: new Set(elements.map((e) => e.id)), valeur, prix: j === i + 1 ? lirePrix(bruts[i]) : null });
+          contraintes.push({ type: 'element', ids: new Set(elements.map((e) => e.id)), valeur, prix: j === i + 1 ? lirePrix(bruts[i]) : null, debut: i, fin: j, prixGroupe: null });
           i = j;
           reconnu = true;
           break;
         }
       }
       if (!reconnu) {
-        contraintes.push({ type: 'texte', valeur: mots[i], prix: lirePrix(bruts[i]) });
+        contraintes.push({ type: 'texte', valeur: mots[i], prix: lirePrix(bruts[i]), debut: i, fin: i + 1, prixGroupe: null });
         i++;
       }
     }
+    prixParMilliers(bruts, contraintes);
     return { mots, contraintes };
   }
 
+  // « 1 140 » : des mots de chiffres qui s'écrivent comme les milliers d'un prix (1 à 3 chiffres, puis des
+  // groupes de 3, le dernier avec ses centimes au besoin). Chaque mot du groupe garde sa recherche d'avant
+  // (le texte, et son propre prix) et accepte EN PLUS les forfaits à ce montant : « T1 140 » ou « zorba 5 300 »
+  // (« Zorba 5 » est un élément) ne perdent rien. Le groupe doit tomber sur des mots entiers de la recherche :
+  // dans « zorba 5 300 », le « 5 » appartient à « Zorba 5 », donc « 5 300 » n'est pas lu comme un prix.
+  function prixParMilliers(bruts, contraintes) {
+    const contrainteDebutant = new Map(contraintes.map((c) => [c.debut, c]));
+    const contrainteFinissant = new Map(contraintes.map((c) => [c.fin, c]));
+    let k = 0;
+    while (k < bruts.length) {
+      let m = k; // dernier mot du groupe
+      if (/^\d{1,3}$/.test(bruts[k])) {
+        while (m + 1 < bruts.length && /^\d{3}(,\d{1,2})?€?$/.test(bruts[m + 1])) {
+          m++;
+          if (!/^\d{3}$/.test(bruts[m])) break; // les centimes (ou « € ») ferment le groupe
+        }
+      }
+      if (m > k && contrainteDebutant.has(k) && contrainteFinissant.has(m + 1)) {
+        const prix = lirePrix(bruts.slice(k, m + 1).join(''));
+        if (prix !== null) for (const c of contraintes) if (c.debut >= k && c.fin <= m + 1) c.prixGroupe = prix;
+      }
+      k = m + 1;
+    }
+  }
+
+  const vautPrix = (forfait, prix) => prix !== null && (forfait.ttc === prix || forfait.ht === prix);
   function correspond(forfait, contraintes, filtres = etatUi.filtres) {
     const els = index.elementsForfait.get(forfait.id);
     for (const [familleId, valeur] of filtres) {
@@ -1597,7 +1633,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const trouve = c.type === 'element'
         ? els.some((e) => c.ids.has(e.id)) || index.motsRefDes.get(forfait.id).some((mots) => suiteDeMots(mots, c.valeur))
         : champs.some((ch) => ch.includes(c.valeur));
-      if (!trouve && !(c.prix !== null && (forfait.ttc === c.prix || forfait.ht === c.prix))) return false;
+      if (!trouve && !vautPrix(forfait, c.prix) && !vautPrix(forfait, c.prixGroupe)) return false;
     }
     return true;
   }
@@ -1962,6 +1998,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     classer(resultats);
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
     etatUi.actif = actif;
+    // Une autre recherche (texte, filtres ou tri) repart des premières rangées ; un autre rendu de la même
+    // (favori, total, autre onglet) garde celles que « Afficher plus » a ajoutées.
+    const cleListe = JSON.stringify([analyse.mots, [...etatUi.filtres], appareil.tri]);
+    if (cleListe !== etatUi.cleListe) { etatUi.cleListe = cleListe; etatUi.limite = LIGNES_LISTE; }
     const groupes = resultats.length === 0 && total > 0 ? groupesParFiltre(analyse.contraintes, classer) : [];
 
     $('compte').replaceChildren(...(total === 0 ? [] : groupes.length ? ['Aucun forfait ne contient tout']
@@ -2001,24 +2041,44 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     } else {
       montres = resultats;
     }
-    // Le forfait choisi reste choisi tant qu'il est à l'écran. Sur grand écran, la fiche n'est
-    // jamais vide : le premier de la liste y est montré d'office (sans compter comme « consulté »).
+    // Le forfait choisi reste choisi tant qu'il est dans la liste, même au-delà des rangées rendues
+    // (rappelé par « Récents ») : sa fiche reste affichée. Sur grand écran, la fiche n'est jamais
+    // vide : le premier de la liste y est montré d'office (sans compter comme « consulté »).
     if (!montres.some((f) => f.id === etatUi.choisi)) etatUi.choisi = large() && montres.length ? montres[0].id : null;
     if (!contenu) {
+      // Seulement les etatUi.limite premières rangées : le reste attend « Afficher plus ».
       let n = 0;
       contenu = groupes.length
         ? [h('li', { class: 'note-groupes' },
           'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec leur « + ».'),
-        ...groupes.flatMap((g) => [
+        ...groupes.flatMap((g) => (n >= etatUi.limite ? [] : [
           h('li', { class: 'titre-groupe' }, h('h3', {}, g.titre), h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))),
-          ...g.liste.map((f) => carte(f, n++))])]
-        : montres.map((f) => carte(f, n++));
+          ...g.liste.slice(0, etatUi.limite - n).map((f) => carte(f, n++))]))]
+        : montres.slice(0, etatUi.limite).map((f) => carte(f, n++));
+      if (n < montres.length) contenu.push(afficherPlus(n, montres.length));
     }
     // Les rangées n'arrivent en cascade qu'à l'ouverture de la page : ensuite, la liste change sans délai.
     $('resultats').classList.toggle('entree', etatUi.premier);
     etatUi.premier = false;
     $('resultats').replaceChildren(...contenu);
     rendreFiche();
+  }
+
+  // Bas de la liste limitée : les rangées suivantes arrivent SOUS le bouton, à sa place (rien ne bouge
+  // au-dessus) ; pas de chargement au défilement, qui ferait bouger le contenu sous le doigt.
+  function afficherPlus(rendues, trouves) {
+    const fr = (n) => n.toLocaleString('fr-FR');
+    return h('li', { class: 'plus-liste' },
+      h('p', {}, `${fr(rendues)} affichés sur ${fr(trouves)}`),
+      h('button', {
+        type: 'button', class: 'btn btn-bord', id: 'btn-afficher-plus',
+        onclick: () => {
+          etatUi.limite = rendues + LIGNES_LISTE;
+          rendreResultats();
+          // Le clavier (et le lecteur d'écran) passe à la première rangée ajoutée, là où était le bouton.
+          $('resultats').querySelectorAll('.carte-ouvrir')[rendues]?.focus();
+        },
+      }, `Afficher ${fr(Math.min(LIGNES_LISTE, trouves - rendues))} de plus`));
   }
 
   const prix = (type, centimes) => h('span', { class: `prix prix-${type}` },
@@ -2270,7 +2330,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   /* ---------- Total : additionner plusieurs forfaits, pièces ou services (par appareil, jamais exporté) ---------- */
   const sommeTotal = () => appareil.total.reduce((s, l) => ({ ht: s.ht + l.ht * l.qte, ttc: s.ttc + l.ttc * l.qte }), { ht: 0, ttc: 0 });
-  const nbArticlesTotal = () => appareil.total.reduce((n, l) => (l.ttc < 0 ? n : n + l.qte), 0); // une remise n'est pas un article
+  // Une remise n'est pas un article : HT ou TTC négatif (la relecture du total accepte un HT négatif avec un TTC à 0).
+  const nbArticlesTotal = () => appareil.total.reduce((n, l) => (l.ttc < 0 || l.ht < 0 ? n : n + l.qte), 0);
   const qteDansTotal = (f) => appareil.total.find((l) => l.id === f.id)?.qte || 0;
 
   // Le forfait vaut-il autre chose que le prix mémorisé par sa ligne du total ? (null : supprimé, ou ligne libre)
@@ -2344,6 +2405,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     };
     const { ht, ttc } = sommeTotal();
     const packEnCours = packDuTotal();
+    // Deux lignes au même nom (deux forfaits de même désignation) : sa référence distingue chacune, à l'écran
+    // et dans le nom de ses boutons. Lue sur le forfait (même supprimé depuis) : rien de plus dans le total enregistré.
+    const nbNom = new Map();
+    for (const l of appareil.total) nbNom.set(norm(l.nom), (nbNom.get(norm(l.nom)) || 0) + 1);
+    const refAmbigue = (l) => {
+      if (!l.id || nbNom.get(norm(l.nom)) < 2) return null;
+      const ref = (index.forfaitParId.get(l.id) || donnees.forfaits.find((f) => f.id === l.id))?.ref;
+      return ref && norm(ref) !== norm(l.nom) ? ref : null;
+    };
     return [
       h('div', { class: 'total-tete' },
         h('h2', { tabindex: dansFeuille ? -1 : null }, 'Total'), h('span', {}, pluriel(nbArticlesTotal(), 'article')),
@@ -2351,20 +2421,22 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       packEnCours ? h('p', { class: 'total-pack' }, `Modification du pack ${packEnCours.ref}`) : null,
       h('ul', { class: 'total-lignes' }, appareil.total.map((l, i) => {
         const nouveau = prixChange(l);
+        const ref = refAmbigue(l);
+        const nom = ref ? `${l.nom} (${ref})` : l.nom; // nom des boutons
         const li = h('li', { class: 'total-ligne' },
-          h('span', { class: 'total-ligne-nom' }, l.nom),
+          h('span', { class: 'total-ligne-nom' }, l.nom, ref ? h('small', { class: 'total-ligne-ref' }, ref) : null),
           h('span', { class: 'total-ligne-prix' }, formatPrix(l.ttc * l.qte), h('small', {}, `${formatPrix(l.ht * l.qte)} HT`)),
           // Le prix gardé est voulu (ce qui est compté ne bouge pas), mais il doit se voir.
           nouveau ? h('span', { class: 'total-ligne-ecart' },
             `Ancien prix : le forfait vaut maintenant ${formatPrix(nouveau.ttc)} TTC (${formatPrix(nouveau.ht)} HT). Retire la ligne pour le nouveau prix.`) : null,
           h('span', { class: 'total-ligne-commandes' },
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}, quantité ${l.qte}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${nom}, quantité ${l.qte}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
             // Pas de zone role=status : le total est recréé à chaque appui, et une zone neuve n'est pas annoncée.
             // La quantité est dans le nom du « − » et du « + », où le focus revient après l'appui.
             h('span', { class: 'total-qte' }, String(l.qte)),
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}, quantité ${l.qte}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${nom}, quantité ${l.qte}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
             l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
-            h('button', { type: 'button', class: 'btn-icone total-retirer', 'data-cmd': 'retirer', 'data-i': i, 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, icone('croix'))));
+            h('button', { type: 'button', class: 'btn-icone total-retirer', 'data-cmd': 'retirer', 'data-i': i, 'aria-label': `Retirer ${nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, icone('croix'))));
         if (l !== ajoutee) li.style.animation = 'none';
         return li;
       })),
@@ -2910,16 +2982,32 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   function annulerSuppression(id) {
     if (lectureSeule()) return;
     const actuel = donnees.forfaits.find((x) => x.id === id);
-    if (!actuel?.supprime) return;
+    // Déjà revenu entre-temps (annulé dans un autre onglet, rendu par un import) : le dire, pas un bouton muet.
+    if (!actuel) { toast("Impossible : ce forfait n'est plus sur cet appareil (données remplacées entre-temps)", true); return; }
+    if (!actuel.supprime) { toast(`Forfait ${actuel.ref} déjà rétabli`); return; }
     if (index.forfaits.some((x) => memeRef(x.ref, actuel.ref))) { toast(`Impossible : un autre forfait porte déjà la référence ${actuel.ref}`, true); return; }
     if (index.forfaits.length >= FORFAITS_MAX) { toast(`Impossible : ${FORFAITS_MAX.toLocaleString('fr-FR')} forfaits au maximum. Supprimes-en un autre d'abord.`, true); return; }
-    const rendu = { ...actuel, maj: Date.now() };
+    // Un surnom désigne une seule chose : pendant la suppression, les siens étaient libres, et autre chose a pu
+    // en prendre un. Chacun repasse donc le contrôle de la saisie (surnomRefuse, sur les données sans ce forfait) ;
+    // refusé, il reste à l'autre, sinon le forfait rétabli le lui reprendrait (le plus petit identifiant gagne).
+    const perdus = (actuel.surnoms || []).filter((s) => surnomRefuse(s, id, true));
+    const miens = appareil.surnoms[id] || [];
+    const persoPerdus = miens.filter((s) => surnomRefuse(s, id));
+    const gardes = (actuel.surnoms || []).filter((s) => !perdus.includes(s));
+    const rendu = { ...actuel, maj: Date.now(), surnoms: gardes };
     delete rendu.supprime;
+    if (!gardes.length) delete rendu.surnoms; // tous repris : sinon la liste d'origine restait
     remplacer(donnees.forfaits, rendu);
     if (!sauver()) return;
+    if (persoPerdus.length) {
+      const reste = miens.filter((s) => !persoPerdus.includes(s));
+      if (reste.length) appareil.surnoms[id] = reste; else delete appareil.surnoms[id];
+      sauverAppareil();
+    }
     noterModif();
     rafraichir();
-    toast(`Forfait ${actuel.ref} rétabli`);
+    const retires = [...perdus, ...persoPerdus].map((s) => `« ${s} »`);
+    toast(`Forfait ${actuel.ref} rétabli${retires.length ? `, sans ${retires.length > 1 ? 'ses surnoms' : 'son surnom'} ${retires.join(', ')} : ${retires.length > 1 ? 'ils désignent' : 'il désigne'} maintenant autre chose` : ''}`);
   }
 
   // Marque supprimés les forfaits EXEMPLE, puis les éléments d'exemple devenus inutiles et jamais retouchés (maj 0). Les appareils

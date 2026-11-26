@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-0HeCEebEjSXSY2KDnfQzBPsQxRXiCjUtsmP+0hLIGvc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-K31cvb/G/CwoEelJFPCAqxAOmjqs+ObjBKgUNBCxKQ8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -306,6 +306,9 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 
 .vide { padding: 56px 16px; text-align: center; color: var(--texte-doux); }
 .vide p { margin: 0 0 16px; font: 600 18px/1.3 var(--police-titre); color: var(--texte-fort); }
+/* Bas d'une longue liste : les rangées suivantes arrivent à la place du bouton. */
+.plus-liste { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 16px 24px; }
+.plus-liste p { margin: 0; font-size: 13px; color: var(--texte-doux); font-variant-numeric: tabular-nums; }
 
 /* Fenêtre sur une moitié d'écran : mêmes colonnes, plus serrées. */
 @container zone (max-width: 759px) {
@@ -823,6 +826,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const QTE_MAX = 99;
   const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
+  // Rangées rendues d'un coup dans la liste, puis « Afficher plus » : rendre les 5 000 forfaits prenait 8 à 13 s
+  // à l'ouverture et 1 à 3 s par lettre tapée (mesuré par outils/mesure_liste.py).
+  const LIGNES_LISTE = 100;
   // Plafonds des données, vérifiés par valider (donc au chargement) : tout ce qui écrit doit les respecter,
   // sinon l'ouverture suivante déclarerait les données illisibles. Ici, avant le premier chargement.
   const FORFAITS_MAX = 5000;       // forfaits affichés (non supprimés) ; à 20 000, l'ouverture prenait 40 s
@@ -1533,7 +1539,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   /* =====================================================================
      RECHERCHE
      ===================================================================== */
-  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true };
+  // limite : rangées rendues pour la recherche décrite par cleListe (une autre recherche repart de LIGNES_LISTE).
+  const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true, limite: LIGNES_LISTE, cleListe: null };
 
   // La virgule sépare deux mots, sauf dans un prix tapé (« 1140,50 », « 1.140,50 ») : il reste un seul mot.
   const decouper = (texte) => texte.split(/[\s;+]+/)
@@ -1991,6 +1998,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     classer(resultats);
     const actif = analyse.mots.length > 0 || etatUi.filtres.size > 0;
     etatUi.actif = actif;
+    // Une autre recherche (texte, filtres ou tri) repart des premières rangées ; un autre rendu de la même
+    // (favori, total, autre onglet) garde celles que « Afficher plus » a ajoutées.
+    const cleListe = JSON.stringify([analyse.mots, [...etatUi.filtres], appareil.tri]);
+    if (cleListe !== etatUi.cleListe) { etatUi.cleListe = cleListe; etatUi.limite = LIGNES_LISTE; }
     const groupes = resultats.length === 0 && total > 0 ? groupesParFiltre(analyse.contraintes, classer) : [];
 
     $('compte').replaceChildren(...(total === 0 ? [] : groupes.length ? ['Aucun forfait ne contient tout']
@@ -2030,24 +2041,44 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     } else {
       montres = resultats;
     }
-    // Le forfait choisi reste choisi tant qu'il est à l'écran. Sur grand écran, la fiche n'est
-    // jamais vide : le premier de la liste y est montré d'office (sans compter comme « consulté »).
+    // Le forfait choisi reste choisi tant qu'il est dans la liste, même au-delà des rangées rendues
+    // (rappelé par « Récents ») : sa fiche reste affichée. Sur grand écran, la fiche n'est jamais
+    // vide : le premier de la liste y est montré d'office (sans compter comme « consulté »).
     if (!montres.some((f) => f.id === etatUi.choisi)) etatUi.choisi = large() && montres.length ? montres[0].id : null;
     if (!contenu) {
+      // Seulement les etatUi.limite premières rangées : le reste attend « Afficher plus ».
       let n = 0;
       contenu = groupes.length
         ? [h('li', { class: 'note-groupes' },
           'Aucun forfait ne contient tout ce que tu as choisi. Voici les forfaits de chaque filtre : ajoute ceux qu’il te faut au total avec leur « + ».'),
-        ...groupes.flatMap((g) => [
+        ...groupes.flatMap((g) => (n >= etatUi.limite ? [] : [
           h('li', { class: 'titre-groupe' }, h('h3', {}, g.titre), h('span', { class: 'titre-groupe-compte' }, pluriel(g.liste.length, 'forfait'))),
-          ...g.liste.map((f) => carte(f, n++))])]
-        : montres.map((f) => carte(f, n++));
+          ...g.liste.slice(0, etatUi.limite - n).map((f) => carte(f, n++))]))]
+        : montres.slice(0, etatUi.limite).map((f) => carte(f, n++));
+      if (n < montres.length) contenu.push(afficherPlus(n, montres.length));
     }
     // Les rangées n'arrivent en cascade qu'à l'ouverture de la page : ensuite, la liste change sans délai.
     $('resultats').classList.toggle('entree', etatUi.premier);
     etatUi.premier = false;
     $('resultats').replaceChildren(...contenu);
     rendreFiche();
+  }
+
+  // Bas de la liste limitée : les rangées suivantes arrivent SOUS le bouton, à sa place (rien ne bouge
+  // au-dessus) ; pas de chargement au défilement, qui ferait bouger le contenu sous le doigt.
+  function afficherPlus(rendues, trouves) {
+    const fr = (n) => n.toLocaleString('fr-FR');
+    return h('li', { class: 'plus-liste' },
+      h('p', {}, `${fr(rendues)} affichés sur ${fr(trouves)}`),
+      h('button', {
+        type: 'button', class: 'btn btn-bord', id: 'btn-afficher-plus',
+        onclick: () => {
+          etatUi.limite = rendues + LIGNES_LISTE;
+          rendreResultats();
+          // Le clavier (et le lecteur d'écran) passe à la première rangée ajoutée, là où était le bouton.
+          $('resultats').querySelectorAll('.carte-ouvrir')[rendues]?.focus();
+        },
+      }, `Afficher ${fr(Math.min(LIGNES_LISTE, trouves - rendues))} de plus`));
   }
 
   const prix = (type, centimes) => h('span', { class: `prix prix-${type}` },

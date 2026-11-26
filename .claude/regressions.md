@@ -293,3 +293,9 @@
 - Bug (roadmap#1251) : seul le TTC négatif marquait une remise ; la relecture du total accepte une ligne libre HT négatif, TTC 0, qui comptait dans « N articles ».
 - À garder : HT OU TTC négatif = pas un article.
 - Test : `test_remise_au_ht_negatif_et_ttc_a_zero_ne_compte_pas_comme_article`.
+
+## 2026-11-26 — Liste : une carte par forfait, 13 s à l'ouverture avec 5 000 forfaits
+- Où : `index.html`, `rendreResultats`, `afficherPlus`, `LIGNES_LISTE`.
+- Bug (roadmap#1252) : toutes les cartes étaient rendues : 5 000 forfaits, 13 s à l'ouverture et 1 à 7 s par lettre tapée (PC chargé, `outils/mesure_liste.py`).
+- À garder : `LIGNES_LISTE` (100) rangées, puis « Afficher plus » (bouton en bas, jamais au défilement) ; le compteur, les nombres des filtres, le tri et le forfait choisi portent sur TOUS les forfaits trouvés ; une autre recherche (texte, filtres, tri) repart de 100 (`etatUi.cleListe`).
+- Test : `tests/test_liste_limitee.py`.

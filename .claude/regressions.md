@@ -329,6 +329,24 @@
 - À garder : les deux côtés comparés sur des copies aux caches recalculés (`avecCaches`, sur l'union pour `apporte`, sur lui-même pour `remplacerParEquipe`).
 - Test : `test_un_pack_qui_ne_differe_que_par_son_cache_ne_repart_pas_au_cloud` (tests/test_synchro_fusion.py).
 
+## 2026-11-26 — « Annuler » d'une suppression : muet si déjà rétabli, surnom repris à un autre
+- Où : `index.html`, `annulerSuppression`.
+- Bug (roadmap#1251) : le forfait déjà rétabli ailleurs (autre onglet, import) : le bouton ne disait rien. Un surnom libéré par la suppression et donné entre-temps à autre chose revenait avec le forfait rétabli, qui le reprenait (plus petit identifiant, ou premier surnom perso) : un surnom désignait deux choses.
+- À garder : « Forfait … déjà rétabli » ; chaque surnom (équipe et perso) repasse `surnomRefuse` avant le retour, les refusés restent à l'autre et le message le dit.
+- Test : `test_annuler_une_suppression_deja_retablie_ailleurs_le_dit`, `test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps`, `test_annuler_une_suppression_dont_tous_les_surnoms_ont_ete_repris` (tous repris : la liste d'origine revenait, vu en revue).
+
+## 2026-11-26 — Total : une remise au HT négatif et TTC à 0 comptée comme article
+- Où : `index.html`, `nbArticlesTotal`.
+- Bug (roadmap#1251) : seul le TTC négatif marquait une remise ; la relecture du total accepte une ligne libre HT négatif, TTC 0, qui comptait dans « N articles ».
+- À garder : HT OU TTC négatif = pas un article.
+- Test : `test_remise_au_ht_negatif_et_ttc_a_zero_ne_compte_pas_comme_article`.
+
+## 2026-11-26 — Liste : une carte par forfait, 13 s à l'ouverture avec 5 000 forfaits
+- Où : `index.html`, `rendreResultats`, `afficherPlus`, `LIGNES_LISTE`.
+- Bug (roadmap#1252) : toutes les cartes étaient rendues : 5 000 forfaits, 13 s à l'ouverture et 1 à 7 s par lettre tapée (PC chargé, `outils/mesure_liste.py`).
+- À garder : `LIGNES_LISTE` (100) rangées, puis « Afficher plus » (bouton en bas, jamais au défilement) ; le compteur, les nombres des filtres, le tri et le forfait choisi portent sur TOUS les forfaits trouvés ; une autre recherche (texte, filtres, tri) repart de 100 (`etatUi.cleListe`).
+- Test : `tests/test_liste_limitee.py`.
+
 ## 2026-11-26 — Case « Contenu » piégée : onglet figé, faux refus, aller-retour cassé
 - Où : `index.html`, `lireContenu`, `decouperContenu`, `avecPlusDans` (dans `analyserTableau`).
 - Bug (trouvé par la relecture du lot 2, avant fusion) : une ligne libre `[a:` suivie de milliers d'espaces faisait s'emballer l'expression des prix (temps cubique), et des milliers de « x » à la suite faisaient chercher une référence à chaque « x » (temps quadratique, avec un parcours de tous les forfaits) : l'onglet restait figé avant la fenêtre d'import. Une référence « 3Q+ » faisait refuser toute case contenant « 3Q + … » (comparaison de texte). Un nom de ligne libre « Pose [b » collait la suite de la case à sa ligne (crochets comptés comme imbriqués).

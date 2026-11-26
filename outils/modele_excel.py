@@ -23,7 +23,9 @@ from openpyxl.worksheet.datavalidation import DataValidation
 RACINE = pathlib.Path(__file__).resolve().parent.parent
 SORTIE = RACINE / "prive" / "Forfaits-a-remplir.xlsx"
 
-DERNIERE_LIGNE = 1000  # nombre de forfaits que le modèle sait contrôler
+# Dernière ligne contrôlée (listes déroulantes, cases rouges) : la ligne des titres + LIGNES_TABLEAU_MAX
+# d'index.html, autant de forfaits que l'import en accepte. tests/test_modele_excel.py vérifie l'accord.
+DERNIERE_LIGNE = 5001
 DERNIERE_LIGNE_LISTE = 100  # éléments par famille dans l'onglet Listes
 DERNIERE_COLONNE = 26  # colonne Z : jusqu'où une ligne compte comme « remplie » (familles ajoutées à droite comprises)
 TVA = 1.2

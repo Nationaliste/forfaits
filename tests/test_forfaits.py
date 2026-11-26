@@ -2331,7 +2331,7 @@ def test_surnoms_d_equipe_partages_et_l_equipe_gagne(appareils, tmp_path):
     a.locator("#f-surnoms").fill("pack nuit")
     remplir(a)
     fichier = exporter_json(a, tmp_path / "equipe.json")
-    assert fichier["version"] == 2
+    assert fichier["version"] == 3
     assert next(e for e in fichier["elements"] if e["nom"] == "4Q")["surnoms"] == ["la petite", "la 4"]
     assert next(f for f in fichier["forfaits"] if f["ref"] == "EX-T2-3Q")["surnoms"] == ["pack nuit"]
 

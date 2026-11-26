@@ -316,3 +316,9 @@
 - Bug : le blocage progressif après 5 codes faux tenait un seul compteur pour tout le monde. Sans jeton, 5 essais vides puis un par fin d'attente (`Retry-After` donne l'heure) gardaient la récupération fermée pour de bon : le jour où le responsable perdait ses appareils, il ne recevait que des 429. Même défaut que le seau unique du 05/11, revenu par un autre chemin. Trouvé en relecture, avant toute mise en ligne.
 - À garder : compteur PAR SOURCE (`sourceDe`, /64 en IPv6) dans `secours:echecs`, mémoire bornée à `SOURCES_MAX` ; code comparé avant la lecture du compteur (aucune attente hors stockage entre lecture et écriture, sinon des essais parallèles perdent des comptes).
 - Test : `test_le_blocage_du_code_de_secours_ne_vise_que_la_source_qui_se_trompe` (tests/cloud_unitaire.mjs : wrangler ne laisse pas choisir l'adresse de l'appelant).
+
+## 2026-11-26 — Pack « modifié » et « prix qui change » à cause de son seul cache de prix
+- Où : `index.html`, `fusionner` et `bilanFusion` (recalcul sur des copies), `recalculerPacks`, `canonique`.
+- Bug (trouvé pendant la construction des packs) : le `ht`/`ttc` d'un pack est un cache, et il entre dans `canonique`. À date égale, deux appareils dont l'un n'a pas encore reçu le nouveau prix d'un forfait avaient deux caches différents : `gagne` départageait par le contenu et le bilan comptait le pack « modifié », avec un « prix qui change ».
+- À garder : `fusionner` rend des copies de packs aux caches recalculés sur l'union, et `bilanFusion` recalcule lui-même les deux côtés (l'union pour « Mettre à jour », le fichier seul pour « Remplacer tout »), sur des copies : aucun appelant (fichier, tableau, synchro) n'a à y penser. `recalculerPacks` ne touche jamais à `maj`.
+- Test : `test_meme_pack_qui_ne_differe_que_par_le_cache_n_est_pas_modifie` (échoue sans le recalcul dans `bilanFusion`), `test_le_prix_d_un_forfait_remonte_dans_le_pack_sans_toucher_a_sa_date`.

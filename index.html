@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YcxevZYeZ5+ct9j4huwIzQGmI4eFaUhivvyAN/LzGHk='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-yUobIKUmyGzv0a4h7jX/d5p90u8t4pzSUsFZqCJEvQE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1056,7 +1056,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           if (motifId.test(fam) && typeof elt === 'string' && motifId.test(elt)) choisis[fam] = elt;
         }
       }
-      const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= 999999999 ? v : null);
+      const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= PRIX_MAX ? v : null);
       const f = {
         id: id(x.id), ref: texte(x.ref, 80), designation: texte(x.designation, 2000),
         ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x), ...avecSurnoms(lireSurnoms(x.surnoms)),

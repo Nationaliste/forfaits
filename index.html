@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-KdY4x5OwlWDy2GPac965Z/hsCA4saZcmJE5U55PXCKo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fyPodyZ6lmaI3pvWqpj2ibvFiBg0tPSR4E3WAwCDjSA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -3326,14 +3326,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
   // Une ligne de la case : référence (80 caractères) ou ligne libre [nom (80) : prix HT / prix TTC], et sa quantité.
   const MORCEAU_MAX = 200;
-  // Morceaux d'une case Contenu : un « + » entre crochets (nom d'une ligne libre) ne sépare rien.
+  // Morceaux d'une case Contenu : un « + » entre crochets (nom d'une ligne libre) ne sépare rien. Pas d'imbrication :
+  // un nom « Pose [b » (crochet jamais fermé) laissait la suite de la case collée à sa ligne, l'aller-retour échouait.
   function decouperContenu(texte) {
     const morceaux = [];
-    let courant = '', crochets = 0;
+    let courant = '', entre = false;
     for (const c of texte) {
-      if (c === '[') crochets++;
-      else if (c === ']') crochets = Math.max(0, crochets - 1);
-      if (!crochets && (c === '+' || c === '\n' || c === '\r')) { morceaux.push(courant.trim()); courant = ''; }
+      if (c === '[') entre = true;
+      else if (c === ']') entre = false;
+      if (!entre && (c === '+' || c === '\n' || c === '\r')) { morceaux.push(courant.trim()); courant = ''; }
       else courant += c;
     }
     morceaux.push(courant.trim());

@@ -219,6 +219,18 @@ def test_reference_avec_un_plus_ne_bloque_que_la_lecture_fausse(page, tmp_path):
     ]
 
 
+def test_ligne_libre_au_crochet_jamais_ferme_se_relit(page, tmp_path):
+    """Un nom « Pose [b » écrit par l'export ne colle pas la ligne suivante à la sienne."""
+    d = depart(page, tmp_path)
+    d["forfaits"].append(pack("pck-c", "PK-C", [libre("Pose [b", 4500, 5400), ligne(d, "EX-T2-3Q")], maj=1000))
+    poser(page, d)
+    case = colonne(exporter_csv(page, tmp_path / "export.csv"), "PK-C", "Contenu")
+    assert case == "[Pose [b : 45,00 HT / 54,00 TTC] + EX-T2-3Q"
+    d2 = ouvrir_tableau(page, tableau(tmp_path, [f"PK-C;;;;;;{case}"]))
+    expect(d2).to_contain_text("0 nouveau, 0 modifié, 1 inchangé")
+    d2.get_by_role("button", name="Annuler").click()
+
+
 def test_pack_present_deux_fois_dans_l_outil_annonce(page, tmp_path):
     """Deux packs de même référence (fusion de deux appareils) : un seul est mis à jour, la fenêtre le dit."""
     d = depart(page, tmp_path)

@@ -14,7 +14,10 @@ Il n'y a pas encore de lien : l'adresse et le code de secours se tapent à la ma
 
 1. Ouvre l'outil → **Menu** → **Mise à jour automatique** → **Premier appareil**.
 2. **Adresse** : `<nom-du-worker>.<compte>.workers.dev` (sans `https://`).
-3. **Code de secours** : celui choisi au déploiement.
+3. **Code de secours** : celui tiré au déploiement (`python outils/code_secours.py`, 29 caractères en
+   5 groupes). Le cloud refuse un code de moins de 24 caractères. Après 5 codes faux depuis une même connexion, il
+   fait attendre celle-là (pas les autres)
+   1 minute avant l'essai suivant, puis 2, 4… jusqu'à 1 heure (le bon code remet le compteur à zéro).
 4. **Nom de cet appareil** : par exemple « PC du responsable ».
 5. **Connecter**. Le menu affiche alors « Mise à jour automatique (connectée) ».
 
@@ -41,6 +44,9 @@ le rôle, puis **Créer le lien**. Tu obtiens le lien, les boutons **Copier** / 
 
 Chaque appareil reçoit malgré tout son propre accès : un lien de lot ne les rend pas solidaires, tu
 peux en retirer un seul plus tard.
+
+Un lien parti chez le mauvais destinataire s'annule : **Appareils connectés** → « Liens pas encore
+utilisés » → **Annuler le lien**.
 
 ---
 
@@ -112,6 +118,9 @@ fonctionne normalement.
 Sur l'appareil responsable : **Menu** → **Mise à jour automatique** → **Appareils connectés** →
 **Retirer** sur la ligne concernée.
 
+Deux appareils peuvent porter le même nom : chaque ligne donne aussi sa date d'ajout et un numéro
+(« n° 4f2a ») pour ne pas retirer le mauvais.
+
 Effet : il ne reçoit plus rien, et à sa prochaine ouverture **avec du réseau** il efface ses
 forfaits. S'il n'est jamais rallumé, les forfaits déjà reçus y restent — comme un fichier envoyé par
 mail. Les autres appareils ne bougent pas.
@@ -122,6 +131,16 @@ mail. Les autres appareils ne bougent pas.
 
 Sur l'appareil responsable : **Menu** → **Mise à jour automatique** → **Revenir à une version** →
 choisis la version. Les 10 dernières sont gardées, et la correction repart sur tous les appareils.
+Si le réseau coupe pendant le retour, l'outil le dit ; la mise à jour suivante le termine s'il est
+arrivé au cloud (sinon, recommence-le).
+
+Importer un `.json` sur un appareil responsable connecté l'envoie aussi à toute l'équipe (« Remplacer
+tout » remplace donc les forfaits de tous les appareils). Un appareil de consultation refuse l'import :
+il reçoit les forfaits de l'équipe.
+
+Garde un export par semaine : sur un appareil responsable connecté, le rappel d'export revient quand le
+dernier export a plus de 7 jours et que tu as modifié des forfaits depuis. Range le fichier dans
+OneDrive : si un jour tous les appareils étaient retirés, c'est lui qui remet les forfaits.
 
 ---
 

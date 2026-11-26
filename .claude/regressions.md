@@ -310,3 +310,9 @@
 - Bug : chaque ligne avait sa zone `role=status`, mais le total est recréé à chaque appui (`replaceChildren`) : une zone live neuve n'est pas annoncée, et il y en avait une par ligne.
 - À garder : pas de `role=status` dans les lignes ; la quantité est dans le nom du « − » et du « + » (« Plus : …, quantité 2 »), où le focus revient après l'appui.
 - Test : `test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus`.
+
+## 2026-11-26 — Code de secours bloquable pour toute l'équipe par n'importe qui
+- Où : `cloud/src/index.js`, `refusSecours` (appelé par `/api/initialiser` et `DELETE /api/tout`).
+- Bug : le blocage progressif après 5 codes faux tenait un seul compteur pour tout le monde. Sans jeton, 5 essais vides puis un par fin d'attente (`Retry-After` donne l'heure) gardaient la récupération fermée pour de bon : le jour où le responsable perdait ses appareils, il ne recevait que des 429. Même défaut que le seau unique du 05/11, revenu par un autre chemin. Trouvé en relecture, avant toute mise en ligne.
+- À garder : compteur PAR SOURCE (`sourceDe`, /64 en IPv6) dans `secours:echecs`, mémoire bornée à `SOURCES_MAX` ; code comparé avant la lecture du compteur (aucune attente hors stockage entre lecture et écriture, sinon des essais parallèles perdent des comptes).
+- Test : `test_le_blocage_du_code_de_secours_ne_vise_que_la_source_qui_se_trompe` (tests/cloud_unitaire.mjs : wrangler ne laisse pas choisir l'adresse de l'appelant).

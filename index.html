@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-9zj2axZebxsZ2wd+oMnA1Moly/KsAWgNFTnaqnMo4mU='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-RqQs1p6nzVj5K3NgpXsfnRegO3+PvibLuonf6koaZCc='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1192,7 +1192,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, modifsDepuisExport: 0, departRappel: Date.now(), dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -1212,6 +1212,12 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         total: Array.isArray(lu.total) ? lu.total.map(lireLigneTotal).filter(Boolean).slice(0, TOTAL_MAX) : [],
         modeModif: lu.modeModif === true,
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
+        // Modifications faites ici depuis le dernier export : seul l'export le remet à zéro (pas les envois au
+        // cloud, qui remettent modifsEnAttente à zéro). Absent (appareil d'avant) : on part de modifsEnAttente.
+        modifsDepuisExport: Number.isInteger(lu.modifsDepuisExport) && lu.modifsDepuisExport >= 0 ? lu.modifsDepuisExport
+          : Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
+        // Un appareil qui n'a jamais exporté compte ses 7 jours depuis le passage à cette version, pas « depuis toujours ».
+        departRappel: Number.isFinite(lu.departRappel) ? lu.departRappel : Date.now(),
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
         dernierImport: Number.isFinite(lu.dernierImport) ? lu.dernierImport : 0,
         theme: THEMES.some((t) => t.valeur === lu.theme) ? lu.theme : 'sombre',
@@ -1256,6 +1262,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // À appeler après chaque changement fait sur cet appareil (sert au rappel d'export).
   function noterModif() {
     appareil.modifsEnAttente += 1;
+    appareil.modifsDepuisExport += 1;
     sauverAppareil();
     demanderStockageDurable();
     planifierEnvoi();
@@ -1311,9 +1318,12 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       // version choisie doit, lui, être réhorodaté : sinon l'autre appareil responsable garderait
       // sa modification (plus récente que maj 0) et la renverrait, annulant le retour arrière
       // précisément là où il servait.
-      const liste = cible[cle].map((x) => (actuels.get(x.id)?.maj === x.maj ? x : { ...x, maj: maintenant }));
+      // Toujours au-delà de la date actuelle : une horloge en avance quelque part a pu dater la version à annuler plus
+      // tard que « maintenant », et l'ancienne valeur regagnerait alors la fusion.
+      const apres = (x) => Math.max(maintenant, (actuels.get(x.id)?.maj ?? 0) + 1);
+      const liste = cible[cle].map((x) => (actuels.get(x.id)?.maj === x.maj ? x : { ...x, maj: apres(x) }));
       // Créé après la version choisie : le retour doit l'effacer, et une suppression est une marque.
-      for (const x of actuel[cle]) if (!dansCible.has(x.id)) liste.push({ ...x, supprime: true, maj: maintenant });
+      for (const x of actuel[cle]) if (!dansCible.has(x.id)) liste.push({ ...x, supprime: true, maj: apres(x) });
       resultat[cle] = liste;
     }
     return resultat;
@@ -1330,6 +1340,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   let donnees = charger();
   let appareil = chargerAppareil();
+  // departRappel se pose une fois : sans enregistrement, chaque ouverture le repousserait à « maintenant ».
+  try { if (!Number.isFinite(JSON.parse(localStorage.getItem(CLE_APPAREIL) || '{}').departRappel)) sauverAppareil(); } catch { /* illisible : chargerAppareil a déjà repris les défauts */ }
 
   // Le CSS n'a que deux palettes : « auto » est résolu ici d'après le réglage de l'appareil.
   // La taille du texte est posée de la même façon, sur <html>.
@@ -2394,8 +2406,18 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     });
   }
 
+  // Responsable connecté : le cloud garde chaque modification, mais après un retrait de tous les appareils, le
+  // dernier export sur OneDrive est le seul filet. Le rappel revient donc, espacé : des modifications depuis le
+  // dernier export, et cet export a plus de 7 jours (sans lui, la date du passage à cette version).
+  const RAPPEL_CLOUD_MS = 7 * 24 * 3600 * 1000;
+  function modifsARappeler() {
+    if (cloud?.role !== 'responsable') return appareil.modifsEnAttente;
+    const depuis = appareil.dernierExport || appareil.departRappel;
+    return Date.now() - depuis > RAPPEL_CLOUD_MS ? appareil.modifsDepuisExport : 0;
+  }
+
   function rendreRappel() {
-    const n = appareil.modifsEnAttente;
+    const n = modifsARappeler();
     $('rappel').hidden = n === 0 || donneesFutures;  // exporter est refusé sur une page en retard : pas de rappel
     document.body.classList.toggle('avec-rappel', !$('rappel').hidden); // la liste garde de la place sous le rappel
     // La consigne est à part : sur un téléphone elle est cachée (CSS), pour que le rappel tienne sur une ligne.
@@ -2955,6 +2977,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       telecharger(nom, contenu, 'application/json'); // refusé (page ouverte en fichier, règle de l'entreprise…)
     }
     appareil.modifsEnAttente = 0;
+    appareil.modifsDepuisExport = 0;
     appareil.dernierExport = Date.now();
     sauverAppareil();
     rendreRappel();
@@ -3007,8 +3030,11 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     });
   }
 
+  // Un appareil de consultation reçoit les forfaits de l'équipe : un import serait remplacé à la mise à jour suivante.
+  const IMPORT_CONSULTATION = "Cet appareil reçoit les forfaits de l'équipe par la mise à jour automatique : un import serait remplacé à la prochaine mise à jour. Importe sur un appareil responsable.";
   function lancerImport() {
     if (lectureSeule()) return;
+    if (cloud?.role === 'consultation') { informer('Import impossible', IMPORT_CONSULTATION); return; }
     const champ = $('fichier-import');
     champ.value = '';
     champ.click();
@@ -3357,6 +3383,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   async function importerFichier(fichier) {
     if (!fichier) return;
     if (lectureSeule()) return;  // le choix du fichier était déjà ouvert quand un autre onglet a annoncé la version plus récente
+    if (cloud?.role === 'consultation') { await informer('Import impossible', IMPORT_CONSULTATION); return; }
     if (fichier.size > 5 * 1024 * 1024) { await informer('Import impossible', 'Fichier trop gros pour être un fichier de forfaits.'); return; }
     if (/\.xlsx?$/i.test(fichier.name)) {
       await informer('Import impossible', "C'est le fichier Excel lui-même. Dans Excel : Fichier → Enregistrer sous → « CSV UTF-8 », puis importe ce fichier .csv.");
@@ -3398,7 +3425,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         resume('Prix qui changent', bilan.prix),
         resume('Éléments et familles renommés', bilan.renommes),
         resume('Éléments et familles supprimés', bilan.retires),
-        'Remplacer tout : cet appareil devient une copie exacte du fichier.'
+        (cloud ? 'Remplacer tout : cet appareil, et par la mise à jour automatique tous ceux de l\'équipe, deviennent une copie exacte du fichier.'
+          : 'Remplacer tout : cet appareil devient une copie exacte du fichier.')
           + (absents ? ` ${pluriel(absents, 'forfait')} de cet appareil ${absents > 1 ? 'disparaîtraient' : 'disparaîtrait'} (absent${absents > 1 ? 's' : ''} du fichier).` : ''),
         // Fichier plus ancien : « Remplacer tout » remettrait d'anciens prix, à dire avant.
         bilan.prixRemplacer.join() === bilan.prix.join() ? null : resume('Prix qui changent avec « Remplacer tout »', bilan.prixRemplacer),
@@ -3426,11 +3454,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       // Le fichier a retiré ses exemples : ceux de cet appareil partent aussi, même s'ils n'ont pas les mêmes identifiants
       // (exemples d'une autre version de l'outil).
       if (entrant.forfaits.some((f) => f.exemple && f.supprime) && !entrant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes(true);
+    } else if (cloud) {
+      // Connecté : le fichier doit GAGNER la fusion chez les autres, comme un retour à une version (sinon leurs
+      // versions plus récentes, et ce que le fichier n'a pas, revenaient à la mise à jour suivante).
+      const remplace = pourRetourArriere(donnees, entrant, Date.now());
+      if (!(await unionValable(remplace))) return;
+      donnees = remplace;
+      appareil.modifsEnAttente = 0;
     } else {
       donnees = entrant;
       appareil.modifsEnAttente = 0;
     }
     if (!sauver()) return;
+    planifierEnvoi();  // responsable connecté : l'import part vers l'équipe (rien ne partait avant la modification suivante)
     donneesIllisibles = false;
     appareil.dernierImport = Date.now();
     demanderStockageDurable();
@@ -3820,6 +3856,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         version: Number.isInteger(c.version) ? c.version : null, // dernière version reçue du cloud
         derniereSynchro: Number.isFinite(c.derniereSynchro) ? c.derniereSynchro : 0,
         aEnvoyer: c.aEnvoyer === true,                            // modifications pas encore envoyées
+        retour: Number.isInteger(c.retour?.cible) ? { cible: c.retour.cible } : null, // retour à une version sans réponse
       };
     } catch {
       return null;
@@ -3838,6 +3875,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   let etatSynchro = '';     // '', 'encours', 'ok', 'horsligne', 'refus', 'erreur', 'retire', 'horloge'
   let erreurSynchro = '';
   let synchroEnCours = null;
+  // Vrai pendant l'appel à /api/revenir : une mise à jour qui lirait le cloud à ce moment n'y verrait pas encore le
+  // retour, oublierait c.retour et annoncerait un échec. Elle attend donc ; le bouton la relance à la fin.
+  let retourEnCours = false;
   let synchroARefaire = false;
   let minuteurEnvoi = 0;
   let ecartHorloge = 0;     // horloge de cet appareil moins celle du cloud
@@ -3917,7 +3957,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const c = cloud;
     // Une page en retard (voir donneesFutures) ne lit ni n'envoie rien : ses listes sont vides, et un responsable
     // qui les enverrait viderait tous les appareils de consultation. Tout repart au rechargement de la page.
-    if (pageEnRetard()) return;
+    if (pageEnRetard() || retourEnCours) return;
     etatSynchro = 'encours';
     rendreEntete();
     try {
@@ -3941,6 +3981,18 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           }
           const distant = clair ? valider(clair) : { familles: [], elements: [], forfaits: [] };
           majRole(c, etat.role);
+          if (c.retour) {
+            // Retour à une version resté sans réponse : arrivé au cloud (c'est sa dernière version), on le termine ;
+            // sinon (pas arrivé, ou un autre envoi depuis) on l'oublie, et la fusion normale reprend.
+            const arrive = etat.revenu_a === c.retour.cible && etat.blob;
+            if (arrive) {
+              if (!finirRetour(c, distant, etat.version)) { etatSynchro = ''; return; }
+              toast('Forfaits revenus à la version choisie');
+              continue;  // l'envoi du retour réhorodaté
+            }
+            c.retour = null;
+            toast("Le retour à une version n'a pas abouti : recommence-le si besoin.", true);
+          }
           if (c.role === 'consultation') {
             // Appareil de consultation : les données de l'équipe remplacent les siennes. Il ne peut
             // rien modifier, donc il n'a rien à garder — et un PC à l'heure fausse ne peut plus
@@ -4006,13 +4058,29 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       etatSynchro = err?.horloge ? 'horloge' : reseau ? 'horsligne' : 'erreur';
       erreurSynchro = err?.horloge ? err.message
         : reseau ? "Mise à jour injoignable : pas de réseau, ou le wifi du magasin la bloque."
-        : err?.name === 'OperationError' ? "Les données du cloud sont illisibles avec la clé de cet appareil : demande un nouveau lien au responsable."
+        : err?.name === 'OperationError' ? (c.role === 'responsable'
+          ? "Les données du cloud sont illisibles avec la clé de cet appareil : demande un nouveau lien à un autre responsable, ou reviens à une version lisible (Revenir à une version)."
+          : "Les données du cloud sont illisibles avec la clé de cet appareil : demande un nouveau lien au responsable.")
         : err?.message || String(err);
     } finally {
       if (cloud === c) sauverCloud();
       rendreEntete();
       rendreBandeaux();
     }
+  }
+
+  // Fin d'un retour à une version : on réhorodate ce paquet et on le renvoie. Sans ce renvoi, un autre appareil
+  // responsable ne fusionnerait pas (les « maj » de l'ancienne version sont plus anciens) et renverrait la fausse manœuvre.
+  function finirRetour(c, cible, version) {
+    donnees = pourRetourArriere(donnees, cible, Date.now());
+    donneesIllisibles = false;
+    if (!sauver()) return false;
+    c.retour = null;
+    c.version = version;
+    c.aEnvoyer = true;
+    sauverCloud();
+    rafraichir();
+    return true;
   }
 
   function texteHorloge() {
@@ -4252,14 +4320,25 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     champAdresse.focus();
   }
 
+  // 429 : après 5 codes de secours faux, le cloud fait attendre (1 min, puis 2, 4… jusqu'à 1 h) ; sinon,
+  // c'est le frein des requêtes trop nombreuses.
+  async function erreurTropDEssais(r) {
+    const rep = await r.json().catch(() => null);
+    if (rep?.raison !== 'code de secours bloque') return new Error('Trop de demandes au cloud : réessaie dans une minute.');
+    const s = Math.max(1, Math.round(Number(rep.attente) || 60));
+    const duree = s < 90 ? `${s} s` : `${Math.round(s / 60)} min`;
+    return new Error(`Trop de codes de secours faux : le cloud attend ${duree} avant d'en accepter un autre.`);
+  }
+
   async function premierAppareil(saisieAdresse, code, nom) {
     const adresse = adresseDeHote(String(saisieAdresse).trim().replace(/^https?:\/\//, '').replace(/\/+$/, ''));
     if (!adresseCloudOk(adresse)) throw new Error(`Adresse invalide : elle se termine par .${COMPTE_CLOUD}.workers.dev`);
-    if (code.length < 12) throw new Error('Code de secours trop court (12 caractères minimum).');
+    if (code.length < 24) throw new Error('Code de secours trop court (24 caractères minimum).');
     const r = await appelCloud(adresse, '/api/initialiser', { methode: 'POST', corps: { code_secours: code, nom } }).catch(() => null);
     if (!r) throw new Error("Cloud injoignable : vérifie l'adresse et le réseau.");
     if (r.status === 401) throw new Error('Code de secours incorrect.');
-    if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
+    if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 24 caractères. Tires-en un avec « python outils/code_secours.py » et repose-le avec « wrangler secret put CODE_SECOURS ».");
+    if (r.status === 429) throw await erreurTropDEssais(r);
     if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
     const rep = await r.json();
     if (typeof rep?.jeton !== 'string' || rep.jeton.length < 20) {
@@ -4275,7 +4354,11 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         message: "Ils sont chiffrés avec une clé que cet appareil n'a pas : impossible de les lire. Les forfaits de CET appareil peuvent les remplacer — les autres appareils devront alors être reconnectés avec un nouveau lien.",
         boutons: [{ texte: 'Remplacer', valeur: true, classe: 'btn-danger' }, { texte: 'Annuler', valeur: false }],
       });
-      if (!ok) throw new Error('Connexion annulée. Pour lire ces forfaits, connecte cet appareil avec un lien venu d’un appareil déjà connecté.');
+      if (!ok) {
+        // Le jeton existe déjà : sans ce retrait, l'appareil restait inscrit comme responsable sans clé.
+        appelCloud(adresse, '/api/moi', { methode: 'DELETE', jeton: rep.jeton }).catch(() => {});
+        throw new Error('Connexion annulée. Pour lire ces forfaits, connecte cet appareil avec un lien venu d’un appareil déjà connecté.');
+      }
     }
     // Nouvelle clé d'équipe, tirée au hasard ici. Elle ne partira jamais vers le cloud.
     const cle = enB64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -4326,6 +4409,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
               boutons: [{ texte: 'Déconnecter', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
             });
             if (!ok) return;
+            // Le cloud l'oublie aussi (sinon il comptait encore comme responsable). Sans réseau, tant pis : il reste
+            // dans « Appareils connectés », d'où un responsable peut le retirer.
+            appelCloud(cloud.adresse, '/api/moi', { methode: 'DELETE', jeton: cloud.jeton }).catch(() => {});
             cloud = null;
             etatSynchro = erreurSynchro = '';
             sauverCloud();
@@ -4430,13 +4516,18 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const liste = h('div', { class: 'menu-liste', id: 'maj-liste-appareils' }, h('p', { class: 'dlg-message' }, 'Chargement…'));
     const charge = async () => {
       try {
-        const r = await appelCloud(cloud.adresse, '/api/appareils', { jeton: cloud.jeton });
+        const [r, ri] = await Promise.all([
+          appelCloud(cloud.adresse, '/api/appareils', { jeton: cloud.jeton }),
+          appelCloud(cloud.adresse, '/api/invitations', { jeton: cloud.jeton }),
+        ]);
         if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
         const { appareils } = await r.json();
+        const invitations = ri.ok ? (await ri.json()).invitations : [];
+        // Deux appareils peuvent porter le même nom : la date d'ajout et la fin de l'identifiant les distinguent.
         liste.replaceChildren(...appareils.map((a) => h('div', { class: 'menu-mode' },
           h('div', {},
             h('strong', {}, a.nom + (a.moi ? ' (cet appareil)' : '')),
-            h('p', {}, `${a.role === 'responsable' ? 'Responsable' : 'Consultation'} · vu ${a.vu ? dateCourte(a.vu) : 'jamais'}`)),
+            h('p', {}, `${a.role === 'responsable' ? 'Responsable' : 'Consultation'}${a.cree ? ` · ajouté le ${dateCourte(a.cree)}` : ''} · vu ${a.vu ? dateCourte(a.vu) : 'jamais'} · n° ${String(a.id).slice(-4)}`)),
           h('button', {
             type: 'button', class: 'btn btn-danger', 'data-retirer': a.id,
             onclick: async () => {
@@ -4448,14 +4539,30 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
                 boutons: [{ texte: 'Retirer', valeur: true, classe: 'btn-danger' }, { texte: 'Annuler', valeur: false }],
               });
               if (!ok) return;
-              const d = await appelCloud(cloud.adresse, '/api/appareils/' + encodeURIComponent(a.id), { methode: 'DELETE', jeton: cloud.jeton });
+              const d = await appelCloud(cloud.adresse, '/api/appareils/' + encodeURIComponent(a.id), { methode: 'DELETE', jeton: cloud.jeton })
+                .catch(() => null);
+              if (!d) { await informer('Impossible', "Cloud injoignable : rien n'a été retiré. Réessaie avec du réseau."); return; }
               if (d.status === 409) { await informer('Impossible', "C'est le dernier appareil responsable : connecte-en un autre avant de retirer celui-ci, sinon personne ne pourra plus modifier les forfaits."); return; }
               if (!d.ok) { await informer('Impossible', `Le cloud a répondu ${d.status}.`); return; }
               toast(`« ${a.nom} » retiré`);
               if (a.moi) { retirerCetAppareil(); dlg.close(); return; }
               charge();
             },
-          }, 'Retirer'))));
+          }, 'Retirer'))),
+        ...(invitations.length ? [h('h3', { class: 'titre-recap' }, 'Liens pas encore utilisés')] : []),
+        ...invitations.map((l) => h('div', { class: 'menu-mode' },
+          h('div', {},
+            h('strong', {}, `Lien ${l.role === 'responsable' ? 'responsable' : 'consultation'}${l.nom ? ` pour « ${l.nom} »` : ''}`),
+            h('p', {}, `${l.usages > 1 ? `Encore ${l.usages} appareils · ` : ''}créé par ${l.par || 'un responsable'} · valable jusqu'au ${fmtDateHeure.format(new Date(l.expire))}`)),
+          h('button', {
+            type: 'button', class: 'btn btn-danger', 'data-annuler-lien': l.id,
+            onclick: async () => {
+              const d = await appelCloud(cloud.adresse, '/api/invitations/' + l.id, { methode: 'DELETE', jeton: cloud.jeton }).catch(() => null);
+              if (!d?.ok && d?.status !== 404) { await informer('Impossible', d ? `Le cloud a répondu ${d.status}.` : 'Cloud injoignable : vérifie le réseau.'); return; }
+              toast('Lien annulé : il ne connecte plus personne');
+              charge();
+            },
+          }, 'Annuler le lien'))));
         if (!appareils.length) liste.replaceChildren(h('p', { class: 'dlg-message' }, 'Aucun appareil.'));
       } catch (err) {
         liste.replaceChildren(h('p', { class: 'msg-erreur', role: 'alert' }, err?.reseau ? 'Cloud injoignable : vérifie le réseau.' : err.message));
@@ -4463,7 +4570,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     };
     const dlg = ouvrirDialogue({
       titre: 'Appareils connectés',
-      corps: [h('p', { class: 'dlg-message' }, 'Retirer un appareil coupe son accès tout de suite. Sa copie des forfaits s’efface à sa prochaine ouverture avec du réseau.'), liste],
+      corps: [h('p', { class: 'dlg-message' }, 'Retirer un appareil coupe son accès tout de suite. Sa copie des forfaits s’efface à sa prochaine ouverture avec du réseau. Un lien envoyé au mauvais destinataire s’annule ici.'), liste],
       pied: [h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Fermer')],
     });
     charge();
@@ -4489,31 +4596,38 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
                 boutons: [{ texte: 'Revenir', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
               });
               if (!ok || pageEnRetard()) return;
-              const avant = donnees;
-              const p = await appelCloud(cloud.adresse, '/api/revenir', { methode: 'POST', jeton: cloud.jeton, corps: { version: v.version } });
-              if (!p.ok) { await informer('Impossible', `Le cloud a répondu ${p.status}.`); return; }
-              // Cette version remonte comme une nouvelle : on la relit, on la réhorodate, puis on la
-              // renvoie. Sans ce renvoi, un autre appareil responsable ne fusionnerait pas (les « maj »
-              // de l'ancienne version sont plus anciens) et renverrait la fausse manœuvre.
-              cloud.version = null;
-              cloud.aEnvoyer = false;
+              if (synchroEnCours) await synchroEnCours;  // une mise à jour déjà partie finit d'abord
+              const c = cloud;
+              if (!c || pageEnRetard()) return;
+              retourEnCours = true;
+              // Noté AVANT d'appeler : si la réponse se perd, la mise à jour suivante finit le retour (voir uneSynchro).
+              c.retour = { cible: v.version };
+              c.version = null;
+              c.aEnvoyer = false;
               sauverCloud();
-              const recu = await appelCloud(cloud.adresse, '/api/donnees', { jeton: cloud.jeton });
-              const etat = recu.ok ? await recu.json() : null;
-              if (!etat?.blob) {
-                await informer('Impossible', "Le cloud a accepté le retour mais ne rend pas encore la version : réessaie dans un instant.");
-                return;
+              try {
+                const p = await appelCloud(c.adresse, '/api/revenir', { methode: 'POST', jeton: c.jeton, corps: { version: v.version } });
+                if (!p.ok) {
+                  c.retour = null;
+                  sauverCloud();
+                  await informer('Impossible', `Le cloud a répondu ${p.status}.`);
+                  return;
+                }
+                const rep = await p.json();
+                if (cloud !== c) return;
+                if (!finirRetour(c, valider(await dechiffrer(rep.blob, c.cle)), rep.version)) return;
+                dlg.close();
+                toast('Forfaits revenus à la version choisie');
+              } catch (err) {
+                // Coupure : le cloud a peut-être fait le retour. La prochaine mise à jour le vérifie et le termine.
+                retourEnCours = false;
+                await informer('Retour pas terminé', err?.reseau
+                  ? "Le réseau a coupé pendant le retour. La prochaine mise à jour le terminera s'il est arrivé au cloud ; sinon, recommence-le."
+                  : err.message);
+              } finally {
+                retourEnCours = false;
+                if (cloud === c) synchroniser();  // l'envoi du retour réhorodaté, ou la vérification après une coupure
               }
-              donnees = pourRetourArriere(avant, valider(await dechiffrer(etat.blob, cloud.cle)), Date.now());
-              donneesIllisibles = false;
-              if (!sauver()) return;
-              cloud.version = etat.version;
-              cloud.aEnvoyer = true;
-              sauverCloud();
-              rafraichir();
-              dlg.close();
-              toast('Forfaits revenus à la version choisie');
-              synchroniser();
             },
           }, 'Revenir'))));
         if (!versions.length) liste.replaceChildren(h('p', { class: 'dlg-message' }, 'Aucune version enregistrée.'));
@@ -4542,7 +4656,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         try {
           const r = await appelCloud(cloud.adresse, '/api/tout', { methode: 'DELETE', jeton: cloud.jeton, codeSecours: champCode.value });
           if (r.status === 401) throw new Error('Code de secours incorrect.');
-          if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 12 caractères. Repose-le avec « wrangler secret put CODE_SECOURS ».");
+          if (r.status === 503) throw new Error("Le cloud refuse : son code de secours fait moins de 24 caractères. Tires-en un avec « python outils/code_secours.py » et repose-le avec « wrangler secret put CODE_SECOURS ».");
+          if (r.status === 429) throw await erreurTropDEssais(r);
           if (!r.ok) throw new Error(`Le cloud a répondu ${r.status}.`);
           cloud = null;
           etatSynchro = erreurSynchro = '';

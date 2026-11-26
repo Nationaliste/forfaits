@@ -28,6 +28,8 @@ NAVIGATEURS = os.environ.get("NAVIGATEURS", "chromium,msedge,firefox").split(","
 CONNECT_SRC = b"connect-src 'self' https://*.a-remplir.workers.dev"
 WRANGLER = "wrangler@4.157.0"
 CODE_SECOURS = "code-de-secours-des-tests"
+# Après 5 codes de secours faux, le cloud fait attendre 1 min (puis 2, 4…) : ramené à 1,5 s pour les essais (DEV seulement).
+ATTENTE_SECOURS_TESTS = 1500
 
 
 # Les fichiers que la page et son service worker demandent vraiment (voir `FICHIERS` dans sw.js) : rien d'autre n'est servi.
@@ -236,7 +238,7 @@ def cloud():
     adresse = f"http://127.0.0.1:{port}"
     commande = (
         f"pnpm dlx {WRANGLER} dev --port {port} --inspector-port {_port_libre()} "
-        f"--var DEV:1 --var CODE_SECOURS:{CODE_SECOURS}"
+        f"--var DEV:1 --var CODE_SECOURS:{CODE_SECOURS} --var ATTENTE_SECOURS_MS:{ATTENTE_SECOURS_TESTS}"
     )
     journal = (RACINE / "captures" / "wrangler-tests.log").open("w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(

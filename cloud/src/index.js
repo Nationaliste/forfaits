@@ -15,13 +15,22 @@ const SEAU_CAPACITE = 30; // requêtes sans jeton valable d'affilée (de quoi é
 const SEAU_PAR_MINUTE = 10; // ...puis 10 par minute : un inconnu ne peut plus brûler le quota de stockage du compte
 const SEAU_LARGE_CAPACITE = 120; // frein de tout appelant, jeton valable compris (20 appareils qui se synchronisent passent)
 const SEAU_LARGE_PAR_MINUTE = 60;
-const SOURCES_MAX = 200; // seaux gardés en mémoire : au-delà on repart à neuf
+const SOURCES_MAX = 200; // seaux gardés en mémoire : au-delà, on oublie la source la moins récente
 const CORPS_COURT = 4096; // appairage et secours : deux champs courts, jamais un paquet de forfaits
 const VU_INTERVALLE = 3_600_000; // « vu le » noté une fois par heure au plus (économise les écritures)
 const TOMBE_MS = 90 * 86_400_000; // on se souvient 90 jours d'un appareil retiré, pour qu'il s'efface
 const ROLES = ['responsable', 'consultation'];
 const LIMITE_CORPS = MAX_CORPS + 4096; // marge pour l'enveloppe JSON autour du paquet
-const CODE_SECOURS_MIN = 12; // le minimum de la page ne protège pas : un attaquant n'exécute pas la page
+// Le code de secours ouvre un accès responsable complet : il se tire au hasard (outils/code_secours.py,
+// 29 caractères). Le minimum de la page ne protège pas : un attaquant n'exécute pas la page.
+const CODE_SECOURS_MIN = 24;
+// Frein du code de secours, COMMUN à toutes les sources et gardé dans le stockage : changer d'adresse,
+// attendre que l'objet s'endorme ou porter un jeton n'y change rien. Après ESSAIS_SECOURS_LIBRES échecs
+// d'affilée, chaque essai attend 1 min, puis 2, 4… jusqu'à 1 h : une vingtaine d'essais par jour. Le
+// responsable qui a vraiment perdu ses appareils attend au pire une heure ; le bon code remet à zéro.
+const ESSAIS_SECOURS_LIBRES = 5;
+const ATTENTE_SECOURS_MS = 60_000;
+const ATTENTE_SECOURS_MAX = 3_600_000;
 
 /* ---------- petits outils ---------- */
 
@@ -67,6 +76,20 @@ function blobValide(blob) {
     tailleBase64(blob) >= MIN_CHIFFRE
   );
 }
+
+// Source d'une requête pour le frein. Une adresse IPv6 se change à volonté à l'intérieur de son /64
+// (chaque box en reçoit au moins un) : on freine donc le /64 entier, pas l'adresse.
+function sourceDe(ip) {
+  if (!ip) return 'sans-source';
+  if (!ip.includes(':')) return ip;
+  const [debut, fin = ''] = ip.toLowerCase().split('::');
+  const avant = debut ? debut.split(':') : [];
+  const apres = fin ? fin.split(':') : [];
+  const groupes = [...avant, ...Array(Math.max(0, 8 - avant.length - apres.length)).fill('0'), ...apres];
+  return groupes.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
+
+const numeroVersion = (e) => (typeof e === 'number' ? e : e.v);
 
 const nomPropre = (v) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40) : '');
 
@@ -174,11 +197,12 @@ export default {
 };
 
 /* ---------- le Durable Object : tout l'état de l'équipe ----------
-   etat          : { version, blob, enregistre_le, par }
-   hist          : [versions gardées]        hist:<n>     : { blob, date, par }
+   etat          : { version, blob, enregistre_le, par, revenu_a }
+   hist          : [{ v, date, par, taille }] (anciennes entrées : numéros)   hist:<n> : { blob, date, par }
    app:<id>      : { emp, role, nom, cree, vu }
    jeton:<emp>   : <id>                      retire:<emp> : date (pour que l'appareil s'efface)
-   inv:<emp>     : { role, usages, expire, nom, par } (par = l'appareil qui l'a émise)        */
+   inv:<emp>     : { role, usages, total, expire, cree, nom, par } (par = l'appareil qui l'a émise)
+   secours:echecs : { n, dernier } (frein commun du code de secours)                             */
 
 export class Equipe {
   constructor(ctx, env) {
@@ -195,11 +219,13 @@ export class Equipe {
   // dimensionnés pour l'équipe entière. Sans en-tête de source (wrangler dev), tout le monde
   // partage un seau, comme avant : jamais plus permissif que l'ancien comportement.
   freine(request, capacite, parMinute, nom) {
-    const source = request.headers.get('CF-Connecting-IP') || 'sans-source';
-    // Un attaquant qui change d'adresse ne doit pas nous remplir la mémoire. Repartir à neuf ne
-    // profite qu'aux appelants honnêtes (leur seau revient plein).
-    if (this.seaux.size > SOURCES_MAX) this.seaux.clear();
+    const source = sourceDe(request.headers.get('CF-Connecting-IP'));
     const siens = this.seaux.get(source) || {};
+    // Rangée en dernier : la Map garde l'ordre d'arrivée, donc la première est la moins récente.
+    this.seaux.delete(source);
+    // Un attaquant qui change d'adresse ne doit pas nous remplir la mémoire : on oublie la source la
+    // moins récente, une seule. Tout vider rendait un seau plein à une source épuisée.
+    if (this.seaux.size >= SOURCES_MAX) this.seaux.delete(this.seaux.keys().next().value);
     const seau = siens[nom] || { jetons: capacite, dernier: Date.now() };
     const maintenant = Date.now();
     seau.jetons = Math.min(capacite, seau.jetons + ((maintenant - seau.dernier) * parMinute) / 60_000);
@@ -246,18 +272,70 @@ export class Equipe {
     return json(503, { erreur: 'configuration du serveur', raison: 'le code de secours du Worker est trop court' });
   }
 
+  // Contrôle du code de secours, freiné PAR SOURCE (adresse, /64 en IPv6 : voir sourceDe) et gardé dans le
+  // stockage (voir ESSAIS_SECOURS_LIBRES). Un compteur commun à tous laissait n'importe qui, sans jeton, tenir la
+  // récupération bloquée pour de bon : 5 essais vides, puis un à chaque fin d'attente. Par source, il ne bloque
+  // que lui ; et deviner un code de 124 bits reste hors de portée, même réparti sur beaucoup d'adresses.
+  // Rend la réponse de refus, ou null si le code est le bon. Pendant l'attente, la réponse ne dit rien du code
+  // (429, même pour le bon) : sinon le frein ne freinerait rien. Une écriture par échec seulement (quota gratuit).
+  async refusSecours(code, source) {
+    const mal = this.codeSecoursInvalide();
+    if (mal) return mal;
+    // Comparé AVANT de lire le compteur : entre la lecture et l'écriture, plus aucune attente hors du stockage
+    // (le Durable Object laisserait passer d'autres requêtes, qui liraient le même compte et en perdraient).
+    // Le résultat ne sert qu'après le contrôle de l'attente : pendant un blocage, il ne dit toujours rien.
+    const bon = await memeSecret(code, this.env.CODE_SECOURS);
+    // { source: { n, dernier } }. L'ancienne forme (un seul compteur { n, dernier }) est oubliée.
+    const lu = await this.ctx.storage.get('secours:echecs');
+    const tous = Object.fromEntries(Object.entries(lu && typeof lu === 'object' ? lu : {})
+      .filter(([, e]) => e && typeof e === 'object' && Number.isInteger(e.n) && Number.isFinite(e.dernier)));
+    const echecs = tous[source] || null;
+    if (echecs && echecs.n >= ESSAIS_SECOURS_LIBRES) {
+      // Réglable en essai local seulement (DEV), pour que les tests n'attendent pas une minute.
+      const base = this.env.DEV === '1' && Number(this.env.ATTENTE_SECOURS_MS) > 0 ? Number(this.env.ATTENTE_SECOURS_MS) : ATTENTE_SECOURS_MS;
+      const attente = Math.min(base * 2 ** (echecs.n - ESSAIS_SECOURS_LIBRES), ATTENTE_SECOURS_MAX);
+      const reste = echecs.dernier + attente - Date.now();
+      if (reste > 0) {
+        const secondes = Math.ceil(reste / 1000);
+        return json(429, { erreur: 'trop d essais', raison: 'code de secours bloque', attente: secondes }, { 'Retry-After': String(secondes) });
+      }
+    }
+    if (!bon) {
+      tous[source] = { n: (echecs?.n || 0) + 1, dernier: Date.now() };
+      // Mémoire bornée : au-delà, les sources les moins récentes sont oubliées (seule la leur en profite).
+      const cles = Object.keys(tous).sort((a, b) => tous[a].dernier - tous[b].dernier);
+      for (const k of cles.slice(0, Math.max(0, cles.length - SOURCES_MAX))) delete tous[k];
+      await this.ctx.storage.put('secours:echecs', tous);
+      return this.refus('code de secours incorrect');
+    }
+    if (echecs) {
+      delete tous[source];
+      if (Object.keys(tous).length) await this.ctx.storage.put('secours:echecs', tous);
+      else await this.ctx.storage.delete('secours:echecs');
+    }
+    return null;
+  }
+
   async etat() {
     return (await this.ctx.storage.get('etat')) || { version: 0, blob: null, enregistre_le: null, par: null };
   }
 
-  async enregistrer(blob, nom) {
+  // hist : les versions gardées, de la plus ancienne à la plus récente, { v, date, par, taille } —
+  // « Revenir à une version » lit cette seule clé au lieu des 10 paquets entiers (jusqu'à 14 Mo, porte
+  // d'entrée de l'objet fermée pendant ce temps). Les entrées écrites avant étaient de simples numéros.
+  // revenuA : numéro de la version reprise par « Revenir à une version » (null pour un envoi normal) ;
+  // l'appareil qui a demandé le retour s'en sert pour le terminer si la réponse s'est perdue.
+  async enregistrer(blob, nom, revenuA = null) {
     const etat = await this.etat();
-    const nouveau = { version: etat.version + 1, blob, enregistre_le: new Date().toISOString(), par: nom };
+    const nouveau = { version: etat.version + 1, blob, enregistre_le: new Date().toISOString(), par: nom, revenu_a: revenuA };
     const hist = (await this.ctx.storage.get('hist')) || [];
-    hist.push(nouveau.version);
-    await this.ctx.storage.put('hist:' + nouveau.version, { blob, date: nouveau.enregistre_le, par: nom });
-    while (hist.length > VERSIONS_GARDEES) await this.ctx.storage.delete('hist:' + hist.shift());
-    await this.ctx.storage.put({ etat: nouveau, hist });
+    hist.push({ v: nouveau.version, date: nouveau.enregistre_le, par: nom, taille: tailleBase64(blob) });
+    const ecrire = { etat: nouveau, hist, ['hist:' + nouveau.version]: { blob, date: nouveau.enregistre_le, par: nom } };
+    const perimees = [];
+    while (hist.length > VERSIONS_GARDEES) perimees.push('hist:' + numeroVersion(hist.shift()));
+    // Une seule écriture groupée (et une suppression) au lieu d'une suite d'appels séparés.
+    await this.ctx.storage.put(ecrire);
+    if (perimees.length) await this.ctx.storage.delete(perimees);
     return nouveau;
   }
 
@@ -288,8 +366,11 @@ export class Equipe {
       return json(429, { erreur: 'trop de requetes' });
     }
     const qui = await this.appareilDe(request);
-    // Sans jeton valable, un second frein plus serré : c'est le chemin qui mène à un jeton.
-    if (qui.statut !== 'ok' && this.freine(request, SEAU_CAPACITE, SEAU_PAR_MINUTE, 'serre')) {
+    // Sans jeton valable, un second frein plus serré : c'est le chemin qui mène à un jeton. Le code de
+    // secours y passe aussi AVEC un jeton (celui de n'importe quel vendeur ouvrait 86 400 essais par jour).
+    // « Tout effacer » demande déjà un jeton responsable ET le code : le frein commun du code suffit.
+    const serre = qui.statut !== 'ok' || chemin === '/api/initialiser';
+    if (serre && this.freine(request, SEAU_CAPACITE, SEAU_PAR_MINUTE, 'serre')) {
       return json(429, { erreur: 'trop de requetes' });
     }
     if (qui.statut === 'retire') return this.refus('retire'); // sur ce motif, l'appli efface ses forfaits
@@ -308,14 +389,17 @@ export class Equipe {
       }
       if (inv.usages <= 1) await this.ctx.storage.delete(cle);
       else await this.ctx.storage.put(cle, { ...inv, usages: inv.usages - 1 });
-      return json(200, await this.creerAppareil(inv.role, nomPropre(demande.nom) || inv.nom));
+      // Lien de lot sans nom choisi par l'appareil : tous portaient le même nom, et retirer « le bon »
+      // dans la liste devenait une devinette. Ils sont numérotés dans l'ordre d'arrivée.
+      const total = Number.isInteger(inv.total) ? inv.total : 1;
+      const nom = nomPropre(demande.nom) || (total > 1 ? `${inv.nom || 'Appareil'} ${total - inv.usages + 1}` : inv.nom);
+      return json(200, await this.creerAppareil(inv.role, nom));
     }
 
     if (chemin === '/api/initialiser' && methode === 'POST') {
-      const mal = this.codeSecoursInvalide();
-      if (mal) return mal;
       const demande = await lireJson(request, CORPS_COURT);
-      if (!(await memeSecret(demande?.code_secours, this.env.CODE_SECOURS))) return this.refus('code de secours incorrect');
+      const refus = await this.refusSecours(demande?.code_secours, sourceDe(request.headers.get('CF-Connecting-IP')));
+      if (refus) return refus;
       return json(200, await this.creerAppareil('responsable', nomPropre(demande.nom) || 'Responsable'));
     }
 
@@ -353,9 +437,14 @@ export class Equipe {
       if (!patron) return this.refus('lecture seule', false);
       const hist = (await this.ctx.storage.get('hist')) || [];
       const lignes = [];
-      for (const v of [...hist].reverse()) {
-        const h = await this.ctx.storage.get('hist:' + v);
-        if (h) lignes.push({ version: v, date: h.date, par: h.par, taille: tailleBase64(h.blob) });
+      for (const e of [...hist].reverse()) {
+        if (typeof e !== 'number') {
+          lignes.push({ version: e.v, date: e.date, par: e.par, taille: e.taille });
+          continue;
+        }
+        // Entrée écrite avant la taille mémorisée : il faut encore lire son paquet (elles partent seules au fil des envois).
+        const h = await this.ctx.storage.get('hist:' + e);
+        if (h) lignes.push({ version: e, date: h.date, par: h.par, taille: tailleBase64(h.blob) });
       }
       return json(200, { versions: lignes, version: (await this.etat()).version });
     }
@@ -366,8 +455,10 @@ export class Equipe {
       const h = Number.isInteger(demande?.version) ? await this.ctx.storage.get('hist:' + demande.version) : null;
       if (!h) return json(404, { erreur: 'version introuvable' });
       // On remet l'ancien contenu comme une NOUVELLE version : les autres appareils le voient arriver.
-      const nouveau = await this.enregistrer(h.blob, app.nom);
-      return json(200, { version: nouveau.version, revenu_a: demande.version });
+      const nouveau = await this.enregistrer(h.blob, app.nom, demande.version);
+      // Le paquet repart dans la réponse : l'appareil n'a pas à le relire (un appel de moins qui peut
+      // échouer), et un autre responsable qui enverrait entre-temps ne peut pas se glisser à sa place.
+      return json(200, { version: nouveau.version, revenu_a: demande.version, blob: h.blob });
     }
 
     if (chemin === '/api/invitation' && methode === 'POST') {
@@ -381,7 +472,9 @@ export class Equipe {
       await this.ctx.storage.put('inv:' + (await empreinte(code)), {
         role,
         usages,
+        total: usages, // pour numéroter les appareils d'un lot
         expire,
+        cree: Date.now(),
         nom: nomPropre(demande?.nom),
         par: id, // pour que retirer cet appareil annule les liens qu'il a émis
       });
@@ -397,6 +490,45 @@ export class Equipe {
       }
       liste.sort((x, y) => (y.vu || 0) - (x.vu || 0));
       return json(200, { appareils: liste });
+    }
+
+    // Liens d'appairage encore valables : un lien parti chez le mauvais destinataire (24 h, 20 appareils)
+    // ne s'annulait qu'en retirant l'appareil qui l'avait créé. L'identifiant montré est le début de
+    // l'empreinte : il désigne le lien sans rien dire du code.
+    if (chemin === '/api/invitations' && methode === 'GET') {
+      if (!patron) return this.refus('lecture seule', false);
+      const invs = await this.ctx.storage.list({ prefix: 'inv:' });
+      const apps = await this.ctx.storage.list({ prefix: 'app:' });
+      const liste = [];
+      const perimees = [];
+      for (const [cle, inv] of invs) {
+        if (inv.expire < Date.now()) { perimees.push(cle); continue; }
+        liste.push({ id: cle.slice(4, 20), role: inv.role, usages: inv.usages, expire: inv.expire, cree: inv.cree || null, nom: inv.nom, par: apps.get('app:' + inv.par)?.nom || '' });
+      }
+      if (perimees.length) await this.ctx.storage.delete(perimees);
+      liste.sort((x, y) => x.expire - y.expire);
+      return json(200, { invitations: liste });
+    }
+
+    if (chemin.startsWith('/api/invitations/') && methode === 'DELETE') {
+      if (!patron) return this.refus('lecture seule', false);
+      const debut = chemin.slice('/api/invitations/'.length);
+      if (!/^[0-9a-f]{16}$/.test(debut)) return json(404, { erreur: 'lien introuvable' });
+      const trouvees = [...(await this.ctx.storage.list({ prefix: 'inv:' + debut })).keys()];
+      if (!trouvees.length) return json(404, { erreur: 'lien introuvable' });
+      await this.ctx.storage.delete(trouvees);
+      return json(200, { annule: debut });
+    }
+
+    // L'appareil se retire lui-même (« Déconnecter », ou premier appareil qui renonce à remplacer le
+    // cloud) : sans ça, son jeton restait valable et il comptait encore comme responsable, ce qui
+    // désarmait la garde du dernier responsable. Pas de marque de retrait : il ne doit rien effacer.
+    if (chemin === '/api/moi' && methode === 'DELETE') {
+      // Ses liens d'appairage partent avec lui, comme pour un appareil retiré.
+      const invs = await this.ctx.storage.list({ prefix: 'inv:' });
+      const siens = [...invs].filter(([, inv]) => inv.par === id).map(([cle]) => cle);
+      await this.ctx.storage.delete(['app:' + id, 'jeton:' + app.emp, ...siens]);
+      return json(200, { retire: id });
     }
 
     if (chemin.startsWith('/api/appareils/') && methode === 'DELETE') {
@@ -424,12 +556,18 @@ export class Equipe {
 
     if (chemin === '/api/tout' && methode === 'DELETE') {
       if (!patron) return this.refus('lecture seule', false);
-      const mal = this.codeSecoursInvalide();
-      if (mal) return mal;
-      if (!(await memeSecret(request.headers.get('X-Code-Secours'), this.env.CODE_SECOURS))) {
-        return this.refus('code de secours incorrect');
-      }
+      const refus = await this.refusSecours(request.headers.get('X-Code-Secours'), sourceDe(request.headers.get('CF-Connecting-IP')));
+      if (refus) return refus;
+      // Les marques de retrait survivent : un appareil retiré resté éteint doit encore s'effacer en se
+      // rallumant (après un effacement complet, le cloud lui répondait « inconnu » et il gardait tout).
+      const tombes = await this.ctx.storage.list({ prefix: 'retire:' });
       await this.ctx.storage.deleteAll();
+      if (tombes.size) {
+        const toutes = [...tombes];
+        // 128 clés au plus par écriture groupée.
+        for (let i = 0; i < toutes.length; i += 128) await this.ctx.storage.put(Object.fromEntries(toutes.slice(i, i + 128)));
+        await this.ctx.storage.setAlarm(Date.now() + TOMBE_MS);
+      }
       this.seaux.clear(); // le frein fait partie de « tout »
       return json(200, { efface: true });
     }

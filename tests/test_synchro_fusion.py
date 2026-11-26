@@ -267,26 +267,38 @@ def pack_zorba():
 def test_un_pack_qui_ne_differe_que_par_son_cache_ne_repart_pas_au_cloud(cloud_vide, appareils_maj):
     """Le prix d'un pack est un cache recalculé sur chaque appareil, et il entre dans canonique : comparé tel quel
     (apporte, remplacerParEquipe), un cache vieilli dans le cloud faisait renvoyer le pack, ou annoncer une mise à jour
-    qui ne changeait rien."""
+    qui ne changeait rien. Deux responsables aux mêmes données ne s'envoient rien, même avec ce paquet-là."""
     patron = appareils_maj()
     poser_donnees(patron.page, forfaits=[forfait("fft-zorba", "ZORBA 1"), pack_zorba()])
     connecter_premier(patron.page, cloud_vide)
+    second = appareils_maj()
+    connecter_avec_lien(second.page, creer_lien(patron.page, role="Responsable"))
+    attendre_forfait(second.page, "PK-ZORBA")
     vendeur = appareils_maj()
     connecter_avec_lien(vendeur.page, creer_lien(patron.page))
     attendre_forfait(vendeur.page, "PK-ZORBA")
+    # Les deux responsables ont les mêmes données : un tour de plus de chacun n'écrit rien au cloud.
+    calme = sonde(cloud_vide)["version"]
+    verifier_maintenant(patron.page)
+    verifier_maintenant(second.page)
+    assert sonde(cloud_vide)["version"] == calme
 
     # Les mêmes données, sauf le cache du pack (un appareil qui ne l'avait pas encore recalculé). Le vrai cache vaut
     # 10000 HT : à date égale, celui de l'appareil gagne le départage de canonique, donc il repartait au cloud.
-    vieilli = donnees(patron.page)
+    # Pris chez le second responsable, dernier à avoir envoyé (ses familles d'exemples, sans drapeau, partent) : le
+    # paquet garde ainsi l'ordre des listes du cloud, que l'appareil de consultation compare aussi.
+    vieilli = donnees(second.page)
     p = next(f for f in vieilli["forfaits"] if f["id"] == "pck-zorba")
     p["ht"], p["ttc"] = 1, 1
     version = envoyer_au_cloud(cloud_vide, patron.page.evaluate(CHIFFRER, [CLE_CLOUD, vieilli]))
 
-    for a in (patron, vendeur):
+    for a in (patron, second, vendeur):
         a.page.evaluate(NOTER_LES_MESSAGES)
         verifier_maintenant(a.page)
+    for a in (patron, second):
+        verifier_maintenant(a.page)  # un tour de plus : toujours rien à envoyer
     assert sonde(cloud_vide)["version"] == version  # rien n'est reparti au cloud
-    for a in (patron, vendeur):
+    for a in (patron, second, vendeur):
         messages = a.page.evaluate("window.__messages")
         assert not any("mis à jour" in m for m in messages), messages
         expect(ttc_de(a.page, "PK-ZORBA")).to_contain_text("120,00")

@@ -15,7 +15,7 @@ Il n'y a pas encore de lien : l'adresse et le code de secours se tapent à la ma
 1. Ouvre l'outil → **Menu** → **Mise à jour automatique** → **Premier appareil**.
 2. **Adresse** : `<nom-du-worker>.<compte>.workers.dev` (sans `https://`).
 3. **Code de secours** : celui tiré au déploiement (`python outils/code_secours.py`, 29 caractères en
-   5 groupes). Le cloud refuse un code de moins de 24 caractères. Après 5 codes faux depuis une même connexion, il
+   5 groupes). Jamais un code inventé ou retenu de tête : c'est son hasard qui protège le cloud. Le cloud refuse un code de moins de 24 caractères. Après 5 codes faux depuis une même connexion, il
    fait attendre celle-là (pas les autres)
    1 minute avant l'essai suivant, puis 2, 4… jusqu'à 1 heure (le bon code remet le compteur à zéro).
 4. **Nom de cet appareil** : par exemple « PC du responsable ».

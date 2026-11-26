@@ -6,7 +6,8 @@
 # faux lien d'appairage ne peut pas détourner un appareil vers un autre cloud.
 #
 # Déploiement :  cd cloud && pnpm dlx wrangler@4.157.0 deploy
-# Code de secours (jamais dans le dépôt) :
+# Code de secours (jamais dans le dépôt) : TIRÉ par « python outils/code_secours.py », jamais inventé
+# (le Worker ne contrôle que sa longueur ; c'est son hasard qui protège de la devinette) :
 #                cd cloud && pnpm dlx wrangler@4.157.0 secret put CODE_SECOURS
 
 name = "nom-a-choisir"

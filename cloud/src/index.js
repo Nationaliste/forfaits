@@ -24,10 +24,11 @@ const LIMITE_CORPS = MAX_CORPS + 4096; // marge pour l'enveloppe JSON autour du 
 // Le code de secours ouvre un accès responsable complet : il se tire au hasard (outils/code_secours.py,
 // 29 caractères). Le minimum de la page ne protège pas : un attaquant n'exécute pas la page.
 const CODE_SECOURS_MIN = 24;
-// Frein du code de secours, COMMUN à toutes les sources et gardé dans le stockage : changer d'adresse,
-// attendre que l'objet s'endorme ou porter un jeton n'y change rien. Après ESSAIS_SECOURS_LIBRES échecs
-// d'affilée, chaque essai attend 1 min, puis 2, 4… jusqu'à 1 h : une vingtaine d'essais par jour. Le
-// responsable qui a vraiment perdu ses appareils attend au pire une heure ; le bon code remet à zéro.
+// Frein du code de secours, PAR SOURCE (adresse, /64 en IPv6 : voir sourceDe et refusSecours) et gardé dans le
+// stockage : attendre que l'objet s'endorme ou porter un jeton n'y change rien. Après ESSAIS_SECOURS_LIBRES échecs
+// d'affilée depuis une source, chacun de ses essais attend 1 min, puis 2, 4… jusqu'à 1 h : une vingtaine d'essais par
+// jour et par source. Les autres sources ne sont pas touchées : le responsable qui a vraiment perdu ses appareils
+// n'attend que s'il s'est lui-même trompé ; le bon code remet sa source à zéro.
 const ESSAIS_SECOURS_LIBRES = 5;
 const ATTENTE_SECOURS_MS = 60_000;
 const ATTENTE_SECOURS_MAX = 3_600_000;
@@ -202,7 +203,7 @@ export default {
    app:<id>      : { emp, role, nom, cree, vu }
    jeton:<emp>   : <id>                      retire:<emp> : date (pour que l'appareil s'efface)
    inv:<emp>     : { role, usages, total, expire, cree, nom, par } (par = l'appareil qui l'a émise)
-   secours:echecs : { n, dernier } (frein commun du code de secours)                             */
+   secours:echecs : { <source>: { n, dernier } } (frein du code de secours, par source)          */
 
 export class Equipe {
   constructor(ctx, env) {
@@ -276,6 +277,10 @@ export class Equipe {
   // stockage (voir ESSAIS_SECOURS_LIBRES). Un compteur commun à tous laissait n'importe qui, sans jeton, tenir la
   // récupération bloquée pour de bon : 5 essais vides, puis un à chaque fin d'attente. Par source, il ne bloque
   // que lui ; et deviner un code de 124 bits reste hors de portée, même réparti sur beaucoup d'adresses.
+  // Limite voulue : au-delà de SOURCES_MAX sources, les moins récentes sont oubliées, donc qui dispose de plus de
+  // 200 adresses retrouve des essais libres. Ce compteur ne protège donc pas seul de la devinette : elle tient au
+  // hasard du code (tiré par outils/code_secours.py, jamais inventé : le Worker n'en contrôle que la longueur) et au
+  // seau « serre » de fetch. Il sert à ce qu'un tricheur ne bloque que lui.
   // Rend la réponse de refus, ou null si le code est le bon. Pendant l'attente, la réponse ne dit rien du code
   // (429, même pour le bon) : sinon le frein ne freinerait rien. Une écriture par échec seulement (quota gratuit).
   async refusSecours(code, source) {
@@ -368,7 +373,7 @@ export class Equipe {
     const qui = await this.appareilDe(request);
     // Sans jeton valable, un second frein plus serré : c'est le chemin qui mène à un jeton. Le code de
     // secours y passe aussi AVEC un jeton (celui de n'importe quel vendeur ouvrait 86 400 essais par jour).
-    // « Tout effacer » demande déjà un jeton responsable ET le code : le frein commun du code suffit.
+    // « Tout effacer » demande déjà un jeton responsable ET le code : le frein du code (par source) suffit.
     const serre = qui.statut !== 'ok' || chemin === '/api/initialiser';
     if (serre && this.freine(request, SEAU_CAPACITE, SEAU_PAR_MINUTE, 'serre')) {
       return json(429, { erreur: 'trop de requetes' });

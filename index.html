@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-GAjP6daCvPuw7B4CfwIyOVu/PxDsMuOiwrfjPLnWN/E='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-YcxevZYeZ5+ct9j4huwIzQGmI4eFaUhivvyAN/LzGHk='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -370,6 +370,7 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 .total-ligne-nom { font: 600 14px/1.3 var(--police-titre); color: var(--texte-fort); overflow-wrap: anywhere; }
 .total-ligne-prix { font: 600 14px var(--police-titre); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .total-ligne-prix small { display: block; font: 400 12px var(--police); color: var(--texte-doux); } /* le HT de la ligne, sous son TTC */
+.total-ligne-ecart { grid-column: 1 / -1; font-size: 13px; line-height: 1.3; color: var(--ambre); } /* prix gardé ≠ prix du jour */
 .total-ligne-commandes { grid-column: 1 / -1; display: flex; align-items: center; gap: 2px; }
 .total-ligne-commandes .btn-icone { width: var(--h-ligne, 30px); height: var(--h-ligne, 30px); background: var(--surface-2); color: var(--texte); }
 .total-ligne-commandes .btn-icone svg.i { width: 14px; height: 14px; }
@@ -405,6 +406,11 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
   opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .2s ease, transform .25s var(--sortie);
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+/* Sans largeur à lui, le message (posé à left: 50 %) se serre dans la moitié de l'écran et passe à la ligne. */
+.toast { width: max-content; }
+/* « Annuler » après une suppression : le bouton à droite du message, cliquable tant qu'il se voit. */
+.toast.avec-action { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 18px; text-align: left; }
+.toast.avec-action.visible { pointer-events: auto; }
 /* Dans une fenêtre ouverte, le message passe en haut : le bas porte ses boutons. */
 dialog > .toast { top: 16px; bottom: auto; transform: translate(-50%, -12px); }
 dialog > .toast.visible { transform: translate(-50%, 0); }
@@ -799,6 +805,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const RECENTS_MAX = 4;           // derniers forfaits consultés (par appareil, jamais exporté)
   const TOTAL_MAX = 50;            // lignes du total (par appareil, jamais exporté)
   const QTE_MAX = 99;
+  const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
@@ -884,8 +891,36 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // « 1 234,50 € » : espace insécable classique, car certaines polices n'affichent pas l'espace fine.
   const formatPrix = (centimes) => fmtEuro.format(centimes / 100).replace(/ /g, ' ');
   const prixSaisie = (centimes) => (centimes / 100).toFixed(2).replace('.', ','); // « 1234,50 »
-  const ttcDepuisHt = (ht) => Math.round(ht * (1 + TVA));
-  const htDepuisTtc = (ttc) => Math.round(ttc / (1 + TVA));
+  // Arrondi pareil des deux côtés de zéro : une remise de 50 € HT vaut −60 € TTC, comme 50 € vaut 60 €.
+  const ttcDepuisHt = (ht) => Math.sign(ht) * Math.round(Math.abs(ht) * (1 + TVA));
+  const htDepuisTtc = (ttc) => Math.sign(ttc) * Math.round(Math.abs(ttc) / (1 + TVA));
+  // Ligne libre du total : un moins devant (« -50 », « − 50 ») en fait une remise, un prix négatif.
+  function lirePrixLibre(saisie) {
+    const t = String(saisie ?? '').trim();
+    const moins = /^[-−]/.test(t);
+    const v = lirePrix(moins ? t.slice(1) : t);
+    return v !== null && moins && v !== 0 ? -v : v; // « -0 » vaut 0 : pas de « −0,00 € » à l'écran
+  }
+  // Pourquoi une saisie n'est pas un prix (lirePrix a renvoyé null), dans un message qui dit quoi corriger.
+  function erreurPrix(saisie) {
+    const tape = String(saisie ?? '').trim();
+    let t = tape.replace(/[\s  €]/g, '').replace(/^[-−]/, '');
+    if (!t) return 'Tape un prix (exemple : 45,50).';
+    if (/[^\d.,]/.test(t)) return `« ${tape} » n'est pas un prix : seulement des chiffres et une virgule (exemple : 45,50).`;
+    const avecVirgule = t.includes(',');
+    if (avecVirgule) t = t.replace(/\./g, '').replace(',', '.');
+    const [entier, decimales = '', ...trop] = t.split('.');
+    if (trop.length || t.includes(',')) return `« ${tape} » : une seule virgule, devant les centimes, et pas de point (exemple : 1234,50).`;
+    if (!entier) return `« ${tape} » : mets un chiffre avant la virgule (exemple : 0,50).`;
+    if (decimales.length > 2) {
+      // « 12.345 » : 3 chiffres après le point. Souvent un point des milliers : on le dit.
+      const sansPoint = entier + decimales;
+      const milliers = !avecVirgule && sansPoint.length <= 7 ? ` Pour ${formatPrix(Number(sansPoint) * 100)}, tape ${sansPoint}, sans point.` : '';
+      return `« ${tape} » : 2 chiffres au plus après la virgule.${milliers}`;
+    }
+    if (entier.length > 7) return `« ${tape} » : ${formatPrix(PRIX_MAX)} au maximum.`;
+    return 'Tape un prix (exemple : 45,50).';
+  }
   const dateCourte = (ms) => fmtDate.format(new Date(ms));
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
@@ -1164,12 +1199,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     }
   }
   // Une ligne du total : forfait (id) ou ligne libre (id null), prix en centimes mémorisés à l'ajout.
+  // Mêmes bornes qu'à la saisie (PRIX_MAX) : une ligne acceptée ne doit pas disparaître au rechargement.
+  // Une ligne libre peut être négative (remise), HT et TTC du même signe ; un forfait, jamais.
   function lireLigneTotal(l) {
     if (!l || typeof l !== 'object') return null;
-    const centimes = (v) => Number.isInteger(v) && v >= 0 && v <= 99999999;
+    const centimes = (v) => Number.isInteger(v) && Math.abs(v) <= PRIX_MAX;
     const nom = typeof l.nom === 'string' ? l.nom.trim().slice(0, 80) : '';
     if (!nom || !centimes(l.ht) || !centimes(l.ttc) || !Number.isInteger(l.qte) || l.qte < 1 || l.qte > QTE_MAX) return null;
     const id = typeof l.id === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(l.id) ? l.id : null;
+    if ((l.ht < 0 || l.ttc < 0) && (id || l.ht > 0 || l.ttc > 0)) return null;
     return { id, nom, qte: l.qte, ht: l.ht, ttc: l.ttc };
   }
   function sauverAppareil() {
@@ -1325,9 +1363,11 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     for (const e of elsActifs) for (const s of surnomsDe.get(e.id) || []) parNom.set(norm(s), [e]);
     const elementsForfait = new Map();
     const champs = new Map();
+    const motsRefDes = new Map(); // un nom d'élément tapé trouve aussi la référence ou la désignation qui l'écrit
     for (const f of forfaits) {
       const els = fams.map((fam) => elParId.get(f.elements[fam.id])).filter((e, i) => e && e.familleId === fams[i].id);
       elementsForfait.set(f.id, els);
+      motsRefDes.set(f.id, [motsPlats(f.ref), motsPlats(f.designation)]);
       champs.set(f.id, [
         norm(f.ref), norm(f.designation),
         ...(surnomsDe.get(f.id) || []).map(norm),
@@ -1353,7 +1393,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       for (const s of surnomsDe.get(f.id) || []) retenirMot(s);
       for (const mot of decouper(f.designation)) retenirMot(mot);
     }
-    return { fams, famParId, elsActifs, elParId, parNom, forfaits, forfaitParId, elementsForfait, champs, surnomPris, surnomsDe, motsConnus };
+    return { fams, famParId, elsActifs, elParId, parNom, forfaits, forfaitParId, elementsForfait, champs, motsRefDes, surnomPris, surnomsDe, motsConnus };
   }
 
   const elementsDe = (familleId) => index.elsActifs.filter((e) => e.familleId === familleId);
@@ -1372,27 +1412,53 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
      ===================================================================== */
   const etatUi = { filtres: new Map(), suggestions: [], nbMotsSuggestion: 0, suggestionActive: -1, actif: false, choisi: null, premier: true };
 
-  const decouper = (texte) => texte.split(/[\s,;+]+/).filter((m) => norm(m) !== '');
+  // La virgule sépare deux mots, sauf dans un prix tapé (« 1140,50 », « 1.140,50 ») : il reste un seul mot.
+  const decouper = (texte) => texte.split(/[\s;+]+/)
+    .flatMap((m) => (/^\d[\d.]*,\d{1,2}€?$/.test(m) ? [m] : m.split(','))).filter((m) => norm(m) !== '');
 
-  // Découpe la recherche en contraintes. Un nom d'élément tapé en entier (« 3Q », « T1 DEMO »,
-  // « t1demo ») devient un filtre exact sur cet élément ; tout le reste cherche un morceau de
-  // texte dans la référence, la désignation et les éléments. Chaque contrainte réduit la liste.
+  // Mots « à plat » d'une référence ou d'une désignation : « CABLE T2 » → ['cable', 't2'].
+  const motsPlats = (texte) => String(texte ?? '').split(/[^\p{L}\p{N}]+/u).map(norm).filter(Boolean);
+  // Vrai si des mots qui se suivent forment exactement `cle` (« t1demo » dans « Taximètre T1 DEMO »).
+  // Mots entiers seulement : « 3q » ne se trouve pas dans « 13Q ».
+  function suiteDeMots(mots, cle) {
+    for (let i = 0; i < mots.length; i++) {
+      let suite = '';
+      for (let j = i; j < mots.length && suite.length < cle.length; j++) {
+        suite += mots[j];
+        if (suite === cle) return true;
+      }
+    }
+    return false;
+  }
+
+  // Découpe la recherche en contraintes ; chacune réduit la liste. Un nom ou un surnom d'élément tapé
+  // en entier (« 3Q », « T1 DEMO », « t1demo ») trouve les forfaits qui ont cet élément, plus ceux dont
+  // la référence ou la désignation l'écrit en mots entiers (« CABLE T2 » pour « t2 ») ; pas ceux qui ont
+  // seulement un autre élément qui le contient (« 3Q » ne ramène pas un élément « 13Q »). Tout le reste
+  // cherche un morceau de texte dans la référence, la désignation, les surnoms et les éléments.
+  // Un mot qui se lit comme un prix (« 1140 », « 1140,50 ») trouve en plus les forfaits dont le TTC
+  // ou le HT vaut exactement ce montant.
   function analyserRecherche(texte) {
-    const mots = decouper(texte).map(norm);
+    const bruts = decouper(texte);
+    const mots = bruts.map(norm);
     const contraintes = [];
     let i = 0;
     while (i < mots.length) {
       let reconnu = false;
       for (let j = mots.length; j > i; j--) {
-        const elements = index.parNom.get(mots.slice(i, j).join(''));
+        const valeur = mots.slice(i, j).join('');
+        const elements = index.parNom.get(valeur);
         if (elements) {
-          contraintes.push({ type: 'element', ids: new Set(elements.map((e) => e.id)) });
+          contraintes.push({ type: 'element', ids: new Set(elements.map((e) => e.id)), valeur, prix: j === i + 1 ? lirePrix(bruts[i]) : null });
           i = j;
           reconnu = true;
           break;
         }
       }
-      if (!reconnu) contraintes.push({ type: 'texte', valeur: mots[i++] });
+      if (!reconnu) {
+        contraintes.push({ type: 'texte', valeur: mots[i], prix: lirePrix(bruts[i]) });
+        i++;
+      }
     }
     return { mots, contraintes };
   }
@@ -1405,7 +1471,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     }
     const champs = index.champs.get(forfait.id);
     for (const c of contraintes) {
-      if (c.type === 'element' ? !els.some((e) => c.ids.has(e.id)) : !champs.some((ch) => ch.includes(c.valeur))) return false;
+      const trouve = c.type === 'element'
+        ? els.some((e) => c.ids.has(e.id)) || index.motsRefDes.get(forfait.id).some((mots) => suiteDeMots(mots, c.valeur))
+        : champs.some((ch) => ch.includes(c.valeur));
+      if (!trouve && !(c.prix !== null && (forfait.ttc === c.prix || forfait.ht === c.prix))) return false;
     }
     return true;
   }
@@ -2057,24 +2126,31 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   /* ---------- Total : additionner plusieurs forfaits, pièces ou services (par appareil, jamais exporté) ---------- */
   const sommeTotal = () => appareil.total.reduce((s, l) => ({ ht: s.ht + l.ht * l.qte, ttc: s.ttc + l.ttc * l.qte }), { ht: 0, ttc: 0 });
-  const nbArticlesTotal = () => appareil.total.reduce((n, l) => n + l.qte, 0);
+  const nbArticlesTotal = () => appareil.total.reduce((n, l) => (l.ttc < 0 ? n : n + l.qte), 0); // une remise n'est pas un article
   const qteDansTotal = (f) => appareil.total.find((l) => l.id === f.id)?.qte || 0;
+
+  // Le forfait vaut-il autre chose que le prix mémorisé par sa ligne du total ? (null : supprimé, ou ligne libre)
+  const prixChange = (l) => {
+    const f = l.id ? index.forfaitParId.get(l.id) : null;
+    return f && (f.ttc !== l.ttc || f.ht !== l.ht) ? f : null;
+  };
 
   // Renvoie la ligne touchée, ou null si l'ajout est refusé.
   function ajouterAuTotal(f) {
     let ligne = appareil.total.find((l) => l.id === f.id);
     if (ligne) {
       if (ligne.qte >= QTE_MAX) { toast(`${QTE_MAX} au maximum pour ${f.ref}`, true); return null; }
-      ligne.qte += 1; // le prix reste celui de la première fois : les unités déjà comptées ne changent pas
+      ligne.qte += 1; // le prix reste celui de la première fois : les unités déjà comptées ne changent pas (la ligne le dit)
     } else {
       if (appareil.total.length >= TOTAL_MAX) { toast(`${TOTAL_MAX} lignes au maximum : ouvre le total et retire-en`, true); return null; }
-      ligne = { id: f.id, nom: f.ref, qte: 1, ht: f.ht, ttc: f.ttc };
+      // Son nom, comme sur sa rangée : la désignation, ou la référence s'il n'en a pas.
+      ligne = { id: f.id, nom: (f.designation || f.ref).replace(/\s+/g, ' ').trim().slice(0, 80), qte: 1, ht: f.ht, ttc: f.ttc };
       appareil.total.push(ligne);
     }
     sauverAppareil();
     rendreTotal(ligne);
     majQuantites(f.id);
-    toast(`${f.ref} ajouté au total${ligne.qte > 1 ? ` (×${ligne.qte})` : ''}`);
+    toast(`${f.ref} ajouté au total${ligne.qte > 1 ? ` (×${ligne.qte})` : ''}${prixChange(ligne) ? `, à l'ancien prix (${formatPrix(ligne.ttc)} TTC)` : ''}`);
     return ligne;
   }
 
@@ -2127,13 +2203,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         h('h2', { tabindex: dansFeuille ? -1 : null }, 'Total'), h('span', {}, pluriel(nbArticlesTotal(), 'article')),
         dansFeuille ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => $('dlg-total').close() }, icone('croix')) : null),
       h('ul', { class: 'total-lignes' }, appareil.total.map((l, i) => {
+        const nouveau = prixChange(l);
         const li = h('li', { class: 'total-ligne' },
           h('span', { class: 'total-ligne-nom' }, l.nom),
           h('span', { class: 'total-ligne-prix' }, formatPrix(l.ttc * l.qte), h('small', {}, `${formatPrix(l.ht * l.qte)} HT`)),
+          // Le prix gardé est voulu (ce qui est compté ne bouge pas), mais il doit se voir.
+          nouveau ? h('span', { class: 'total-ligne-ecart' },
+            `Ancien prix : le forfait vaut maintenant ${formatPrix(nouveau.ttc)} TTC (${formatPrix(nouveau.ht)} HT). Retire la ligne pour le nouveau prix.`) : null,
           h('span', { class: 'total-ligne-commandes' },
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
-            h('span', { class: 'total-qte', role: 'status', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}, quantité ${l.qte}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
+            // Pas de zone role=status : le total est recréé à chaque appui, et une zone neuve n'est pas annoncée.
+            // La quantité est dans le nom du « − » et du « + », où le focus revient après l'appui.
+            h('span', { class: 'total-qte' }, String(l.qte)),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}, quantité ${l.qte}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
             l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
             h('button', { type: 'button', class: 'btn-icone total-retirer', 'data-cmd': 'retirer', 'data-i': i, 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, icone('croix'))));
         if (l !== ajoutee) li.style.animation = 'none';
@@ -2217,25 +2299,34 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const nom = h('input', { class: 'champ', maxlength: 80, placeholder: 'Nom (pièce, service…)', 'aria-label': 'Nom de la ligne libre' });
     const ht = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix HT', 'aria-label': 'Prix HT de la ligne libre' });
     const ttc = h('input', { class: 'champ', inputmode: 'decimal', placeholder: 'Prix TTC', 'aria-label': 'Prix TTC de la ligne libre' });
-    ht.addEventListener('input', () => { const v = lirePrix(ht.value); ttc.value = v === null ? '' : prixSaisie(ttcDepuisHt(v)); });
-    ttc.addEventListener('input', () => { const v = lirePrix(ttc.value); ht.value = v === null ? '' : prixSaisie(htDepuisTtc(v)); });
+    ht.addEventListener('input', () => { const v = lirePrixLibre(ht.value); ttc.value = v === null ? '' : prixSaisie(ttcDepuisHt(v)); });
+    ttc.addEventListener('input', () => { const v = lirePrixLibre(ttc.value); ht.value = v === null ? '' : prixSaisie(htDepuisTtc(v)); });
     const erreur = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
     const dlg = ouvrirDialogue({
       titre: 'Ligne libre',
       corps: h('div', { class: 'total-libre' },
-        h('p', { class: 'aide-texte' }, "Une pièce ou un service qui n'est pas un forfait : tape un des deux prix, l'autre se calcule."),
+        h('p', { class: 'aide-texte' }, "Une pièce ou un service qui n'est pas un forfait : tape un des deux prix, l'autre se calcule. Pour une remise, mets un moins devant (-50)."),
         nom, h('div', { class: 'total-libre-prix' }, ht, ttc), erreur),
       pied: [
         h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Terminé'),
         h('button', { type: 'submit', class: 'btn btn-rouge' }, icone('plus'), 'Ajouter à la liste'),
       ],
       surEnvoi: () => {
-        const prixHt = lirePrix(ht.value);
-        const prixTtc = lirePrix(ttc.value);
+        const prixHt = lirePrixLibre(ht.value);
+        const prixTtc = lirePrixLibre(ttc.value);
         erreur.textContent = '';
-        if (prixHt === null || prixTtc === null) { erreur.textContent = 'Tape un prix (exemple : 45,50).'; (prixHt === null ? ht : ttc).focus(); return; }
+        if (prixHt === null || prixTtc === null) {
+          // Le champ mal écrit (l'autre est resté vide, faute de prix à calculer), sinon le premier vide.
+          const fautif = [ht, ttc].find((c) => c.value.trim() && lirePrixLibre(c.value) === null) || (prixHt === null ? ht : ttc);
+          erreur.textContent = erreurPrix(fautif.value);
+          fautif.focus();
+          return;
+        }
         if (appareil.total.length >= TOTAL_MAX) { erreur.textContent = `${TOTAL_MAX} lignes au maximum : retires-en une.`; return; }
-        const ligne = { id: null, nom: nom.value.trim().slice(0, 80) || 'Divers', qte: 1, ht: prixHt, ttc: prixTtc };
+        // HT et TTC se calculent l'un de l'autre, mais l'un peut être retouché ensuite : pas de ligne à moitié
+        // négative (la relecture des données de l'appareil la refuserait).
+        if (Math.sign(prixHt) * Math.sign(prixTtc) < 0) { erreur.textContent = 'Le HT et le TTC doivent avoir le même signe.'; ht.focus(); return; }
+        const ligne = { id: null, nom: nom.value.trim().slice(0, 80) || (prixTtc < 0 ? 'Remise' : 'Divers'), qte: 1, ht: prixHt, ttc: prixTtc };
         appareil.total.push(ligne);
         sauverAppareil();
         nom.value = ht.value = ttc.value = '';
@@ -2343,17 +2434,29 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   // Le message s'affiche dans la fenêtre ouverte, s'il y en a une : derrière elle, on ne le verrait
   // pas et un lecteur d'écran ne l'annoncerait pas (le reste de la page est mis hors d'usage).
+  // `action` ({ texte, faire }) : un bouton dans le message (« Annuler » après une suppression) ;
+  // le message reste alors 8 s, et tant que le clavier est sur son bouton.
   const elToast = $('toast');
   let minuteurToast = 0;
-  function toast(message, erreur = false) {
+  function toast(message, erreur = false, action = null) {
     const ouvertes = document.querySelectorAll('dialog[open]');
     const hote = ouvertes[ouvertes.length - 1] || document.body;
     if (elToast.parentNode !== hote) hote.append(elToast);
-    elToast.textContent = message;
+    elToast.replaceChildren(message, ...(action ? [h('button', {
+      type: 'button', class: 'btn btn-blanc', onclick: (ev) => { ev.currentTarget.blur(); cacherToast(); action.faire(); },
+    }, action.texte)] : []));
     elToast.classList.toggle('erreur', erreur);
+    elToast.classList.toggle('avec-action', Boolean(action));
     elToast.classList.add('visible');
     clearTimeout(minuteurToast);
-    minuteurToast = setTimeout(() => elToast.classList.remove('visible'), 3000);
+    minuteurToast = setTimeout(cacherToast, action ? 8000 : 3000);
+  }
+  function cacherToast() {
+    clearTimeout(minuteurToast);
+    if (elToast.contains(document.activeElement)) { minuteurToast = setTimeout(cacherToast, 1000); return; }
+    elToast.classList.remove('visible');
+    // Le bouton d'un message caché ne doit plus se prendre au clavier : il part après le fondu.
+    minuteurToast = setTimeout(() => { elToast.querySelector('button')?.remove(); elToast.classList.remove('avec-action'); }, 250);
   }
   // La fenêtre se ferme : le message en cours retourne dans la page.
   document.addEventListener('close', (ev) => {
@@ -2512,7 +2615,23 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     if (!sauver()) return;
     noterModif();
     rafraichir();
-    toast(`Forfait ${f.ref} supprimé`);
+    toast(`Forfait ${f.ref} supprimé`, false, { texte: 'Annuler', faire: () => annulerSuppression(f.id) });
+  }
+
+  // « Annuler » du message de suppression : le forfait revient avec une date plus récente que sa
+  // suppression (remplacer), donc la fusion le fait revenir aussi sur un appareil qui l'a déjà reçue.
+  function annulerSuppression(id) {
+    if (lectureSeule()) return;
+    const actuel = donnees.forfaits.find((x) => x.id === id);
+    if (!actuel?.supprime) return;
+    if (index.forfaits.some((x) => memeRef(x.ref, actuel.ref))) { toast(`Impossible : un autre forfait porte déjà la référence ${actuel.ref}`, true); return; }
+    const rendu = { ...actuel, maj: Date.now() };
+    delete rendu.supprime;
+    remplacer(donnees.forfaits, rendu);
+    if (!sauver()) return;
+    noterModif();
+    rafraichir();
+    toast(`Forfait ${actuel.ref} rétabli`);
   }
 
   // Marque supprimés les forfaits EXEMPLE, puis les éléments d'exemple devenus inutiles et jamais retouchés (maj 0). Les appareils

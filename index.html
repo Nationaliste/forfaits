@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EOvM8FkiNeyOAqERuPNZs1AxxEhsXgPw4kI3pXvc16s='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EiwYj5b/1ivhHPyqxLCw1yeyLC/FZz2U0CwhiNDc3Ds='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -258,6 +258,10 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 .carte-prix { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; white-space: nowrap; font-family: var(--police-titre); font-variant-numeric: tabular-nums; }
 .prix-ttc { font-size: 19px; font-weight: 700; letter-spacing: -.015em; color: var(--rouge-vif); }
 .prix-ht { margin-top: 2px; font-size: 12.5px; color: var(--texte-doux); }
+/* Pack : une marque sobre à côté du nom (pas une pastille pleine : celle-ci veut dire « choisi »). */
+.badge-pack { display: inline-block; margin-right: 7px; padding: 1px 5px; border: 1.5px solid var(--trait-fort); border-radius: 4px; font: 700 10.5px/1.3 var(--police); letter-spacing: .07em; text-transform: uppercase; vertical-align: 2px; color: var(--texte-doux); }
+.fiche-tete .badge-pack { margin-right: 6px; vertical-align: 0; }
+.prix-revoir { margin-top: 3px; font: 600 12px/1.2 var(--police); color: var(--ambre); }
 
 /* La référence est toujours une pilule : un clic la copie. */
 .btn-copier {
@@ -350,6 +354,13 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 .ttc-grand { display: block; font: 700 42px/1 var(--police-titre); letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--rouge-vif); white-space: nowrap; }
 .ttc-grand small { margin-left: 8px; font: 700 13px/1 var(--police); letter-spacing: 0; }
 .ht-fiche { display: block; margin-top: 6px; font: 500 15px/1.2 var(--police-titre); font-variant-numeric: tabular-nums; color: var(--texte-doux); }
+/* Pack : chaque ligne est un arrêt, son montant à droite ; le terminus garde le total. */
+.trajet .ligne-pack > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: baseline; }
+.trajet .ligne-pack .fam, .trajet .ligne-pack .el { grid-column: 1; }
+.trajet .ligne-pack .fam.revoir { color: var(--ambre); }
+.ligne-pack-prix { grid-column: 2; grid-row: 1 / span 2; align-self: center; font: 600 15px/1.2 var(--police-titre); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--texte-fort); }
+.ligne-pack-prix small { margin-left: 4px; font: 600 11px/1 var(--police); color: var(--texte-doux); }
+.prix-revoir-fiche { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; color: var(--ambre); }
 .fiche-gestes { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
 /* Marges serrées : une référence de 13 caractères tient à côté du bouton dans le panneau (324 px). */
 .fiche-gestes .btn { position: relative; flex: 0 0 auto; min-height: 46px; padding: 0 14px 0 10px; }
@@ -385,8 +396,10 @@ svg.marque-favori { width: 14px; height: 14px; margin-right: 5px; vertical-align
 .total-somme dt.s-ttc-t { color: var(--rouge-vif); }
 .total-somme .roule { display: inline-block; animation: roule .28s var(--sortie); }
 @keyframes roule { from { opacity: 0; transform: translateY(45%); } }
-.total-boutons { display: flex; gap: 8px; }
+.total-boutons { display: flex; flex-wrap: wrap; gap: 8px; }
 .total-boutons .btn { flex: 1; padding: 0 8px; font-size: 14px; }
+.total-boutons .btn-pack { flex-basis: 100%; }
+.total-pack { margin: 0; padding: 0 18px 4px; font-size: 13px; font-weight: 600; color: var(--ambre); }
 .barre-total {
   position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 45; max-width: 560px; margin: 0 auto;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 14px; min-height: 54px; padding: 8px 20px;
@@ -426,6 +439,8 @@ dialog > .toast.visible { transform: translate(-50%, 0); }
   }
   .panneau { scrollbar-width: thin; }
   .panneau .fiche { flex: 0 0 auto; }
+  /* Fiche d'un pack (jusqu'à 50 lignes) : elle se serre et défile à son tour, sinon elle poussait le total hors de l'écran. */
+  .panneau .fiche:has(.trajet-pack) { flex: 0 1 auto; min-height: 200px; overflow: auto; scrollbar-width: thin; }
   /* Le total se serre avant de sortir de l'écran : ses lignes défilent, les sommes restent visibles. */
   .panneau .total { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 240px; overflow: hidden; }
   .panneau .total-lignes { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; }
@@ -812,7 +827,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const FORFAITS_MAX = 5000;       // forfaits affichés (non supprimés) ; à 20 000, l'ouverture prenait 40 s
   const FORFAITS_TOTAL_MAX = 20000; // marques de suppression comprises (elles s'accumulent)
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
-  const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
+  const VERSION_FORMAT = 3;        // 2 : surnoms des éléments et des forfaits ; 3 : packs (`contenu` d'un forfait)
+  const NIVEAUX_PACK = 3;          // un pack dans un pack dans un pack, pas plus (au-delà, ou en boucle : prix « à revoir »)
+  const ELEMENTS_PACK_MAX = 100;   // éléments montrés (et filtrés) par pack : sans plafond, un fichier bricolé en donnait 20 000 à chacun
   const VERSION_OUTIL = '1.0';
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
   const TAUX_TVA = `${Math.round(TVA * 100)} %`;
@@ -1068,7 +1085,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         id: id(x.id), ref: texte(x.ref, 80), designation: texte(x.designation, 2000),
         ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x), ...avecSurnoms(lireSurnoms(x.surnoms)),
       };
-      if (!f.supprime && (!f.ref || prix(x.ht) === null || prix(x.ttc) === null)) echec(`Fichier abîmé : forfait « ${f.ref || '?'} » invalide.`);
+      // Pack (version 3) : ses lignes ont la forme d'une ligne du total, sans ligne négative (pas de remise sur un pack).
+      // Son ht/ttc n'est qu'un cache, recalculé par recalculerPacks : il peut manquer dans un fichier fait à la main.
+      if (x.contenu !== undefined) {
+        const lignes = Array.isArray(x.contenu) && x.contenu.length >= 1 && x.contenu.length <= TOTAL_MAX ? x.contenu.map(lireLigneTotal) : [null];
+        if (lignes.some((l) => !l || l.ht < 0 || l.ttc < 0)) echec(`Fichier abîmé : pack « ${f.ref || '?'} » invalide.`);
+        f.contenu = lignes;
+      }
+      if (!f.supprime && (!f.ref || (!f.contenu && (prix(x.ht) === null || prix(x.ttc) === null)))) echec(`Fichier abîmé : forfait « ${f.ref || '?'} » invalide.`);
       return f;
     });
     return { familles, elements, forfaits };
@@ -1141,6 +1165,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       refuserFutur();
       return false;
     }
+    // Cache de prix des packs juste dans le stockage, quel que soit le chemin qui a remplacé les données (« Remplacer
+    // tout », synchro, retour à une version) : sinon il gardait celui du fichier jusqu'au prochain enregistrement.
+    recalculerPacks(donnees);
     try {
       localStorage.setItem(CLE_DONNEES, JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, ...donnees }));
       stockageOk = true;
@@ -1174,7 +1201,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   function chargerAppareil() {
-    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [] };
+    const defaut = { modeModif: false, modifsEnAttente: 0, dernierExport: 0, dernierImport: 0, theme: 'sombre', texte: 'normal', tri: 'ref', favoris: [], recents: [], ordreFams: [], usageElements: {}, usageForfaits: {}, surnoms: {}, total: [], totalPack: null };
     const estId = (v) => typeof v === 'string' && /^[a-z]{2,6}-[a-z0-9-]{1,64}$/.test(v);
     const compteurs = (v) => Object.fromEntries(v && typeof v === 'object' && !Array.isArray(v)
       ? Object.entries(v).filter(([id, n]) => estId(id) && Number.isInteger(n) && n > 0).slice(0, USAGE_MAX) : []);
@@ -1192,6 +1219,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         surnoms: Object.fromEntries(lu.surnoms && typeof lu.surnoms === 'object' && !Array.isArray(lu.surnoms)
           ? Object.entries(lu.surnoms).filter(([id]) => estId(id)).map(([id, v]) => [id, lireSurnoms(v)]).filter(([, v]) => v.length).slice(0, USAGE_MAX) : []),
         total: Array.isArray(lu.total) ? lu.total.map(lireLigneTotal).filter(Boolean).slice(0, TOTAL_MAX) : [],
+        // Pack dont le contenu a été rechargé dans le total (« Modifier » sur sa fiche) : « Enregistrer » le met à jour.
+        totalPack: estId(lu.totalPack) ? lu.totalPack : null,
         modeModif: lu.modeModif === true,
         modifsEnAttente: Number.isInteger(lu.modifsEnAttente) && lu.modifsEnAttente > 0 ? lu.modifsEnAttente : 0,
         dernierExport: Number.isFinite(lu.dernierExport) ? lu.dernierExport : 0,
@@ -1265,6 +1294,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const gagne = (x, actuel) => x.maj > actuel.maj || (x.maj === actuel.maj && canonique(x) > canonique(actuel));
 
   // Fusion de deux jeux de données : pour chaque enregistrement, la version la plus récente gagne.
+  // Les packs de l'union sont des copies dont le cache de prix est déjà recalculé sur l'union : tout appelant
+  // (import, synchro) l'a sans y penser, et ni `local` ni `entrant` ne sont touchés.
   function fusionner(local, entrant) {
     const resultat = {};
     for (const cle of ['familles', 'elements', 'forfaits']) {
@@ -1275,8 +1306,56 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       }
       resultat[cle] = [...parId.values()];
     }
+    resultat.forfaits = resultat.forfaits.map(copiePack);
+    recalculerPacks(resultat);
     return resultat;
   }
+  const copiePack = (f) => (f.contenu ? { ...f } : f);
+
+  // Prix des packs : un cache, recalculé ici, qui ne touche JAMAIS à `maj` (sinon deux appareils se renverraient
+  // le même pack à chaque fusion). Ligne avec id : le prix du forfait, relu dans `source` (un pack imbriqué est
+  // recalculé, sur NIVEAUX_PACK niveaux en tout) ; forfait disparu, pack trop profond ou en boucle : le prix noté
+  // sur la ligne sert de secours et le pack est « à revoir ». Ligne sans id (pièce, service) : son prix noté fait foi.
+  // Le calcul ne dépend que des contenus et des prix des forfaits ordinaires, jamais de l'ordre des listes ni des
+  // caches : deux appareils qui ont les mêmes données trouvent le même prix. Mémorisé par (pack, niveaux restants),
+  // donc borné même pour un fichier bricolé (5 000 packs de 50 lignes qui se contiennent l'un l'autre).
+  // Renvoie l'ensemble des identifiants de packs à revoir.
+  function recalculerPacks(d, source = d) {
+    const parId = new Map();
+    for (const f of source.forfaits) if (!f.supprime) parId.set(f.id, f);
+    const memo = new Map();
+    const somme = (p, niveaux) => {
+      let ht = 0, ttc = 0, revoir = false;
+      for (const l of p.contenu) {
+        let lht = l.ht, lttc = l.ttc;
+        const f = l.id ? parId.get(l.id) : null;
+        if (l.id && !f) revoir = true;
+        else if (f?.contenu) {
+          if (niveaux <= 1) revoir = true;
+          else {
+            const cle = f.id + ' ' + niveaux;
+            if (!memo.has(cle)) memo.set(cle, somme(f, niveaux - 1));
+            const r = memo.get(cle);
+            lht = r.ht; lttc = r.ttc; revoir ||= r.revoir;
+          }
+        } else if (f) { lht = f.ht; lttc = f.ttc; }
+        ht += lht * l.qte; ttc += lttc * l.qte;
+        // Au-delà de ce qu'un forfait peut valoir : le fichier ne se relirait plus.
+        if (ht > PRIX_MAX || ttc > PRIX_MAX) return { ht: Math.min(ht, PRIX_MAX), ttc: Math.min(ttc, PRIX_MAX), revoir: true };
+      }
+      return { ht, ttc, revoir };
+    };
+    const aRevoir = new Set();
+    for (const p of d.forfaits) {
+      if (p.supprime || !p.contenu) continue;
+      const r = somme(p, NIVEAUX_PACK);
+      p.ht = r.ht;
+      p.ttc = r.ttc;
+      if (r.revoir) aRevoir.add(p.id);
+    }
+    return aRevoir;
+  }
+  let packsARevoir = new Set(); // ceux de `donnees`, posés par construireIndex
 
   // Date de la dernière modification (0 = données d'exemple jamais touchées).
   function derniereModif(d) {
@@ -1328,6 +1407,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   let index = null;
 
   function construireIndex() {
+    // Avant tout le reste : cartes, recherche par prix, total et export lisent f.ht et f.ttc sans rien savoir des packs.
+    packsARevoir = recalculerPacks(donnees);
     // Ordre des familles : celui rangé sur cet appareil d'abord ; une famille qu'il ne connaît pas
     // encore (nouvelle, ou appareil jamais réglé) passe après, dans l'ordre des données.
     const rangAppareil = new Map(appareil.ordreFams.map((id, i) => [id, i]));
@@ -1371,12 +1452,42 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const elementsForfait = new Map();
     const champs = new Map();
     const motsRefDes = new Map(); // un nom d'élément tapé trouve aussi la référence ou la désignation qui l'écrit
+    // Un pack n'a pas d'éléments à lui : il montre (et se filtre par) ceux de ses forfaits, plusieurs par famille au
+    // besoin, sur NIVEAUX_PACK niveaux (mémorisé : borné même pour des packs qui se contiennent l'un l'autre), et au plus
+    // ELEMENTS_PACK_MAX : chaque pack de tête a sa propre liste, refaite à chaque rendu (50 lignes × 100 éléments au pire).
+    const rangEl = new Map(elsActifs.map((e, i) => [e.id, i]));
+    const memoEls = new Map();
+    const elementsVus = (f, niveaux) => {
+      if (!f.contenu) return fams.map((fam) => elParId.get(f.elements[fam.id])).filter((e, i) => e && e.familleId === fams[i].id);
+      const cle = f.id + ' ' + niveaux;
+      if (memoEls.has(cle)) return memoEls.get(cle);
+      const ids = new Set();
+      for (const l of f.contenu) {
+        const g = l.id ? forfaitParId.get(l.id) : null;
+        if (g && (!g.contenu || niveaux > 1)) for (const e of elementsVus(g, niveaux - 1)) ids.add(e.id);
+      }
+      const els = [...ids].sort((a, b) => rangEl.get(a) - rangEl.get(b)).slice(0, ELEMENTS_PACK_MAX).map((id) => elParId.get(id));
+      memoEls.set(cle, els);
+      return els;
+    };
+    // Référence et désignation « à plat » d'un forfait cité par des packs : calculées une fois (une désignation fait
+    // jusqu'à 2 000 caractères, et des milliers de lignes de packs peuvent citer le même forfait).
+    const plats = new Map();
+    const platsDe = (g) => {
+      if (!plats.has(g.id)) plats.set(g.id, [norm(g.ref), norm(g.designation)]);
+      return plats.get(g.id);
+    };
     for (const f of forfaits) {
-      const els = fams.map((fam) => elParId.get(f.elements[fam.id])).filter((e, i) => e && e.familleId === fams[i].id);
+      const els = elementsVus(f, NIVEAUX_PACK);
       elementsForfait.set(f.id, els);
       motsRefDes.set(f.id, [motsPlats(f.ref), motsPlats(f.designation)]);
+      // Pack : trouvé aussi par le nom de ses lignes (et la référence de ses forfaits).
+      const lignes = f.contenu ? [...new Set(f.contenu.flatMap((l) => {
+        const g = l.id ? forfaitParId.get(l.id) : null;
+        return [norm(l.nom), ...(g ? platsDe(g) : [])];
+      }))] : [];
       champs.set(f.id, [
-        norm(f.ref), norm(f.designation),
+        norm(f.ref), norm(f.designation), ...lignes,
         ...(surnomsDe.get(f.id) || []).map(norm),
         ...els.map((e) => norm(e.nom)),
         ...els.flatMap((e) => (surnomsDe.get(e.id) || []).map(norm)), // « la pe » trouve comme « zor »
@@ -1405,9 +1516,13 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   const elementsDe = (familleId) => index.elsActifs.filter((e) => e.familleId === familleId);
 
-  // Clé d'une combinaison d'éléments (sert à repérer deux forfaits identiques).
-  function cleCombinaison(elements) {
-    return Object.entries(elements)
+  // Clé d'une combinaison d'éléments (sert à repérer deux forfaits identiques). Un pack n'a pas d'éléments à lui :
+  // sa clé est son contenu trié (sinon tous les packs passeraient pour des doublons l'un de l'autre).
+  function cleCombinaison(f) {
+    if (f.contenu) {
+      return 'pack|' + f.contenu.map((l) => (l.id ? 'f:' + l.id : `l:${norm(l.nom)}:${l.ht}:${l.ttc}`) + '×' + l.qte).sort().join('|');
+    }
+    return Object.entries(f.elements)
       .filter(([fam, elt]) => index.elParId.get(elt)?.familleId === fam)
       .map(([fam, elt]) => fam + ':' + elt)
       .sort()
@@ -1473,8 +1588,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   function correspond(forfait, contraintes, filtres = etatUi.filtres) {
     const els = index.elementsForfait.get(forfait.id);
     for (const [familleId, valeur] of filtres) {
-      const present = els.find((e) => e.familleId === familleId);
-      if (valeur === SANS ? present : present?.id !== valeur) return false;
+      // Un pack peut avoir plusieurs éléments d'une même famille (ceux de ses forfaits).
+      const presents = els.filter((e) => e.familleId === familleId);
+      if (valeur === SANS ? presents.length : !presents.some((e) => e.id === valeur)) return false;
     }
     const champs = index.champs.get(forfait.id);
     for (const c of contraintes) {
@@ -1695,8 +1811,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   function choixFiltre(fam) {
     const actuel = etatUi.filtres.get(fam.id);
     const nb = (valeur) => index.forfaits.filter((f) => {
-      const present = index.elementsForfait.get(f.id).find((e) => e.familleId === fam.id);
-      return valeur === SANS ? !present : present?.id === valeur;
+      const presents = index.elementsForfait.get(f.id).filter((e) => e.familleId === fam.id);
+      return valeur === SANS ? !presents.length : presents.some((e) => e.id === valeur);
     }).length;
     const choix = [
       { valeur: undefined, nom: 'Tous' },
@@ -1938,12 +2054,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           // Titre = le nom du forfait (sa désignation) ; sans désignation, la référence fait le titre.
           h('span', { class: 'carte-nom' + (f.designation ? ' carte-designation' : '') },
             appareil.favoris.includes(f.id) ? [icone('etoile', 'marque-favori'), h('span', { class: 'sr' }, 'Favori : ')] : null,
+            f.contenu ? h('span', { class: 'badge-pack' }, 'Pack') : null,
             f.designation || f.ref))),
         elements.length || surnoms ? h('div', { class: 'carte-arrets' },
           elements.length ? h('ul', { class: 'carte-elements', role: 'list' }, elements.map((e) => h('li', { class: 'arret' },
             h('i', { class: 'pt' }), h('span', { class: 'el-famille' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el-nom' }, e.nom)))) : null,
           surnoms ? h('span', { class: 'carte-surnoms' }, `dit « ${surnoms.join(', ')} »`) : null) : null),
-      h('div', { class: 'carte-prix' }, prix('ttc', f.ttc), prix('ht', f.ht)),
+      h('div', { class: 'carte-prix' }, prix('ttc', f.ttc), prix('ht', f.ht),
+        packsARevoir.has(f.id) ? h('span', { class: 'prix-revoir' }, 'Prix à revoir') : null),
       boutonRef(f, false),
       boutonPlus(f));
     li.style.setProperty('--n', n);
@@ -1964,8 +2082,22 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       li.style.setProperty('--n', n);
       return li;
     };
+    // Pack : ses lignes sont les arrêts. Un pack imbriqué tient en une ligne (son nom et son total), sans ses propres lignes.
+    const lignesPack = (f.contenu || []).map((l, n) => {
+      const g = l.id ? index.forfaitParId.get(l.id) : null;
+      const unite = g || l; // forfait disparu : le prix noté sur la ligne, en secours
+      const note = !l.id ? 'Prix saisi' : !g ? 'Supprimé : prix à revoir' : g.contenu ? (packsARevoir.has(g.id) ? 'Pack, prix à revoir' : 'Pack') : g.designation ? g.ref : '';
+      return arret(n, 'ligne-pack',
+        h('span', { class: 'fam' + (!l.id || (g && !packsARevoir.has(g.id)) ? '' : ' revoir') }, `${l.qte} ×`, note ? ` · ${note}` : ''),
+        h('span', { class: 'el' }, g ? g.designation || g.ref : l.nom),
+        h('span', { class: 'ligne-pack-prix' }, formatPrix(unite.ttc * l.qte), h('small', {}, 'TTC')));
+    });
+    const arrets = f.contenu
+      ? lignesPack
+      : elements.map((e, n) => arret(n, null, h('span', { class: 'fam' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el' }, e.nom)));
     return h('div', { class: 'fiche-int' },
       h('div', { class: 'fiche-tete' },
+        f.contenu ? h('span', { class: 'badge-pack' }, 'Pack') : null,
         f.exemple ? h('span', { class: 'badge-exemple' }, 'Exemple') : null,
         h('span', { class: 'pousse' }),
         h('button', {
@@ -1973,17 +2105,22 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           'aria-label': `Favori : ${f.ref}`, title: 'Favori : en tête de liste sur cet appareil', onclick: () => basculerFavori(f),
         }, icone('etoile')),
         h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Surnoms de ${f.ref}`, title: 'Mon surnom', onclick: () => ouvrirSurnoms(f.id) }, icone('surnom')),
-        appareil.modeModif ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Modifier ${f.ref}`, title: 'Modifier', onclick: puis(() => ouvrirFormulaire(f)) }, icone('crayon')) : null,
+        appareil.modeModif ? h('button', {
+          type: 'button', class: 'btn-icone', 'aria-label': `Modifier ${f.ref}`, title: f.contenu ? 'Modifier ce pack dans le total' : 'Modifier',
+          onclick: puis(() => (f.contenu ? modifierPack(f) : ouvrirFormulaire(f))),
+        }, icone('crayon')) : null,
         appareil.modeModif ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': `Supprimer ${f.ref}`, title: 'Supprimer', onclick: puis(() => supprimerForfait(f)) }, icone('corbeille')) : null,
         dansFeuille ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: fermer }, icone('croix')) : null),
       h('h2', { class: 'fiche-nom', tabindex: dansFeuille ? -1 : null }, f.designation || f.ref),
       surnoms ? h('p', { class: 'fiche-surnom' }, `dit « ${surnoms.join(', ')} »`) : null,
-      h('ol', { class: 'trajet' },
-        elements.map((e, n) => arret(n, null, h('span', { class: 'fam' }, index.famParId.get(e.familleId).nom), h('span', { class: 'el' }, e.nom))),
+      h('ol', { class: 'trajet' + (f.contenu ? ' trajet-pack' : '') },
+        arrets,
         // Le terminus : le prix.
-        arret(elements.length, 'terminus',
+        arret(arrets.length, 'terminus',
           h('span', { class: 'ttc-grand' }, formatPrix(f.ttc), h('small', {}, 'TTC')),
-          h('span', { class: 'ht-fiche' }, `${formatPrix(f.ht)} HT`))),
+          h('span', { class: 'ht-fiche' }, `${formatPrix(f.ht)} HT`),
+          packsARevoir.has(f.id) ? h('span', { class: 'prix-revoir-fiche' },
+            `Prix à revoir : un forfait de ce pack a été supprimé, ou il contient des packs sur plus de ${NIVEAUX_PACK} niveaux. Le montant affiché reprend les derniers prix connus.`) : null)),
       h('div', { class: 'fiche-gestes' },
         boutonRef(f, true),
         h('button', { type: 'button', class: 'btn btn-rouge btn-total', onclick: () => { if (ajouterAuTotal(f)) consulter(f); } },
@@ -2157,7 +2294,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     sauverAppareil();
     rendreTotal(ligne);
     majQuantites(f.id);
-    toast(`${f.ref} ajouté au total${ligne.qte > 1 ? ` (×${ligne.qte})` : ''}${prixChange(ligne) ? `, à l'ancien prix (${formatPrix(ligne.ttc)} TTC)` : ''}`);
+    toast(`${f.ref} ajouté au total${ligne.qte > 1 ? ` (×${ligne.qte})` : ''}${prixChange(ligne) ? `, à l'ancien prix (${formatPrix(ligne.ttc)} TTC)` : ''}${packsARevoir.has(f.id) ? ' (prix du pack à revoir)' : ''}`);
     return ligne;
   }
 
@@ -2200,15 +2337,18 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       });
       if (!ok) return;
       appareil.total = [];
+      appareil.totalPack = null;
       sauverAppareil();
       rendreTotal();
       majQuantites();
     };
     const { ht, ttc } = sommeTotal();
+    const packEnCours = packDuTotal();
     return [
       h('div', { class: 'total-tete' },
         h('h2', { tabindex: dansFeuille ? -1 : null }, 'Total'), h('span', {}, pluriel(nbArticlesTotal(), 'article')),
         dansFeuille ? h('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Fermer', onclick: () => $('dlg-total').close() }, icone('croix')) : null),
+      packEnCours ? h('p', { class: 'total-pack' }, `Modification du pack ${packEnCours.ref}`) : null,
       h('ul', { class: 'total-lignes' }, appareil.total.map((l, i) => {
         const nouveau = prixChange(l);
         const li = h('li', { class: 'total-ligne' },
@@ -2234,7 +2374,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           h('dt', { class: 's-ttc-t' }, 'TTC'), h('dd', { class: 's-ttc' }, h('span', { class: roule ? 'roule' : null }, formatPrix(ttc)))),
         h('div', { class: 'total-boutons' },
           h('button', { type: 'button', class: 'btn btn-bord', onclick: ouvrirLigneLibre }, icone('plus'), 'Ligne libre'),
-          h('button', { type: 'button', class: 'btn btn-nu', onclick: vider }, 'Vider')))];
+          h('button', { type: 'button', class: 'btn btn-nu', onclick: vider }, 'Vider'),
+          // Un pack est de la donnée d'équipe : en mode modification seulement.
+          appareil.modeModif ? h('button', { type: 'button', class: 'btn btn-bord btn-pack', onclick: ouvrirEnregistrerPack },
+            packEnCours ? `Enregistrer le pack ${packEnCours.ref}` : 'Enregistrer comme pack') : null))].filter(Boolean);
   }
 
   // Le total est à deux endroits, jamais en même temps : sous la fiche sur un grand écran assez haut ;
@@ -2242,6 +2385,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // grand écran peu haut). Il disparaît quand il est vide.
   function rendreTotal(ajoutee, roule = Boolean(ajoutee)) {
     const vide = appareil.total.length === 0;
+    // Total vidé (dernière ligne retirée, autre onglet) : il ne modifie plus aucun pack.
+    if (vide && appareil.totalPack) { appareil.totalPack = null; sauverAppareil(); }
     const grand = totalSousFiche();
     // Grand écran peu haut : la barre se range sous le panneau, et la fiche se serre (data-total).
     const colonne = large() && !grand;
@@ -2298,6 +2443,126 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     if (!feuille.open) feuille.showModal();
     rendreTotal();
     feuille.querySelector('h2')?.focus();
+  }
+
+  /* ---------- Packs : le total sert d'éditeur ---------- */
+  // Le pack que le total est en train de modifier (« Modifier » sur sa fiche), s'il existe encore.
+  const packDuTotal = () => {
+    const p = appareil.totalPack && appareil.total.length ? index.forfaitParId.get(appareil.totalPack) : null;
+    return p?.contenu ? p : null;
+  };
+  // Packs (actifs) qui ont une ligne de ce forfait.
+  const packsAvec = (f) => index.forfaits.filter((p) => p.contenu?.some((l) => l.id === f.id));
+
+  // « Modifier » sur la fiche d'un pack : son contenu passe dans le total, aux prix du jour, où on le retouche.
+  async function modifierPack(p) {
+    if (lectureSeule()) return;
+    const dejaLa = appareil.totalPack === p.id;
+    if (appareil.total.length && !dejaLa) {
+      const ok = await demander({
+        titre: `Modifier le pack ${p.ref} ?`,
+        message: 'Son contenu va dans le total, où tu le retouches avec − et +, puis « Enregistrer le pack ». Ton total en cours sera remplacé.',
+        boutons: [{ texte: 'Remplacer le total', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
+      });
+      if (!ok) return;
+    }
+    if (!dejaLa) {
+      appareil.total = p.contenu.map((l) => {
+        const g = l.id ? index.forfaitParId.get(l.id) : null;
+        return g ? { id: g.id, nom: (g.designation || g.ref).replace(/\s+/g, ' ').trim().slice(0, 80), qte: l.qte, ht: g.ht, ttc: g.ttc } : { ...l };
+      });
+      appareil.totalPack = p.id;
+      sauverAppareil();
+    }
+    rendreTotal(null, true);
+    majQuantites();
+    ouvrirTotal();
+    toast(`Le pack ${p.ref} est dans le total : retouche-le, puis « Enregistrer le pack »`);
+  }
+
+  // « Enregistrer comme pack » : le total devient un pack (nouveau, ou celui qu'on modifie).
+  function ouvrirEnregistrerPack() {
+    if (lectureSeule()) return;
+    const existant = packDuTotal();
+    // Pas de remise sur un pack (V1) : une ligne négative est refusée, avec son nom.
+    const negative = appareil.total.find((l) => l.ht < 0 || l.ttc < 0);
+    if (negative) {
+      informer('Pack impossible', `Un pack ne peut pas contenir de remise : retire « ${negative.nom} » du total, puis réessaie.`);
+      return;
+    }
+    if (existant && appareil.total.some((l) => l.id === existant.id)) {
+      informer('Pack impossible', `Le pack ${existant.ref} ne peut pas se contenir lui-même : retire sa ligne du total, puis réessaie.`);
+      return;
+    }
+    // Référence proposée : PACK-01, PACK-02… la première libre.
+    let n = 1;
+    while (index.forfaits.some((f) => memeRef(f.ref, `PACK-${String(n).padStart(2, '0')}`))) n++;
+    const champNom = h('input', { id: 'p-nom', class: 'champ', maxlength: 2000, autocomplete: 'off', value: existant?.designation ?? '', placeholder: 'Pack nuit complet' });
+    const champRef = h('input', { id: 'p-ref', class: 'champ', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', value: existant?.ref ?? `PACK-${String(n).padStart(2, '0')}` });
+    const erreur = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
+    // Lignes du pack aux prix d'aujourd'hui : une ligne du total peut garder l'ancien prix de son forfait (voulu dans
+    // le total), mais le pack, lui, suivra le prix actuel ; c'est aussi son prix de secours si le forfait disparaît.
+    const lignesPack = () => appareil.total.map((l) => {
+      const p = prixChange(l) || l;
+      return { id: l.id, nom: l.nom, qte: l.qte, ht: p.ht, ttc: p.ttc };
+    });
+    const ht = lignesPack().reduce((s, l) => s + l.ht * l.qte, 0);
+    const ttc = lignesPack().reduce((s, l) => s + l.ttc * l.qte, 0);
+    const groupe = (label, champ) => h('div', { class: 'champ-groupe' }, h('label', { for: champ.id }, label), champ);
+    const enregistrer = async () => {
+      const nom = champNom.value.trim();
+      const ref = champRef.value.trim();
+      const doublon = ref ? index.forfaits.find((f) => f.id !== existant?.id && memeRef(f.ref, ref)) : null;
+      const plein = existant ? null : pasDePlace();
+      const [probleme, fautif] = plein ? [plein, champRef]
+        : !nom ? ['Donne un nom au pack.', champNom]
+        : !ref ? ['La référence est obligatoire.', champRef]
+        : doublon ? [`La référence ${doublon.ref} existe déjà : choisis-en une autre.`, champRef]
+        : !appareil.total.length ? ['Le total est vide.', champNom]
+        : ['', null];
+      erreur.textContent = probleme;
+      if (probleme) { fautif.focus(); return; }
+      const contenu = lignesPack();
+      const cle = cleCombinaison({ contenu });
+      const memes = index.forfaits.filter((f) => f.id !== existant?.id && f.contenu && cleCombinaison(f) === cle);
+      if (memes.length) {
+        const ok = await demander({
+          titre: "Vérifie avant d'enregistrer", liste: [`Même contenu que : ${memes.map((f) => f.ref).join(', ')}.`],
+          boutons: [{ texte: 'Enregistrer quand même', valeur: true, classe: 'btn-rouge' }, { texte: 'Revenir', valeur: false }],
+        });
+        if (!ok) return;
+      }
+      if (lectureSeule()) return; // la question laissait le temps à un autre onglet d'annoncer une version plus récente
+      // Un exemple retouché devient un vrai pack, comme un forfait.
+      const { exemple: _ancienExemple, ...base } = existant || { id: nouvelId('fft'), elements: {} };
+      const pack = { ...base, ref, designation: nom, ht: 0, ttc: 0, contenu, maj: Date.now() };
+      remplacer(donnees.forfaits, pack);
+      if (!sauver()) return; // recalcule le prix du pack
+      noterModif();
+      appareil.totalPack = null; // le total reste (client au comptoir) ; un nouvel enregistrement ferait un autre pack
+      sauverAppareil();
+      dlg.close();
+      etatUi.choisi = pack.id;
+      rafraichir();
+      const fini = donnees.forfaits.find((f) => f.id === pack.id);
+      toast(`Pack ${ref} ${existant ? 'modifié' : 'enregistré'} : ${formatPrix(fini.ttc)} TTC`);
+    };
+    const dlg = ouvrirDialogue({
+      titre: existant ? `Enregistrer le pack ${existant.ref}` : 'Enregistrer comme pack',
+      surEnvoi: enregistrer,
+      corps: [
+        h('p', { class: 'aide-texte' }, `${pluriel(appareil.total.length, 'ligne')}, ${formatPrix(ttc)} TTC (${formatPrix(ht)} HT) aujourd'hui. `
+          + "Le prix du pack suivra celui de ses forfaits ; une ligne libre garde le prix saisi."),
+        groupe('Nom du pack *', champNom),
+        groupe('Référence *', champRef),
+        erreur,
+      ],
+      pied: [
+        h('button', { type: 'submit', class: 'btn btn-rouge', id: 'p-enregistrer' }, 'Enregistrer'),
+        h('button', { type: 'button', class: 'btn btn-bord', onclick: () => dlg.close() }, 'Annuler'),
+      ],
+    });
+    champNom.focus();
   }
 
   // Pièce ou service qui n'est pas un forfait : on tape un nom et un prix (l'autre prix se calcule).
@@ -2367,7 +2632,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       onclick: () => choisirSuggestion(i, false),
     }, h('span', { class: 'suggestion-nom' }, e.nom), via.has(e.id) ? h('span', { class: 'suggestion-surnom' }, `« ${via.get(e.id)} »`) : null,
     h('span', { class: 'suggestion-info' }, h('span', { class: 'suggestion-famille' }, index.famParId.get(e.familleId).nom),
-      ` · ${pluriel(index.forfaits.filter((f) => f.elements[e.familleId] === e.id).length, 'forfait')}`))));
+      ` · ${pluriel(index.forfaits.filter((f) => index.elementsForfait.get(f.id).some((x) => x.id === e.id)).length, 'forfait')}`))));
     liste.hidden = suggestions.length === 0;
     champ.setAttribute('aria-expanded', String(suggestions.length > 0));
     champ.removeAttribute('aria-activedescendant');
@@ -2564,8 +2829,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       // Avertissements : on laisse enregistrer après confirmation.
       const avertissements = [];
       if (proche) avertissements.push(`La référence ressemble à ${proche.ref}.`);
-      const cle = cleCombinaison(elements);
-      const memes = cle ? index.forfaits.filter((f) => autre(f) && cleCombinaison(f.elements) === cle) : [];
+      const cle = cleCombinaison({ elements });
+      const memes = cle ? index.forfaits.filter((f) => autre(f) && cleCombinaison(f) === cle) : [];
       if (memes.length) avertissements.push(`Même combinaison d'éléments que : ${memes.map((f) => f.ref).join(', ')}.`);
       const attendu = ttcDepuisHt(ht);
       if (Math.abs(ttc - attendu) > TOLERANCE_TVA) avertissements.push(`Le TTC (${formatPrix(ttc)}) ne correspond pas au HT + ${TAUX_TVA} (${formatPrix(attendu)}).`);
@@ -2620,10 +2885,16 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   async function supprimerForfait(f) {
+    const packs = packsAvec(f);
     const ok = await demander({
-      titre: 'Supprimer ce forfait ?',
+      titre: f.contenu ? 'Supprimer ce pack ?' : 'Supprimer ce forfait ?',
       message: [h('strong', {}, f.ref), f.designation ? ' — ' + f.designation : ''],
-      liste: ["La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export."],
+      liste: [
+        // Comme pour un élément utilisé : le dire et compter. Le pack reprend le prix noté sur sa ligne (celui du jour
+        // où le pack a été enregistré), marqué « à revoir ».
+        packs.length ? `Il est dans ${pluriel(packs.length, 'pack')} (${refsAbregees(packs).join(', ')}) : ${packs.length > 1 ? 'ils reprendront' : 'il reprendra'} le prix qu'il avait quand le pack a été enregistré, marqué « à revoir ».` : null,
+        "La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export.",
+      ].filter(Boolean),
       boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],
     });
     if (!ok) return;
@@ -2631,7 +2902,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     if (!sauver()) return;
     noterModif();
     rafraichir();
-    toast(`Forfait ${f.ref} supprimé`, false, { texte: 'Annuler', faire: () => annulerSuppression(f.id) });
+    toast(`${f.contenu ? 'Pack' : 'Forfait'} ${f.ref} supprimé`, false, { texte: 'Annuler', faire: () => annulerSuppression(f.id) });
   }
 
   // « Annuler » du message de suppression : le forfait revient avec une date plus récente que sa
@@ -2656,7 +2927,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // seulementMarques : retrait automatique, sans le choix de l'utilisateur (un élément d'un fichier sans date a aussi maj 0).
   function marquerExemplesSupprimes(seulementMarques = false) {
     const maintenant = Date.now();
-    for (const f of donnees.forfaits.filter((x) => x.exemple && !x.supprime)) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
+    for (const f of exemplesARetirer()) remplacer(donnees.forfaits, { ...f, supprime: true, maj: maintenant });
     const utilises = new Set(donnees.forfaits.filter((f) => !f.supprime).flatMap((f) => Object.values(f.elements)));
     for (const e of donnees.elements) {
       const exemple = e.maj === 0 && (e.exemple || !seulementMarques);  // retouché (renommé…) : il est à l'utilisateur
@@ -2664,8 +2935,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     }
   }
 
+  // Les forfaits EXEMPLE, plus les packs bâtis seulement sur eux (toutes leurs lignes sont des exemples, ou de tels packs) :
+  // sans eux, ces packs ne vaudraient plus rien. Une ligne libre est à l'utilisateur : son pack reste.
+  function exemplesARetirer() {
+    const actifs = donnees.forfaits.filter((f) => !f.supprime);
+    const partent = new Set(actifs.filter((f) => f.exemple).map((f) => f.id));
+    for (let n = 0; n < NIVEAUX_PACK; n++) {
+      for (const p of actifs) if (p.contenu && p.contenu.every((l) => l.id && partent.has(l.id))) partent.add(p.id);
+    }
+    return actifs.filter((f) => partent.has(f.id));
+  }
+
   async function supprimerExemples() {
-    const exemples = index.forfaits.filter((f) => f.exemple);
+    const exemples = exemplesARetirer();
     const ok = await demander({
       titre: 'Supprimer les exemples ?',
       message: `Les ${pluriel(exemples.length, 'forfait')} marqués EXEMPLE seront supprimés, avec les éléments de départ que tu n'as ni utilisés ni modifiés. Tes vrais forfaits ne bougent pas.`,
@@ -2921,7 +3203,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     };
     const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', 'Surnoms', ...fams.map((f) => f.nom), 'Exemple', 'Modifié le']];
     for (const f of [...index.forfaits].sort((a, b) => tri.compare(a.ref, b.ref))) {
-      const els = index.elementsForfait.get(f.id);
+      // Pack : son prix calculé, sans les éléments de ses forfaits (ce ne sont pas les siens).
+      const els = f.contenu ? [] : index.elementsForfait.get(f.id);
       lignes.push([
         f.ref, f.designation, prixSaisie(f.ht), prixSaisie(f.ttc), (f.surnoms || []).join(', '),
         ...fams.map((fam) => els.find((e) => e.familleId === fam.id)?.nom ?? ''),
@@ -2967,15 +3250,27 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // Compte ce que la mise à jour va changer, pour l'annoncer avant de le faire,
   // et nomme les forfaits dont le prix change (le reste d'une modification compte moins au comptoir).
   // prixRemplacer : la même liste pour « Remplacer tout », qui prend aussi les versions plus anciennes du fichier.
+  // Le cache de prix d'un pack entre dans canonique : il est recalculé ici, sur des copies (rien n'est écrit), sur les
+  // prix que chaque choix donnerait (l'union pour « Mettre à jour », le fichier seul pour « Remplacer tout »). Sans cela,
+  // deux appareils qui ne diffèrent que par ce cache (un prix de forfait reçu par l'un, pas encore par l'autre)
+  // voyaient le pack « modifié » et son prix « qui change ».
   function bilanFusion(entrant) {
-    const locaux = new Map(donnees.forfaits.map((f) => [f.id, f]));
+    const union = fusionner(donnees, entrant);
+    const caches = (d, source) => {
+      const copie = { forfaits: d.forfaits.map(copiePack) };
+      recalculerPacks(copie, source);
+      return new Map(copie.forfaits.map((f) => [f.id, f]));
+    };
+    const locaux = caches(donnees, union), entrants = caches(entrant, union);
+    const avantRemplacer = caches(donnees, donnees), apresRemplacer = caches(entrant, entrant);
     const bilan = { nouveaux: 0, modifies: 0, supprimes: 0, prix: [], prixRemplacer: [] };
     const ligne = (l, f) => `${f.ref} : ${formatPrix(l.ht)} → ${formatPrix(f.ht)} HT, ${formatPrix(l.ttc)} → ${formatPrix(f.ttc)} TTC`;
-    for (const f of entrant.forfaits) {
+    for (const f of entrants.values()) {
       const l = locaux.get(f.id);
       if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
+      const lr = avantRemplacer.get(f.id), fr = apresRemplacer.get(f.id);
+      if (!fr.supprime && !lr.supprime && (fr.ht !== lr.ht || fr.ttc !== lr.ttc)) bilan.prixRemplacer.push(ligne(lr, fr));
       const prixChange = !f.supprime && !l.supprime && (f.ht !== l.ht || f.ttc !== l.ttc);
-      if (prixChange) bilan.prixRemplacer.push(ligne(l, f));
       if (!gagne(f, l)) continue;
       if (f.supprime && !l.supprime) bilan.supprimes++;
       else if (!f.supprime && l.supprime) bilan.nouveaux++;
@@ -3125,6 +3420,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const forfaits = [];
     const brouillons = []; // lignes lues, avant le contrôle des surnoms
     let avecExemples = false;
+    const packsIgnores = [];
     for (let n = 1; n < lignes.length; n++) {
       const ligne = lignes[n];
       if (ligne.every((c) => !String(c).trim())) continue;
@@ -3141,6 +3437,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const cleRef = ref.toLocaleUpperCase('fr');
       if (lignesParRef.has(cleRef)) { erreurs.push(`${lieu} : cette référence est déjà à la ligne ${lignesParRef.get(cleRef)}.`); continue; }
       lignesParRef.set(cleRef, n + 1);
+      // Un pack ne se modifie pas encore par le tableau (sa colonne Contenu viendra) : sa ligne, celle de l'export
+      // par exemple, est laissée de côté et annoncée, sans quoi elle en ferait un forfait ordinaire et perdrait son contenu.
+      if (donnees.forfaits.some((f) => !f.supprime && f.contenu && memeRef(f.ref, ref))) { packsIgnores.push(ref); continue; }
       const ht = lirePrix(lire('ht'));
       const ttc = lirePrix(lire('ttc'));
       if (ht === null) erreurs.push(`${lieu} : prix HT ${lire('ht') ? `illisible « ${lire('ht').slice(0, 30)} »` : 'manquant'}.`);
@@ -3148,7 +3447,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (ht === null || ttc === null) continue;
       if (Math.abs(ttc - ttcDepuisHt(ht)) > TOLERANCE_TVA) avertissements.push(`${ref} : ${formatPrix(ttc)} au lieu de ${formatPrix(ttcDepuisHt(ht))}`);
 
-      const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => memeRef(f.ref, ref));
+      // Un pack supprimé n'est pas repris : la ligne crée un forfait neuf.
+      const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => !f.contenu && memeRef(f.ref, ref));
       // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
       const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
       if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
@@ -3220,14 +3520,16 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         maj: Math.max(maintenant, (existant?.maj ?? 0) + 1), ...(exemple ? { exemple: true } : {}),
       });
     }
-    if (!erreurs.length && !forfaits.length) erreurs.push('Le tableau ne contient aucun forfait.');
+    if (!erreurs.length && !forfaits.length) {
+      erreurs.push(packsIgnores.length ? "Le tableau ne contient que des packs, et l'import du tableau ne modifie pas encore les packs : rien à importer." : 'Le tableau ne contient aucun forfait.');
+    }
     if (erreurs.length) return { erreurs };
     try {
       // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
       const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: [...donnees.familles, ...famillesCreees], elements: [...donnees.elements, ...elementsCrees], forfaits });
       return {
         entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples, surnomsRefuses,
-        rattaches: [...rattaches], refsEnDouble: [...refsEnDouble],
+        rattaches: [...rattaches], refsEnDouble: [...refsEnDouble], packsIgnores,
       };
     } catch (err) {
       return { erreurs: [err.message] };
@@ -3264,7 +3566,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
       return;
     }
-    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses, rattaches, refsEnDouble } = analyse;
+    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses, rattaches, refsEnDouble, packsIgnores } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
@@ -3281,6 +3583,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         resume("Références présentes plusieurs fois dans l'outil : un seul de ces forfaits sera mis à jour, supprime l'autre", refsEnDouble),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
         resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose, 3 au maximum)", surnomsRefuses),
+        resume("Packs laissés tels quels (le tableau ne modifie pas encore un pack : fais-le dans l'outil)", packsIgnores),
       ].filter(Boolean),
       boutons: [
         { texte: 'Importer', valeur: 'fusion', classe: exemplesRestants ? 'btn-bord' : 'btn-rouge' },

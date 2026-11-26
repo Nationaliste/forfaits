@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-ypKIqH0xxdX4KfNAN44eExb8KPStz2wAZtHs8Bzc6CA='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EOvM8FkiNeyOAqERuPNZs1AxxEhsXgPw4kI3pXvc16s='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -807,6 +807,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const QTE_MAX = 99;
   const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
+  // Plafonds des données, vérifiés par valider (donc au chargement) : tout ce qui écrit doit les respecter,
+  // sinon l'ouverture suivante déclarerait les données illisibles. Ici, avant le premier chargement.
+  const FORFAITS_MAX = 5000;       // forfaits affichés (non supprimés) ; à 20 000, l'ouverture prenait 40 s
+  const FORFAITS_TOTAL_MAX = 20000; // marques de suppression comprises (elles s'accumulent)
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
   const VERSION_OUTIL = '1.0';
@@ -1004,6 +1008,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     for (const cle of ['familles', 'elements', 'forfaits']) {
       if (!Array.isArray(obj[cle])) echec(`Fichier incomplet (« ${cle} » manquant).`);
     }
+    // Chaque enregistrement est borné, mais pas leur NOMBRE : un fichier à 45 000 forfaits passait
+    // tous les contrôles, s'enregistrait, puis figeait l'appli à chaque ouverture (une carte par
+    // forfait), menu compris — donc plus aucune réparation depuis l'outil. Les forfaits affichés
+    // sont plafonnés comme l'import du tableau (FORFAITS_MAX) ; les marques de suppression, qui
+    // s'accumulent, ne comptent que dans le plafond total. Le message dit la limite : une union
+    // (tableau ou fichier ajouté à cet appareil) peut la dépasser sans que le fichier soit aberrant.
+    const affiches = obj.forfaits.filter((f) => f?.supprime !== true).length;
+    const nb = (n) => n.toLocaleString('fr-FR');
+    const trop = affiches > FORFAITS_MAX ? `${nb(affiches)} forfaits, pour ${nb(FORFAITS_MAX)} au maximum`
+      : obj.forfaits.length > FORFAITS_TOTAL_MAX ? `${nb(obj.forfaits.length)} forfaits en comptant les supprimés, pour ${nb(FORFAITS_TOTAL_MAX)} au maximum`
+      : obj.elements.length > 20000 ? `${nb(obj.elements.length)} éléments, pour ${nb(20000)} au maximum`
+      : obj.familles.length > 500 ? `${nb(obj.familles.length)} familles, pour 500 au maximum` : '';
+    if (trop) echec(`Trop d'enregistrements : ${trop}.`);
     const motifId = /^[a-z]{2,6}-[a-z0-9-]{1,64}$/;
     const vus = new Set();
     const id = (v) => {
@@ -1014,7 +1031,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     };
     const texte = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     // Date bornée : une date absurde (an 3000…) bloquerait l'affichage et gagnerait toutes les fusions.
-    const limite = Date.now() + 86400000;
+    // La borne part de la date d'export du fichier (tous les exports en portent une) : bornée sur l'heure de l'import,
+    // le même fichier relu plus tard recevait des dates plus récentes et écrasait une correction faite entre-temps.
+    // Exporté « dans le futur », c'est une horloge fausse : refusé, sinon la borne redeviendrait l'heure de l'import.
+    const exporte = Date.parse(obj.exporteLe);
+    if (exporte > Date.now() + 86400000) {
+      echec(`Ce fichier a été exporté le ${fmtDateHeure.format(new Date(exporte))}, plus tard que l'heure de cet appareil : l'horloge de l'un des deux est fausse. Corrige la date et l'heure, exporte de nouveau, puis réessaie.`);
+    }
+    const limite = (Number.isFinite(exporte) ? Math.min(exporte, Date.now()) : Date.now()) + 86400000;
     const date = (v) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), limite) : 0);
     const marques = (x) => ({ ...(x.supprime === true ? { supprime: true } : {}), ...(x.exemple === true ? { exemple: true } : {}) });
     const objet = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : echec('Fichier abîmé : enregistrement invalide.'));
@@ -1039,7 +1063,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           if (motifId.test(fam) && typeof elt === 'string' && motifId.test(elt)) choisis[fam] = elt;
         }
       }
-      const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= 999999999 ? v : null);
+      const prix = (v) => (Number.isInteger(v) && v >= 0 && v <= PRIX_MAX ? v : null);
       const f = {
         id: id(x.id), ref: texte(x.ref, 80), designation: texte(x.designation, 2000),
         ht: prix(x.ht) ?? 0, ttc: prix(x.ttc) ?? 0, elements: choisis, maj: date(x.maj), ...marques(x), ...avecSurnoms(lireSurnoms(x.surnoms)),
@@ -1074,15 +1098,37 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     // enregistrement écrasait les vraies. Ni copie de côté, ni exemples : des listes vides, que sauver() refuse d'écrire.
     donneesFutures = estFutur(brut);
     if (donneesFutures) return { familles: [], elements: [], forfaits: [] };
-    if (brut === null) return donneesInitiales();
+    if (brut === null) { rangerIllisibles(null); return donneesInitiales(); }
     try {
-      return valider(JSON.parse(brut));
+      const lues = valider(JSON.parse(brut));
+      rangerIllisibles(null);
+      return lues;
     } catch {
       // Données abîmées : on les met de côté plutôt que de les écraser.
-      try { localStorage.setItem(CLE_DONNEES + '.illisible.' + Date.now(), brut); } catch { /* tant pis */ }
+      rangerIllisibles(brut);
       donneesIllisibles = true;
       return donneesInitiales();
     }
+  }
+
+  // Copies mises de côté (« forfaits.donnees.v1.illisible.<date> ») : chaque chargement refusé en écrivait une, entière,
+  // jamais relue ni effacée, jusqu'à remplir le stockage. On garde les ILLISIBLES_GARDEES plus récentes, sans écrire
+  // deux fois la même à la suite, et on efface les autres. brut = null : seulement le ménage.
+  const ILLISIBLES_GARDEES = 3;
+  function rangerIllisibles(brut) {
+    const prefixe = CLE_DONNEES + '.illisible.';
+    try {
+      const copies = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const cle = localStorage.key(i);
+        if (cle?.startsWith(prefixe)) copies.push(cle);
+      }
+      copies.sort((a, b) => Number(b.slice(prefixe.length)) - Number(a.slice(prefixe.length))); // la plus récente d'abord
+      const nouvelle = brut !== null && (!copies.length || localStorage.getItem(copies[0]) !== brut);
+      // Le ménage d'abord : il fait la place de la nouvelle copie.
+      for (const cle of copies.slice(nouvelle ? ILLISIBLES_GARDEES - 1 : ILLISIBLES_GARDEES)) localStorage.removeItem(cle);
+      if (nouvelle) localStorage.setItem(prefixe + Date.now(), brut);
+    } catch { /* tant pis */ }
   }
 
   // Renvoie false quand rien n'a été écrit parce que l'appareil porte des données d'une version plus récente :
@@ -1205,6 +1251,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     navigator.storage.persisted().then((deja) => (deja ? true : navigator.storage.persist())).catch(() => {});
   }
 
+  // Texte d'un enregistrement, clés dans l'ordre alphabétique à tous les niveaux : deux appareils écrivent le même.
+  function canonique(v) {
+    if (Array.isArray(v)) return '[' + v.map(canonique).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + canonique(v[k])).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+  // Vrai si la version x remplace la version actuelle. À date égale (anciens fichiers sans date, fichier retouché),
+  // le local gagnait des deux côtés : deux appareils qui s'échangent leurs fichiers gardaient chacun la sienne.
+  // Le départage par le contenu donne le même gagnant partout.
+  const gagne = (x, actuel) => x.maj > actuel.maj || (x.maj === actuel.maj && canonique(x) > canonique(actuel));
+
   // Fusion de deux jeux de données : pour chaque enregistrement, la version la plus récente gagne.
   function fusionner(local, entrant) {
     const resultat = {};
@@ -1212,7 +1271,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const parId = new Map(local[cle].map((x) => [x.id, x]));
       for (const x of entrant[cle]) {
         const actuel = parId.get(x.id);
-        if (!actuel || x.maj > actuel.maj) parId.set(x.id, x);
+        if (!actuel || gagne(x, actuel)) parId.set(x.id, x);
       }
       resultat[cle] = [...parId.values()];
     }
@@ -2483,7 +2542,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       // Seuls les surnoms ajoutés sont contrôlés : un ancien doublon (déjà ignoré par la recherche) ne bloque pas un changement de prix.
       const ajoutes = nouveaux(surnoms, existant?.surnoms);
       const surnomPris = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
-      const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
+      const plein = existant ? null : pasDePlace();
+      const [probleme, champFautif] = plein ? [plein, champRef]
+        : !ref ? ['La référence est obligatoire.', champRef]
         : doublon ? [`${dejaPrise(doublon)} Choisis-en une autre.`, champRef]
         : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
         : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
@@ -2551,6 +2612,13 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     champRef.focus();
   }
 
+  // Un nouveau forfait dépasserait-il les plafonds de valider ? Le message, ou null.
+  function pasDePlace() {
+    if (index.forfaits.length >= FORFAITS_MAX) return `${FORFAITS_MAX.toLocaleString('fr-FR')} forfaits au maximum : supprime ceux qui ne servent plus avant d'en ajouter.`;
+    if (donnees.forfaits.length >= FORFAITS_TOTAL_MAX) return `${FORFAITS_TOTAL_MAX.toLocaleString('fr-FR')} forfaits au maximum en comptant les supprimés : l'outil ne peut plus en ajouter.`;
+    return null;
+  }
+
   async function supprimerForfait(f) {
     const ok = await demander({
       titre: 'Supprimer ce forfait ?',
@@ -2573,6 +2641,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const actuel = donnees.forfaits.find((x) => x.id === id);
     if (!actuel?.supprime) return;
     if (index.forfaits.some((x) => memeRef(x.ref, actuel.ref))) { toast(`Impossible : un autre forfait porte déjà la référence ${actuel.ref}`, true); return; }
+    if (index.forfaits.length >= FORFAITS_MAX) { toast(`Impossible : ${FORFAITS_MAX.toLocaleString('fr-FR')} forfaits au maximum. Supprimes-en un autre d'abord.`, true); return; }
     const rendu = { ...actuel, maj: Date.now() };
     delete rendu.supprime;
     remplacer(donnees.forfaits, rendu);
@@ -2654,12 +2723,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   function contenuListes(signaler, changer) {
     const fams = index.fams;
     const nomLibre = (nom, liste, idActuel) => !liste.some((x) => x.id !== idActuel && norm(x.nom) === norm(nom));
+    // Une famille nommée « Exemple » ou « HT » donnait deux colonnes de même titre à l'export, et l'import lisait la mauvaise.
+    const colonneFixe = (nom) => (COLONNES_TABLEAU.has(norm(nom)) ? `« ${nom} » est le titre d'une colonne du tableau Excel : choisis un autre nom de famille.` : null);
 
     const blocs = fams.map((fam) => {
       const champNom = h('input', { class: 'champ', value: fam.nom, maxlength: 60, 'aria-label': 'Nom de la famille ' + fam.nom });
       champNom.addEventListener('change', () => {
         const courante = donnees.familles.find((x) => x.id === fam.id);
         const nom = champNom.value.trim();
+        if (colonneFixe(nom)) { signaler(colonneFixe(nom)); champNom.value = courante.nom; return; }
         if (!nom || !nomLibre(nom, index.fams, fam.id)) {
           signaler(nom ? `La famille « ${nom} » existe déjà.` : 'Le nom ne peut pas être vide.');
           champNom.value = courante.nom;
@@ -2733,6 +2805,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const champFamille = h('input', { class: 'champ', id: 'nouvelle-famille', maxlength: 60, placeholder: 'Ex. : TPE, Rétroviseur…', 'aria-label': 'Nouvelle famille' });
     const ajouterFamille = () => {
       const nom = champFamille.value.trim();
+      if (colonneFixe(nom)) { signaler(colonneFixe(nom)); return; }
       if (!nom) return;
       if (!nomLibre(nom, index.fams)) { signaler(`La famille « ${nom} » existe déjà.`); return; } // index.fams : `fams` est périmée après un renommage
       signaler('');
@@ -2903,7 +2976,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (!l) { if (!f.supprime) bilan.nouveaux++; continue; }
       const prixChange = !f.supprime && !l.supprime && (f.ht !== l.ht || f.ttc !== l.ttc);
       if (prixChange) bilan.prixRemplacer.push(ligne(l, f));
-      if (f.maj <= l.maj) continue;
+      if (!gagne(f, l)) continue;
       if (f.supprime && !l.supprime) bilan.supprimes++;
       else if (!f.supprime && l.supprime) bilan.nouveaux++;
       else if (!f.supprime) {
@@ -2913,6 +2986,21 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     }
     bilan.prix.sort(tri.compare);
     bilan.prixRemplacer.sort(tri.compare);
+    // Éléments et familles : un renommage ou une suppression change toutes les cartes qui les montrent, à dire avant.
+    bilan.renommes = [];
+    bilan.retires = [];
+    const famillesLocales = new Map(donnees.familles.map((x) => [x.id, x]));
+    const nomFamille = (id) => famillesLocales.get(id)?.nom ?? '?';
+    for (const cle of ['familles', 'elements']) {
+      const locauxCle = new Map(donnees[cle].map((x) => [x.id, x]));
+      for (const x of entrant[cle]) {
+        const l = locauxCle.get(x.id);
+        if (!l || l.supprime || !gagne(x, l)) continue;
+        const avant = cle === 'familles' ? `Famille ${l.nom}` : `${nomFamille(l.familleId)} : ${l.nom}`;
+        if (x.supprime) bilan.retires.push(avant);
+        else if (x.nom !== l.nom) bilan.renommes.push(`${avant} → ${x.nom}`);
+      }
+    }
     return bilan;
   }
 
@@ -2928,7 +3016,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
     ['surnoms', 'surnoms'], ['exemple', 'exemple'], ['modifiele', null],
   ]);
-  const LIGNES_TABLEAU_MAX = 5000;
+  const LIGNES_TABLEAU_MAX = FORFAITS_MAX;
   const FAMILLES_TABLEAU_MAX = 10; // nouvelles familles par import : au-delà, c'est sans doute un mauvais fichier
 
   // Texte d'un fichier : UTF-8 (« CSV UTF-8 » d'Excel), sinon Windows-1252 (ancien « CSV » d'Excel).
@@ -2951,6 +3039,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     let ligne = [];
     let cellule = '';
     let entreGuillemets = false;
+    let ligneGuillemet = 0; // ligne Excel du guillemet ouvrant
     for (let i = 0; i < t.length; i++) {
       const c = t[i];
       if (entreGuillemets) {
@@ -2959,6 +3048,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         else entreGuillemets = false;
       } else if (c === '"' && cellule === '') {
         entreGuillemets = true;
+        ligneGuillemet = lignes.length + 1;
       } else if (c === sep) {
         ligne.push(cellule);
         cellule = '';
@@ -2972,6 +3062,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         cellule += c;
       }
     }
+    // Sans ce contrôle, toutes les lignes suivantes finissaient dans une seule cellule, sans erreur.
+    if (entreGuillemets) throw new Error(`Ligne ${ligneGuillemet} : une cellule commence par un guillemet (") qui n'est jamais refermé.`);
     if (cellule !== '' || ligne.length) { ligne.push(cellule); lignes.push(ligne); }
     return lignes;
   }
@@ -2979,7 +3071,12 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // Transforme le tableau en données prêtes à fusionner, ou renvoie la liste des problèmes (rien n'est modifié).
   // Un forfait garde son identifiant si sa référence existe déjà : on le met à jour au lieu de le dupliquer.
   function analyserTableau(texte) {
-    const lignes = decouperCsv(texte);
+    let lignes;
+    try {
+      lignes = decouperCsv(texte);
+    } catch (err) {
+      return { erreurs: [err.message] };
+    }
     // Excel ajoute des lignes vides à la fin de chaque colonne mise en forme : on les écarte avant de compter.
     while (lignes.length && lignes[lignes.length - 1].every((c) => !String(c).trim())) lignes.pop();
     if (lignes.length > LIGNES_TABLEAU_MAX + 1) return { erreurs: [`Trop de lignes : ${LIGNES_TABLEAU_MAX} forfaits au maximum.`] };
@@ -3018,6 +3115,12 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const nouveauxElements = [];
     const elementsCrees = [];
     const elementsConnus = new Map(index.elsActifs.map((e) => [`${e.familleId}|${norm(e.nom)}`, e]));
+    // Nom comparé sans majuscules, accents ni espaces doublés, mais avec ses signes et ses espaces (norm les retire).
+    const ecrit = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+    const rattaches = new Set();
+    const refsEnDouble = new Set();
+    const nbParRef = new Map(); // même clé que memeRef
+    for (const f of index.forfaits) { const cle = f.ref.trim().toLocaleUpperCase('fr'); nbParRef.set(cle, (nbParRef.get(cle) || 0) + 1); }
     const lignesParRef = new Map();
     const forfaits = [];
     const brouillons = []; // lignes lues, avant le contrôle des surnoms
@@ -3046,6 +3149,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (Math.abs(ttc - ttcDepuisHt(ht)) > TOLERANCE_TVA) avertissements.push(`${ref} : ${formatPrix(ttc)} au lieu de ${formatPrix(ttcDepuisHt(ht))}`);
 
       const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => memeRef(f.ref, ref));
+      // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
+      const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
+      if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
       // Une famille absente du tableau n'est pas touchée ; une cellule vide retire l'élément.
       const elements = { ...(existant?.elements ?? {}) };
       for (const fam of toutesFamilles) {
@@ -3054,9 +3160,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         const nom = lire(cle);
         if (!nom) { delete elements[fam.id]; continue; }
         if (!norm(nom)) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)} » illisible.`); continue; }
+        // Coupé à 60 caractères, le nom créé ne ressemblait plus à la cellule : un élément de plus à chaque import.
+        if (nom.length > 60) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)}… » : nom trop long (60 caractères au maximum).`); continue; }
         const cleElement = `${fam.id}|${norm(nom)}`;
         // Le surnom d'équipe d'un élément vaut son nom (« la petite » → 3Q) ; pris dans une autre famille, c'est une erreur.
-        let element = elementsConnus.get(cleElement)
+        const parSonNom = elementsConnus.get(cleElement);
+        // « Zorba 5+ » ou « Zorba-5 » sont rangés sous « Zorba 5 » (même nom à plat) : à annoncer, ce n'est peut-être pas lui.
+        if (parSonNom && ecrit(parSonNom.nom) !== ecrit(nom)) rattaches.add(`${fam.nom} : « ${nom} » rangé avec « ${parSonNom.nom} »`);
+        let element = parSonNom
           || index.elsActifs.find((e) => e.familleId === fam.id && (e.surnoms || []).some((s) => norm(s) === norm(nom)));
         const ailleurs = !element && index.surnomPris.get(norm(nom));
         if (ailleurs?.equipe) { erreurs.push(`${lieu} : ${fam.nom} « ${nom.slice(0, 30)} » est le surnom de ${nomDe(ailleurs.id)}.`); continue; }
@@ -3114,7 +3225,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     try {
       // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
       const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: [...donnees.familles, ...famillesCreees], elements: [...donnees.elements, ...elementsCrees], forfaits });
-      return { entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples, surnomsRefuses };
+      return {
+        entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples, surnomsRefuses,
+        rattaches: [...rattaches], refsEnDouble: [...refsEnDouble],
+      };
     } catch (err) {
       return { erreurs: [err.message] };
     }
@@ -3122,6 +3236,18 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   // Fichier OneDrive « en ligne seulement », retiré pendant le choix… : le navigateur ne peut pas le lire.
   const FICHIER_ILLISIBLE = "Le fichier n'a pas pu être lu. S'il est dans OneDrive, ouvre-le une fois dans OneDrive pour qu'il soit sur l'appareil, puis réessaie.";
+
+  // L'union passe le même contrôle que le stockage relu au prochain chargement : un identifiant pris dans deux listes
+  // (fichier retouché) ou trop d'enregistrements y seraient refusés, et toutes les données mises de côté.
+  async function unionValable(union) {
+    try {
+      valider({ format: FORMAT, version: VERSION_FORMAT, ...union });
+      return true;
+    } catch (err) {
+      await informer('Import impossible', `${err.message} Rien n'a changé sur cet appareil.`);
+      return false;
+    }
+  }
 
   async function importerTableau(fichier) {
     let texte;
@@ -3138,7 +3264,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
       return;
     }
-    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses } = analyse;
+    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses, rattaches, refsEnDouble } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
@@ -3151,6 +3277,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         resume('Prix qui changent', bilan.prix),
         resume("Familles (colonnes) qui n'existent pas encore et seront créées (vérifie l'orthographe)", nouvellesFamilles),
         resume("Éléments qui n'existent pas encore et seront créés (vérifie l'orthographe)", nouveauxElements),
+        resume("Noms lus comme un élément qui existe déjà (ils ne diffèrent que par un signe ou un espace : vérifie)", rattaches),
+        resume("Références présentes plusieurs fois dans l'outil : un seul de ces forfaits sera mis à jour, supprime l'autre", refsEnDouble),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
         resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose, 3 au maximum)", surnomsRefuses),
       ].filter(Boolean),
@@ -3161,7 +3289,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       ].filter(Boolean),
     });
     if (!choix) return;
-    donnees = fusionner(donnees, entrant);
+    const union = fusionner(donnees, entrant);
+    if (!(await unionValable(union))) return;
+    donnees = union;
     if (choix === 'sans-exemples') marquerExemplesSupprimes();
     if (!sauver()) return;
     if (bilan.nouveaux || bilan.modifies || nouvellesFamilles.length || nouveauxElements.length || choix === 'sans-exemples') noterModif();
@@ -3201,7 +3331,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     // Un fichier piégé ou abîmé peut effacer les vrais forfaits (les exemples partent normalement) : à dire en clair.
     const vrais = donnees.forfaits.filter((f) => !f.supprime && !f.exemple);
     const entrantParId = new Map(entrant.forfaits.map((f) => [f.id, f]));
-    const effaces = vrais.filter((l) => entrantParId.get(l.id)?.supprime && entrantParId.get(l.id).maj > l.maj).length;
+    const effaces = vrais.filter((l) => entrantParId.get(l.id)?.supprime && gagne(entrantParId.get(l.id), l)).length;
     const absents = vrais.filter((l) => !entrantParId.has(l.id) || entrantParId.get(l.id).supprime).length;
     const choix = await demander({
       titre: 'Importer ce fichier ?',
@@ -3211,6 +3341,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         effaces >= 3 && effaces * 5 >= vrais.length
           ? `Attention : « Mettre à jour » supprimerait ${effaces} des ${vrais.length} forfaits de cet appareil. Si ce fichier ne vient pas d'un responsable, annule.` : null,
         resume('Prix qui changent', bilan.prix),
+        resume('Éléments et familles renommés', bilan.renommes),
+        resume('Éléments et familles supprimés', bilan.retires),
         'Remplacer tout : cet appareil devient une copie exacte du fichier.'
           + (absents ? ` ${pluriel(absents, 'forfait')} de cet appareil ${absents > 1 ? 'disparaîtraient' : 'disparaîtrait'} (absent${absents > 1 ? 's' : ''} du fichier).` : ''),
         // Fichier plus ancien : « Remplacer tout » remettrait d'anciens prix, à dire avant.
@@ -3233,7 +3365,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (!ok) return;
     }
     if (choix === 'fusion') {
-      donnees = fusionner(donnees, entrant);
+      const union = fusionner(donnees, entrant);
+      if (!(await unionValable(union))) return;
+      donnees = union;
       // Le fichier a retiré ses exemples : ceux de cet appareil partent aussi, même s'ils n'ont pas les mêmes identifiants
       // (exemples d'une autre version de l'outil).
       if (entrant.forfaits.some((f) => f.exemple && f.supprime) && !entrant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes(true);
@@ -3261,9 +3395,24 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         if (pris?.id !== x.id) doublons.push(`Surnom « ${s} » de ${nomDe(x.id)} : déjà ${pris ? 'pris par ' + nomDe(pris.id) : "le nom d'un élément ou d'une famille"}`);
       }
     }
+    // Élément (ou famille) supprimé sur un appareil, encore utilisé sur l'autre : le forfait l'avait perdu sans rien dire.
+    const elementsTous = new Map(donnees.elements.map((e) => [e.id, e]));
+    const famillesToutes = new Map(donnees.familles.map((x) => [x.id, x]));
+    const orphelins = [];
+    for (const f of index.forfaits) {
+      for (const [famId, eltId] of Object.entries(f.elements)) {
+        if (index.famParId.has(famId) && index.elParId.get(eltId)?.familleId === famId) continue;
+        orphelins.push(`Forfait ${f.ref} : ${famillesToutes.get(famId)?.nom ?? 'famille inconnue'} « ${elementsTous.get(eltId)?.nom ?? 'élément inconnu'} » supprimé`);
+      }
+    }
+    const aCorriger = [...doublons, ...orphelins];
     // 50 lignes au plus : un fichier piégé ne doit pas figer la page avec des milliers de lignes.
-    const affiches = doublons.length > 50 ? [...doublons.slice(0, 50), `… et ${doublons.length - 50} autres`] : doublons;
-    if (doublons.length) await informer('Doublons à corriger', 'Après la mise à jour, ces références ou éléments existent plusieurs fois. Un responsable doit corriger :', affiches);
+    const affiches = aCorriger.length > 50 ? [...aCorriger.slice(0, 50), `… et ${aCorriger.length - 50} autres`] : aCorriger;
+    const message = [
+      doublons.length ? 'Après la mise à jour, ces références ou éléments existent plusieurs fois.' : null,
+      orphelins.length ? "Ces forfaits utilisent un élément supprimé sur un autre appareil : il n'apparaît plus sur leur fiche. Choisis-en un autre, ou recrée-le." : null,
+    ].filter(Boolean).join(' ');
+    if (aCorriger.length) await informer(doublons.length ? 'Doublons à corriger' : 'Forfaits à corriger', `${message} Un responsable doit corriger :`, affiches);
   }
 
   /* =====================================================================

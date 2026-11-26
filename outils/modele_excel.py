@@ -42,6 +42,8 @@ FAMILLES: dict[str, list[str]] = {
     "Installation": [],
 }
 COLONNES_FIXES = ["Référence", "Désignation", "Prix HT", "Prix TTC", "Surnoms"]
+# Après les familles : elle sert rarement. Une case remplie fait de la ligne un pack (prix et éléments calculés).
+CONTENU = "Contenu"
 PAS_DE_DONNEES = "/"  # en tête de chaque liste : l'outil le lit comme une case vide
 
 ROUGE = "E30613"
@@ -89,6 +91,13 @@ MODE_D_EMPLOI = [
         "À l'import, l'outil crée la famille et les éléments, et te les montre avant de valider : vérifie l'orthographe à ce moment-là.",
     ),
     (
+        "Un pack (plusieurs forfaits)",
+        "Colonne « Contenu », tout à droite : les références de ses forfaits, séparées par « + » (ou Alt+Entrée), "
+        "avec la quantité après « × » ou « x » : « REF-A + REF-B ×2 ». Laisse les prix et les éléments vides : "
+        "le pack prend ceux de ses forfaits, et son prix suit le leur. Une pièce qui n'est pas un forfait s'écrit "
+        "entre crochets avec ses deux prix : « [Pose : 45,00 HT / 54,00 TTC] ». Pour un forfait ordinaire, laisse la case vide.",
+    ),
+    (
         "Pour modifier plus tard",
         "Retape la référence d'un forfait existant : il est mis à jour au lieu d'être dupliqué. "
         "Une ligne supprimée du tableau ne supprime rien dans l'outil (supprime dans l'outil).",
@@ -117,7 +126,8 @@ def fabriquer() -> Workbook:
     listes.freeze_panes = "A2"
 
     # ----- Forfaits
-    titres = COLONNES_FIXES + list(FAMILLES)
+    titres = [*COLONNES_FIXES, *FAMILLES, CONTENU]
+    colonne_contenu = get_column_letter(len(titres))
     for col, titre in enumerate(titres, start=1):
         cellule = forfaits.cell(row=1, column=col, value=titre)
         cellule.fill = entete_fond
@@ -128,7 +138,7 @@ def fabriquer() -> Workbook:
         "Mode d'emploi : onglet « Mode d'emploi ». Ne change pas les titres de cette ligne.", "Forfaits"
     )
     forfaits.freeze_panes = "A2"
-    largeurs = {"A": 22, "B": 46, "C": 13, "D": 13, "E": 30}
+    largeurs = {"A": 22, "B": 46, "C": 13, "D": 13, "E": 30, colonne_contenu: 46}
     for col in range(1, len(titres) + 1):
         lettre = get_column_letter(col)
         forfaits.column_dimensions[lettre].width = largeurs.get(lettre, 24)
@@ -138,6 +148,9 @@ def fabriquer() -> Workbook:
         forfaits.cell(row=ligne, column=2).alignment = Alignment(wrap_text=True, vertical="top")
         for col in (3, 4):
             forfaits.cell(row=ligne, column=col).number_format = "0.00"
+        contenu = forfaits.cell(row=ligne, column=len(titres))
+        contenu.number_format = "@"  # « REF ×2 » reste du texte
+        contenu.alignment = Alignment(wrap_text=True, vertical="top")  # Alt+Entrée sépare aussi les forfaits
 
     # Listes déroulantes : un élément de la famille, ou rien. La liste suit l'onglet Listes.
     premiere_famille = len(COLONNES_FIXES) + 1
@@ -161,9 +174,11 @@ def fabriquer() -> Workbook:
     rouge = PatternFill("solid", start_color="F8B4BA", end_color="F8B4BA")
     orange = PatternFill("solid", start_color="FFD8A8", end_color="FFD8A8")
     ligne_remplie = f"COUNTA($A2:${get_column_letter(DERNIERE_COLONNE)}2)>0"  # compte aussi les colonnes ajoutées à droite
-    for plage, cellule in (("A", "A2"), ("C", "C2"), ("D", "D2")):
+    # Un pack (case Contenu remplie) n'a pas de prix à saisir : ses cases de prix vides ne sont pas rouges.
+    sans_contenu = f'${colonne_contenu}2=""'
+    for plage, condition in (("A", 'A2=""'), ("C", f'C2="",{sans_contenu}'), ("D", f'D2="",{sans_contenu}')):
         forfaits.conditional_formatting.add(
-            f"{plage}2:{plage}{DERNIERE_LIGNE}", FormulaRule(formula=[f'AND({ligne_remplie},{cellule}="")'], fill=rouge)
+            f"{plage}2:{plage}{DERNIERE_LIGNE}", FormulaRule(formula=[f"AND({ligne_remplie},{condition})"], fill=rouge)
         )
     forfaits.conditional_formatting.add(
         f"A2:A{DERNIERE_LIGNE}",

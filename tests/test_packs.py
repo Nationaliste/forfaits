@@ -411,6 +411,7 @@ def test_modifier_un_pack_le_recharge_dans_le_total(page, tmp_path):
 
 
 def test_ligne_du_tableau_qui_porte_la_reference_d_un_pack_ne_le_modifie_pas(page, tmp_path):
+    """Tableau sans colonne Contenu (ancien modèle) : la ligne d'un pack le laisse tel quel (lot 2 : tests/test_packs_tableau.py)."""
     d = depart(page, tmp_path)
     d["forfaits"].append(pack("pck-nuit", "PK-NUIT", [ligne(d, "EX-T2-3Q")], "Pack nuit", maj=1000))
     poser(page, d)
@@ -419,9 +420,7 @@ def test_ligne_du_tableau_qui_porte_la_reference_d_un_pack_ne_le_modifie_pas(pag
     chemin = ecrire_tableau(tmp_path / "t.csv", ["PK-NUIT;Pack nuit;100,00;120,00;T2;;;;", "NV-1;Nouveau;10,00;12,00;T2;;;;"])
     ouvrir_tableau(page, chemin)
     d2 = dialogue(page)
-    expect(d2).to_contain_text(
-        "Packs laissés tels quels (le tableau ne modifie pas encore un pack : fais-le dans l'outil) : PK-NUIT"
-    )
+    expect(d2).to_contain_text("Ignoré sur les packs (un pack prend le prix et les éléments de ses forfaits) : PK-NUIT")
     expect(d2).to_contain_text("1 nouveau, 0 modifié")
     d2.get_by_role("button", name="Importer", exact=True).click()
     expect(page.locator("#toast")).to_have_text("Tableau importé")
@@ -590,7 +589,10 @@ def test_page_restee_au_format_2_refuse_proprement_un_pack(page, tmp_path):
     donnees_3 = page.evaluate(STOCKAGE)
 
     ancienne = page_de_la_version_d_avant()
-    page.route(re.compile(r"/(index\.html)?(\?.*)?$"), lambda r: r.fulfill(status=200, content_type="text/html; charset=utf-8", body=ancienne))
+    page.route(
+        re.compile(r"/(index\.html)?(\?.*)?$"),
+        lambda r: r.fulfill(status=200, content_type="text/html; charset=utf-8", body=ancienne),
+    )
     # 1. L'appareil a encore ses données au format 2 : le fichier au format 3 est refusé, en le disant.
     page.evaluate("cle => localStorage.removeItem(cle)", CLE_DONNEES)
     page.reload()

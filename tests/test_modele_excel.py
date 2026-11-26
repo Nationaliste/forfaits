@@ -53,8 +53,8 @@ def test_modele_a_les_titres_de_l_export_csv_de_l_outil(modele):
     titres = [c.value for c in modele["Forfaits"][1]]
     assert titres[:5] == ["Référence", "Désignation", "Prix HT", "Prix TTC", "Surnoms"]
     # Mêmes familles que l'outil ; l'ordre est libre (l'import lit les colonnes par leur titre).
-    assert sorted(titres[5:]) == sorted(nom for _, nom in familles_de_l_outil())
-    assert titres[-2:] == ["Boîtier", "Installation"]  # les deux qui servent rarement, à droite
+    assert sorted(titres[5:-1]) == sorted(nom for _, nom in familles_de_l_outil())
+    assert titres[-3:] == ["Boîtier", "Installation", "Contenu"]  # ce qui sert rarement, à droite
 
 
 def test_modele_a_les_listes_de_depart_de_l_outil(modele):
@@ -63,7 +63,7 @@ def test_modele_a_les_listes_de_depart_de_l_outil(modele):
         attendu[famille].append(nom)
     attendu_par_nom = {nom: attendu[identifiant] for identifiant, nom in familles_de_l_outil()}
     listes = modele["Listes"]
-    titres_forfaits = [c.value for c in modele["Forfaits"][1]][5:]
+    titres_forfaits = [c.value for c in modele["Forfaits"][1]][5:-1]  # les familles, sans Contenu
     for colonne, nom in enumerate(titres_forfaits, start=1):
         assert listes.cell(row=1, column=colonne).value == nom  # même ordre que les colonnes de l'onglet Forfaits
         valeurs = [c.value for c in listes[openpyxl.utils.get_column_letter(colonne)][1:] if c.value]

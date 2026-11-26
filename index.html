@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-MsyryU4k3Xy+LFLsZ6LTsja3U8/SlzuSf0NIZzqnKP4='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EiwYj5b/1ivhHPyqxLCw1yeyLC/FZz2U0CwhiNDc3Ds='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -439,6 +439,8 @@ dialog > .toast.visible { transform: translate(-50%, 0); }
   }
   .panneau { scrollbar-width: thin; }
   .panneau .fiche { flex: 0 0 auto; }
+  /* Fiche d'un pack (jusqu'à 50 lignes) : elle se serre et défile à son tour, sinon elle poussait le total hors de l'écran. */
+  .panneau .fiche:has(.trajet-pack) { flex: 0 1 auto; min-height: 200px; overflow: auto; scrollbar-width: thin; }
   /* Le total se serre avant de sortir de l'écran : ses lignes défilent, les sommes restent visibles. */
   .panneau .total { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 240px; overflow: hidden; }
   .panneau .total-lignes { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; }
@@ -827,6 +829,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 3;        // 2 : surnoms des éléments et des forfaits ; 3 : packs (`contenu` d'un forfait)
   const NIVEAUX_PACK = 3;          // un pack dans un pack dans un pack, pas plus (au-delà, ou en boucle : prix « à revoir »)
+  const ELEMENTS_PACK_MAX = 100;   // éléments montrés (et filtrés) par pack : sans plafond, un fichier bricolé en donnait 20 000 à chacun
   const VERSION_OUTIL = '1.0';
   const TVA = 0.2;                 // TVA 20 % : sert à contrôler le TTC saisi
   const TAUX_TVA = `${Math.round(TVA * 100)} %`;
@@ -1162,6 +1165,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       refuserFutur();
       return false;
     }
+    // Cache de prix des packs juste dans le stockage, quel que soit le chemin qui a remplacé les données (« Remplacer
+    // tout », synchro, retour à une version) : sinon il gardait celui du fichier jusqu'au prochain enregistrement.
+    recalculerPacks(donnees);
     try {
       localStorage.setItem(CLE_DONNEES, JSON.stringify({ format: FORMAT, version: VERSION_FORMAT, ...donnees }));
       stockageOk = true;
@@ -1447,7 +1453,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const champs = new Map();
     const motsRefDes = new Map(); // un nom d'élément tapé trouve aussi la référence ou la désignation qui l'écrit
     // Un pack n'a pas d'éléments à lui : il montre (et se filtre par) ceux de ses forfaits, plusieurs par famille au
-    // besoin, sur NIVEAUX_PACK niveaux (mémorisé : borné même pour des packs qui se contiennent l'un l'autre).
+    // besoin, sur NIVEAUX_PACK niveaux (mémorisé : borné même pour des packs qui se contiennent l'un l'autre), et au plus
+    // ELEMENTS_PACK_MAX : chaque pack de tête a sa propre liste, refaite à chaque rendu (50 lignes × 100 éléments au pire).
     const rangEl = new Map(elsActifs.map((e, i) => [e.id, i]));
     const memoEls = new Map();
     const elementsVus = (f, niveaux) => {
@@ -1459,19 +1466,26 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         const g = l.id ? forfaitParId.get(l.id) : null;
         if (g && (!g.contenu || niveaux > 1)) for (const e of elementsVus(g, niveaux - 1)) ids.add(e.id);
       }
-      const els = [...ids].sort((a, b) => rangEl.get(a) - rangEl.get(b)).map((id) => elParId.get(id));
+      const els = [...ids].sort((a, b) => rangEl.get(a) - rangEl.get(b)).slice(0, ELEMENTS_PACK_MAX).map((id) => elParId.get(id));
       memoEls.set(cle, els);
       return els;
+    };
+    // Référence et désignation « à plat » d'un forfait cité par des packs : calculées une fois (une désignation fait
+    // jusqu'à 2 000 caractères, et des milliers de lignes de packs peuvent citer le même forfait).
+    const plats = new Map();
+    const platsDe = (g) => {
+      if (!plats.has(g.id)) plats.set(g.id, [norm(g.ref), norm(g.designation)]);
+      return plats.get(g.id);
     };
     for (const f of forfaits) {
       const els = elementsVus(f, NIVEAUX_PACK);
       elementsForfait.set(f.id, els);
       motsRefDes.set(f.id, [motsPlats(f.ref), motsPlats(f.designation)]);
       // Pack : trouvé aussi par le nom de ses lignes (et la référence de ses forfaits).
-      const lignes = (f.contenu || []).flatMap((l) => {
+      const lignes = f.contenu ? [...new Set(f.contenu.flatMap((l) => {
         const g = l.id ? forfaitParId.get(l.id) : null;
-        return [norm(l.nom), ...(g ? [norm(g.ref), norm(g.designation)] : [])];
-      });
+        return [norm(l.nom), ...(g ? platsDe(g) : [])];
+      }))] : [];
       champs.set(f.id, [
         norm(f.ref), norm(f.designation), ...lignes,
         ...(surnomsDe.get(f.id) || []).map(norm),
@@ -2486,7 +2500,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const champNom = h('input', { id: 'p-nom', class: 'champ', maxlength: 2000, autocomplete: 'off', value: existant?.designation ?? '', placeholder: 'Pack nuit complet' });
     const champRef = h('input', { id: 'p-ref', class: 'champ', maxlength: 80, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', value: existant?.ref ?? `PACK-${String(n).padStart(2, '0')}` });
     const erreur = h('p', { class: 'msg-erreur msg-reserve', role: 'alert' });
-    const { ht, ttc } = sommeTotal();
+    // Lignes du pack aux prix d'aujourd'hui : une ligne du total peut garder l'ancien prix de son forfait (voulu dans
+    // le total), mais le pack, lui, suivra le prix actuel ; c'est aussi son prix de secours si le forfait disparaît.
+    const lignesPack = () => appareil.total.map((l) => {
+      const p = prixChange(l) || l;
+      return { id: l.id, nom: l.nom, qte: l.qte, ht: p.ht, ttc: p.ttc };
+    });
+    const ht = lignesPack().reduce((s, l) => s + l.ht * l.qte, 0);
+    const ttc = lignesPack().reduce((s, l) => s + l.ttc * l.qte, 0);
     const groupe = (label, champ) => h('div', { class: 'champ-groupe' }, h('label', { for: champ.id }, label), champ);
     const enregistrer = async () => {
       const nom = champNom.value.trim();
@@ -2501,7 +2522,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         : ['', null];
       erreur.textContent = probleme;
       if (probleme) { fautif.focus(); return; }
-      const contenu = appareil.total.map((l) => ({ id: l.id, nom: l.nom, qte: l.qte, ht: l.ht, ttc: l.ttc }));
+      const contenu = lignesPack();
       const cle = cleCombinaison({ contenu });
       const memes = index.forfaits.filter((f) => f.id !== existant?.id && f.contenu && cleCombinaison(f) === cle);
       if (memes.length) {
@@ -2516,8 +2537,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const { exemple: _ancienExemple, ...base } = existant || { id: nouvelId('fft'), elements: {} };
       const pack = { ...base, ref, designation: nom, ht: 0, ttc: 0, contenu, maj: Date.now() };
       remplacer(donnees.forfaits, pack);
-      recalculerPacks(donnees); // le prix enregistré est déjà le bon
-      if (!sauver()) return;
+      if (!sauver()) return; // recalcule le prix du pack
       noterModif();
       appareil.totalPack = null; // le total reste (client au comptoir) ; un nouvel enregistrement ferait un autre pack
       sauverAppareil();
@@ -2870,8 +2890,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       titre: f.contenu ? 'Supprimer ce pack ?' : 'Supprimer ce forfait ?',
       message: [h('strong', {}, f.ref), f.designation ? ' — ' + f.designation : ''],
       liste: [
-        // Comme pour un élément utilisé : le dire et compter. Le pack garde le dernier prix connu, marqué « à revoir ».
-        packs.length ? `Il est dans ${pluriel(packs.length, 'pack')} (${refsAbregees(packs).join(', ')}) : ${packs.length > 1 ? 'ils garderont' : 'il gardera'} son dernier prix, marqué « à revoir ».` : null,
+        // Comme pour un élément utilisé : le dire et compter. Le pack reprend le prix noté sur sa ligne (celui du jour
+        // où le pack a été enregistré), marqué « à revoir ».
+        packs.length ? `Il est dans ${pluriel(packs.length, 'pack')} (${refsAbregees(packs).join(', ')}) : ${packs.length > 1 ? 'ils reprendront' : 'il reprendra'} le prix qu'il avait quand le pack a été enregistré, marqué « à revoir ».` : null,
         "La suppression passera aussi sur les autres appareils quand ils importeront ton prochain export.",
       ].filter(Boolean),
       boutons: [{ texte: 'Supprimer', valeur: true, classe: 'btn-rouge' }, { texte: 'Annuler', valeur: false }],

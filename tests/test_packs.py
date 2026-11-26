@@ -31,6 +31,7 @@ from test_forfaits import (
     supprimer,
 )
 from test_fusion_import import CLE_DONNEES, ecrire_fichier, forfait, stockage
+from test_recherche_total import poser_total
 
 # Prix des forfaits d'exemple (inventés), en centimes.
 T1_Z5_3Q = (123450, 148140)
@@ -450,6 +451,30 @@ def test_meme_pack_qui_ne_differe_que_par_le_cache_n_est_pas_modifie(page, tmp_p
     assert prix_rangee(page, "PK-NUIT") == ("1 380,00 €", "1 150,00 €")
 
 
+def test_remplacer_tout_avec_un_cache_faux_donne_le_bon_prix(page, tmp_path):
+    """« Remplacer tout » n'appelle pas recalculerPacks lui-même : sauver() et construireIndex le font."""
+    d = depart(page, tmp_path)
+    d["forfaits"].append(pack("pck-nuit", "PK-NUIT", [ligne(d, "EX-T2-3Q"), ligne(d, "EX-LUM-POSE")], "Pack nuit", maj=1000))
+    poser(page, d)
+    fichier = exporter_json(page, tmp_path / "export.json")
+    for f in fichier["forfaits"]:
+        if f["ref"] == "EX-T2-3Q":
+            f["ht"], f["ttc"], f["maj"] = 80000, 96000, f["maj"] + 1  # nouveau prix dans le fichier
+        if f["ref"] == "PK-NUIT":
+            f["ht"], f["ttc"] = 999999, 999999  # cache faux (vieux, ou fichier retouché)
+    chemin = tmp_path / "autre.json"
+    chemin.write_text(json.dumps(fichier), encoding="utf-8")
+    importer(page, chemin, "Remplacer tout")
+    attendu = ("1 500,00 €", "1 250,00 €")  # 960 + 540 TTC, 800 + 450 HT
+    assert prix_rangee(page, "PK-NUIT") == attendu
+    assert (du_stockage(page, "PK-NUIT")["ht"], du_stockage(page, "PK-NUIT")["ttc"]) == (125000, 150000)  # sauver() recalcule
+    page.reload()  # données relues depuis le stockage
+    page.wait_for_selector("#resultats .carte")
+    assert prix_rangee(page, "PK-NUIT") == attendu
+    p = next(f for f in exporter_json(page, tmp_path / "apres.json")["forfaits"] if f["ref"] == "PK-NUIT")
+    assert (p["ht"], p["ttc"]) == (125000, 150000)
+
+
 def test_fichier_version_2_toujours_lisible_et_pack_abime_refuse(page, tmp_path):
     chemin = ecrire_fichier(tmp_path / "v2.json", forfaits=[forfait("fft-v2", "V2-1", 10000, 12000, maj=5)])
     importer(page, chemin)
@@ -463,6 +488,63 @@ def test_fichier_version_2_toujours_lisible_et_pack_abime_refuse(page, tmp_path)
     expect(dialogue(page)).to_contain_text("Fichier abîmé : pack « PK-ABIME » invalide.")
     dialogue(page).get_by_role("button", name="Compris").click()
     assert "PK-ABIME" not in refs(page)
+
+
+def test_pack_enregistre_prend_le_prix_du_jour_des_forfaits(page):
+    """Une ligne du total peut garder un ancien prix : le pack, lui, est annoncé et noté au prix actuel."""
+    page.set_viewport_size(HAUT)
+    # Ligne mémorisée quand EX-T2-3Q valait 600,00 € HT, 720,00 € TTC ; il vaut aujourd'hui 700,00 € HT, 840,00 € TTC.
+    poser_total(page, [{"id": "fft-ext23q", "nom": "EX-T2-3Q", "qte": 2, "ht": 60000, "ttc": 72000}])
+    activer_modif(page)
+    page.locator("#total .btn-pack").click()
+    expect(dialogue(page)).to_contain_text(re.compile(r"1 ligne, 1\s680,00\s€ TTC \(1\s400,00\s€ HT\) aujourd'hui"))
+    dialogue(page).locator("#p-nom").fill("Pack du jour")
+    dialogue(page).locator("#p-enregistrer").click()
+    expect(page.locator("#toast")).to_contain_text("Pack PACK-01 enregistré")
+    p = du_stockage(page, "PACK-01")
+    assert [(lg["qte"], lg["ht"], lg["ttc"]) for lg in p["contenu"]] == [(2, *T2_3Q)]  # le prix de secours est celui du jour
+
+
+def test_fiche_d_un_long_pack_laisse_le_total_a_l_ecran(page, tmp_path):
+    """Page de 1000 px de haut : la fiche d'un pack de 8 lignes poussait le total (et ses sommes) sous l'écran."""
+    page.set_viewport_size(HAUT)
+    d = depart(page, tmp_path)
+    refs_ = [f["ref"] for f in d["forfaits"] if not f.get("supprime")][:8]
+    d["forfaits"].append(pack("pck-long", "PK-LONG", [ligne(d, r) for r in refs_], "Pack long"))
+    poser(page, d)
+    activer_modif(page)
+    ajouter(page, refs_[0])
+    ajouter(page, refs_[1])
+    f = fiche(page, "PK-LONG")
+    expect(f.locator(".ligne-pack")).to_have_count(8)
+    hauteur = page.evaluate("innerHeight")
+    for sel in ("#total .total-somme", "#total .btn-pack"):
+        bas = page.locator(sel).bounding_box()
+        assert bas["y"] + bas["height"] <= hauteur, (sel, bas, hauteur)
+    # La fiche défile à son tour : son prix total se lit en la faisant défiler.
+    f.locator(".ttc-grand").scroll_into_view_if_needed()
+    expect(f.locator(".ttc-grand")).to_be_in_viewport()
+
+
+def test_un_pack_montre_au_plus_100_elements(page, tmp_path):
+    """Sans plafond, un fichier bricolé donnait à chaque pack l'union de milliers d'éléments, refaite à chaque rendu."""
+    d = depart(page, tmp_path)
+    familles = [f["id"] for f in d["familles"] if not f.get("supprime")][:5]
+    for fam in familles:
+        d["elements"] += [{"id": f"elt-{fam[4:]}-{i}", "familleId": fam, "nom": f"{fam[4:]} {i}", "maj": 1} for i in range(30)]
+    d["forfaits"] += [
+        forfait(f"fft-large-{i}", f"LARGE-{i}", elements={fam: f"elt-{fam[4:]}-{i}" for fam in familles}) for i in range(30)
+    ]
+    large = [{"id": f"fft-large-{i}", "nom": f"LARGE-{i}", "qte": 1, "ht": 10000, "ttc": 12000} for i in range(30)]
+    d["forfaits"] += [
+        pack("pck-large", "PK-LARGE", large, "Pack large"),
+        pack("pck-dessus", "PK-DESSUS", [{"id": "pck-large", "nom": "Large", "qte": 1, "ht": 0, "ttc": 0}], "Pack dessus"),
+    ]
+    poser(page, d)
+    for ref in ("PK-DESSUS", "PK-LARGE"):
+        chercher(page, ref)
+        expect(rangee(page, ref).locator(".arret")).to_have_count(100)  # 150 éléments dans ses forfaits
+    assert prix_rangee(page, "PK-LARGE") == ("3 600,00 €", "3 000,00 €")  # le prix, lui, compte toutes les lignes
 
 
 def test_pack_cree_depuis_le_total_respecte_le_plafond_de_forfaits(page, tmp_path):
@@ -541,7 +623,7 @@ def test_captures_des_packs(appareils, tmp_path):
     for theme in ("sombre", "clair"):
         for nom, options in (
             ("grand", {"viewport": HAUT}),
-            ("telephone", {"viewport": {"width": 375, "height": 812}, "has_touch": True, "is_mobile": True}),
+            ("telephone", {"viewport": {"width": 375, "height": 812}, "has_touch": True}),
         ):
             a = appareils(**options)
             page = a.page

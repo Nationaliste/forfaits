@@ -9,8 +9,8 @@
 ## Reste à faire
 - Faire essayer la nouvelle interface par l'utilisateur, sur son PC du comptoir et sur un vrai téléphone : rien n'a été jugé sur un vrai appareil (captures de navigateurs de test seulement).
 - roadmap#1030 (idée) : police embarquée, l'outil s'affiche avec la police du système sur Android.
-- roadmap#1032 : à 360 px de large, « Autres » passe seul sur une 2e ligne de filtres.
-- PR #47 (synchro, `feat/synchro-cloud`) : toujours pas déployée ni à fusionner. Elle est maintenant en conflit avec presque tout `index.html` : la reprendre sur le nouveau `main` avant tout déploiement (ce n'est plus seulement la balise CSP).
+- roadmap#1032, fait le 19/11 : sous 375 px de large les pastilles sont resserrées, « Autres » ne passe plus seul sur une 2e ligne à 360 px (à 320 px il y reste, choix de l'utilisateur).
+- PR #47 (synchro, `feat/synchro-cloud`) : toujours pas déployée ni à fusionner. `main` y a été refusionné le 16/11 après la refonte (7 petits conflits ; 423 tests passés sur Chromium, Edge et Firefox ; la fenêtre et le menu de la mise à jour automatique ont été vus dans la nouvelle interface). Ses écrans n'ont pas été redessinés un par un : à regarder avant le déploiement.
 - Inchangé depuis la session 04 : ce qui attend l'accord de l'utilisateur (packs, recherche, fusion et import, restes de l'audit).
 
 ## Pièges

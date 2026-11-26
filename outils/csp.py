@@ -30,6 +30,9 @@ def empreinte(html: str) -> str:
 
 def main() -> None:
     html = PAGE.read_text(encoding="utf-8")
+    if not MOTIF_EMPREINTE.search(html):
+        # Sans ce garde-fou, « déjà à jour » s'affichait alors que la page n'a plus d'empreinte à mettre à jour.
+        sys.exit("Aucune empreinte « script-src 'sha256-…' » dans la balise CSP de index.html : rien n'a été écrit.")
     nouveau = MOTIF_EMPREINTE.sub(
         f"script-src 'sha256-{empreinte(html)}'", html, count=1
     )

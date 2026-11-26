@@ -1536,6 +1536,17 @@ def test_affichage_telephone_et_pc(navigateur, appareils, largeur, hauteur, nom)
     page.screenshot(path=f"{prefixe}-7-total.png")
 
 
+def test_telephone_etroit_garde_les_filtres_sur_une_ligne(appareils):
+    """À 360 px de large (courant sur Android), « Autres » passait seul sur une 2e ligne de filtres et
+    prenait la place d'un forfait."""
+    page = appareils(viewport={"width": 360, "height": 640}).page
+    hauts = page.eval_on_selector_all(
+        "#filtres .filtre", "fs => fs.map(f => Math.round(f.getBoundingClientRect().top))"
+    )
+    assert len(hauts) == 4 and len(set(hauts)) == 1, hauts
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+
 def test_telephone_une_rangee_par_forfait_puis_sa_fiche_en_feuille(navigateur, appareils):
     """Sur un téléphone, une rangée : le nom, les éléments, le TTC et le « + ». Le reste est dans la
     fiche, qui monte du bas au premier appui."""
@@ -2560,6 +2571,8 @@ def test_total_additionne_forfaits_quantites_et_lignes_libres(page):
     page.set_viewport_size(HAUT)
     a, b = sorted(TOUS)[:2]
     (ht_a, ttc_a), (ht_b, ttc_b) = prix_carte(page, a), prix_carte(page, b)
+    # La ligne du total porte la désignation du forfait.
+    nom_a, nom_b = (page.locator("#resultats .carte", has_text=r).locator(".carte-nom").text_content() for r in (a, b))
     total = page.locator("#total")  # grand écran : le total est sous la fiche, à droite de la liste
     expect(total).to_be_hidden()  # rien à afficher tant que le total est vide
 
@@ -2577,9 +2590,9 @@ def test_total_additionne_forfaits_quantites_et_lignes_libres(page):
     expect(page.locator("#fiche .deja")).to_have_text("×3")
     expect(plus_a).to_have_text("3")
 
-    total.get_by_role("button", name=f"Moins : {a}").click()  # 3 → 2
-    total.get_by_role("button", name=f"Moins : {a}").click()  # 2 → 1
-    total.get_by_role("button", name=f"Retirer {b}").click()
+    total.get_by_role("button", name=f"Moins : {nom_a}").click()  # 3 → 2
+    total.get_by_role("button", name=f"Moins : {nom_a}").click()  # 2 → 1
+    total.get_by_role("button", name=f"Retirer {nom_b}").click()
     expect(total.locator(".total-ligne")).to_have_count(1)
     expect(plus_a).to_have_text("1")
     # Chaque ligne garde son HT sous son TTC (les clients sont des professionnels : le HT se lit ligne par ligne).
@@ -2596,7 +2609,7 @@ def test_total_additionne_forfaits_quantites_et_lignes_libres(page):
     expect(d.get_by_label("Prix HT de la ligne libre")).to_have_value("0,20")
     d.get_by_role("button", name="Ajouter à la liste").click()
     d.get_by_role("button", name="Terminé").click()
-    expect(total.locator(".total-ligne-nom")).to_have_text([a, "Pièce test", "Divers"])
+    expect(total.locator(".total-ligne-nom")).to_have_text([nom_a, "Pièce test", "Divers"])
     assert centimes(total.locator(".s-ht").text_content()) == ht_a + 10 + 20
     assert centimes(total.locator(".s-ttc").text_content()) == ttc_a + 12 + 24
 
@@ -2617,6 +2630,8 @@ def test_total_sur_telephone_barre_du_bas_puis_feuille(appareils):
     page = appareils(viewport={"width": 375, "height": 812}).page
     a = sorted(TOUS)[0]
     ht, ttc = prix_carte(page, a)
+    # La ligne du total porte la désignation du forfait.
+    nom = page.locator("#resultats .carte", has_text=a).locator(".carte-nom").text_content()
     barre = page.locator("#barre-total")
     expect(barre).to_be_hidden()  # rien à afficher tant que le total est vide
 
@@ -2635,13 +2650,13 @@ def test_total_sur_telephone_barre_du_bas_puis_feuille(appareils):
     barre.click()
     feuille = page.locator("#dlg-total")
     expect(feuille.locator("h2")).to_be_focused()
-    expect(feuille.locator(".total-ligne-nom")).to_have_text([a])
+    expect(feuille.locator(".total-ligne-nom")).to_have_text([nom])
     feuille.get_by_role("button", name="Ligne libre").click()
     d = dialogue(page)
     d.get_by_label("Prix TTC de la ligne libre").fill("12")
     d.get_by_role("button", name="Ajouter à la liste").click()
     d.get_by_role("button", name="Terminé").click()
-    expect(feuille.locator(".total-ligne-nom")).to_have_text([a, "Divers"])
+    expect(feuille.locator(".total-ligne-nom")).to_have_text([nom, "Divers"])
     assert centimes(feuille.locator(".s-ttc").text_content()) == 2 * ttc + 1200
     feuille.get_by_role("button", name="Fermer").click()
     assert centimes(page.locator("#barre-total-ttc").text_content()) == 2 * ttc + 1200
@@ -2680,15 +2695,17 @@ def test_total_abime_ou_invalide_ne_bloque_rien(page):
 def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(appareils):
     page = appareils(viewport={"width": 375, "height": 812}).page
     a = sorted(TOUS)[0]
+    # La ligne du total porte la désignation du forfait.
+    nom = page.locator("#resultats .carte", has_text=a).locator(".carte-nom").text_content()
     page.get_by_role("button", name=f"Ajouter {a} au total", exact=True).click()
     page.locator("#barre-total").click()
     d = page.locator("#dlg-total")
-    plus = d.get_by_role("button", name=f"Plus : {a}")
+    plus = d.get_by_role("button", name=f"Plus : {nom}")
     plus.focus()
     page.keyboard.press("Enter")
     expect(d.locator(".total-qte")).to_have_text("2")
-    expect(d.get_by_role("button", name=f"Plus : {a}")).to_be_focused()  # le focus ne se perd pas
-    hauteur = d.get_by_role("button", name=f"Retirer {a}").bounding_box()
+    expect(d.get_by_role("button", name=f"Plus : {nom}")).to_be_focused()  # le focus ne se perd pas
+    hauteur = d.get_by_role("button", name=f"Retirer {nom}").bounding_box()
     assert hauteur["height"] >= 44 and hauteur["width"] >= 44, hauteur
     # Le total a changé dans un autre onglet : la feuille ouverte le suit, et « Retirer » retire la ligne visée.
     page.evaluate(
@@ -2697,8 +2714,8 @@ def test_total_clavier_focus_cible_tactile_et_total_change_ailleurs(appareils):
           localStorage.setItem('forfaits.appareil.v1', JSON.stringify(l));
           window.dispatchEvent(new StorageEvent('storage', {key: ['forfaits', 'appareil', 'v1'].join('.')})); }"""
     )
-    expect(d.locator(".total-ligne-nom")).to_have_text([a, "Autre"])
-    d.get_by_role("button", name=f"Retirer {a}").click()
+    expect(d.locator(".total-ligne-nom")).to_have_text([nom, "Autre"])
+    d.get_by_role("button", name=f"Retirer {nom}").click()
     expect(d.locator(".total-ligne-nom")).to_have_text(["Autre"])
 
 

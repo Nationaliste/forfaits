@@ -190,3 +190,123 @@
 - Bug : avec des commandes de 44 px la barre des filtres fait 60 px, mais `--barre` disait 56 : la liste dépassait l'écran de 4 px et le panneau collait 4 px trop haut (mesuré sur Firefox, qui lit la dalle tactile du PC).
 - À garder : `--barre` vaut 60 px quand `data-tactile` est posé.
 - Test : `test_total_du_panneau_garde_son_defilement_et_montre_la_ligne_ajoutee` (`scrollY` reste à 0 ; Firefox lit la vraie dalle).
+
+## 2026-11-19 — Téléphone de 360 px : « Autres » seul sur une 2e ligne de filtres
+- Où : `index.html`, `@container page (max-width: 374px)` (`.filtres`, `.filtre`).
+- Bug : à 360 px de large (courant sur Android) il manquait quelques pixels pour les trois pastilles et « Autres » ; « Autres » passait seul sur une 2e ligne et prenait la place d'un forfait (50 px). Reste de la refonte (roadmap#1032).
+- À garder : sous 375 px, pastilles resserrées (marges de 6 px, écart de 4 px, texte inchangé). À 320 px la 2e ligne reste, choix de l'utilisateur.
+- Test : `test_telephone_etroit_garde_les_filtres_sur_une_ligne`.
+
+## 2026-11-26 — Fusion : forfait qui utilise un élément supprimé sur un autre appareil, sans message
+- Où : `index.html`, fin d'`importerFichier` (fenêtre « Doublons à corriger » / « Forfaits à corriger »).
+- Bug : élément supprimé sur A, encore utilisé par un forfait de B : après la fusion le forfait s'affichait sans cet élément, et rien ne l'annonçait (roadmap#753).
+- À garder : après l'import, chaque forfait actif dont un élément (ou sa famille) n'est plus actif est listé.
+- Test : `test_forfait_qui_utilise_un_element_supprime_ailleurs_est_signale`.
+
+## 2026-11-26 — Import du tableau : « Zorba 5+ » rangé avec « Zorba 5 » en silence
+- Où : `index.html`, `analyserTableau` (`rattaches`), fenêtre « Importer ce tableau ? ».
+- Bug : `norm` retire signes et espaces, donc deux noms qui ne diffèrent que par eux désignaient le même élément sans le dire (roadmap#753).
+- À garder : `norm` inchangé ; une cellule trouvée par son nom à plat mais écrite autrement (signes, espaces) est annoncée.
+- Test : `test_tableau_annonce_un_nom_range_avec_un_element_proche`.
+
+## 2026-11-26 — Import .json : union enregistrée sans contrôle, puis tout refusé au chargement suivant
+- Où : `index.html`, `unionValable`, appelée par `importerFichier` (« Mettre à jour ») et `importerTableau`.
+- Bug : seul le fichier passait `valider` ; un identifiant pris dans deux listes (fichier retouché) ou un total au-delà du plafond passait, puis le stockage était refusé et mis de côté à la réouverture (roadmap#753).
+- À garder : l'union passe `valider` avant `sauver()` ; refusée, rien ne change.
+- Test : `test_import_json_qui_casserait_le_stockage_est_refuse`, `test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union`.
+
+## 2026-11-26 — Nombre d'enregistrements non plafonné dans `valider`
+- Où : `index.html`, `valider`, `pasDePlace` (formulaire), `annulerSuppression`.
+- Bug : un fichier à 45 000 forfaits passait et figeait l'appli à chaque ouverture (roadmap#573, #711).
+- À garder : au-delà de `FORFAITS_MAX` (5 000) forfaits non supprimés (comme le tableau ; à 20 000, l'ouverture prenait encore 40 s), `FORFAITS_TOTAL_MAX` (20 000, marques de suppression comprises), 20 000 éléments ou 500 familles : « Trop d'enregistrements », avec la limite. Tout ce qui écrit un forfait la respecte (formulaire, `annulerSuppression`), sinon le chargement suivant déclare les données illisibles. Plafond différent de la branche synchro, qui doit le reprendre.
+- Test : `test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union`, `test_formulaire_refuse_un_forfait_de_plus_que_le_plafond_du_chargement`.
+
+## 2026-11-26 — Copies `.illisible.<date>` jamais purgées
+- Où : `index.html`, `rangerIllisibles`, appelée par `charger`.
+- Bug : chaque chargement refusé écrivait une copie entière des données, jamais effacée, jusqu'à remplir le stockage (roadmap#573).
+- À garder : 3 copies au plus (les plus récentes), pas deux fois de suite la même.
+- Test : `test_copies_illisibles_purgees_les_trois_plus_recentes_gardees`.
+
+## 2026-11-26 — Fusion à date égale : chaque appareil gardait sa version
+- Où : `index.html`, `gagne` (utilisé par `fusionner`, `bilanFusion` et le compte des effacements).
+- Bug : à `maj` égal le local gagnait des deux côtés : deux appareils qui s'échangeaient leurs fichiers ne convergeaient pas (roadmap#751).
+- À garder : à date égale, le contenu (`canonique`, clés triées) départage, pareil partout.
+- Test : `test_fusion_a_date_egale_donne_le_meme_resultat_des_deux_cotes`.
+
+## 2026-11-26 — Borne des dates qui dépendait du moment de l'import
+- Où : `index.html`, `valider` (`limite`).
+- Bug : bornée à « maintenant + 24 h », une date du futur grandissait à chaque réimport du même fichier et écrasait une correction faite entre-temps (roadmap#751).
+- À garder : borne = date d'export du fichier (`exporteLe`, présent depuis la V1) + 24 h ; fichier exporté plus de 24 h dans le futur refusé (horloge fausse). Stockage et tableau, sans `exporteLe` : maintenant + 24 h.
+- Test : `test_borne_de_date_suit_la_date_d_export_du_fichier`, `test_fichier_exporte_dans_le_futur_refuse`.
+
+## 2026-11-26 — Import du tableau : petits défauts de lecture
+- Où : `index.html`, `decouperCsv`, `analyserTableau`, `contenuListes` ; `outils/modele_excel.py`.
+- Bug (roadmap#751) : nom d'élément de plus de 60 caractères recréé (coupé) à chaque import ; guillemet jamais refermé qui avalait les lignes suivantes ; famille nommée comme une colonne fixe (« Exemple », « HT »…) qui doublait une colonne de l'export ; référence en double dans l'outil dont un seul forfait était mis à jour, sans le dire ; modèle Excel contrôlé sur 999 lignes quand l'import en accepte 5000.
+- À garder : ligne refusée au-delà de 60 caractères ; erreur « guillemet jamais refermé » ; `colonneFixe` dans Listes (ajout et renommage) ; « Références présentes plusieurs fois » dans la fenêtre ; `DERNIERE_LIGNE` = `LIGNES_TABLEAU_MAX` + 1.
+- Test : `test_tableau_nom_d_element_trop_long_refuse`, `test_tableau_guillemet_non_referme_refuse`, `test_famille_nommee_comme_une_colonne_du_tableau_refusee`, `test_reference_en_double_dans_l_outil_signalee_a_l_import_du_tableau`, `test_modele_excel_controle_autant_de_lignes_que_l_import`.
+
+## 2026-11-26 — Bilan d'import .json muet sur les éléments et les familles
+- Où : `index.html`, `bilanFusion` (`renommes`, `retires`), fenêtre « Importer ce fichier ? ».
+- Bug : un élément ou une famille renommé ou supprimé par le fichier n'était pas annoncé, puis toutes les cartes changeaient (roadmap#751).
+- À garder : « Éléments et familles renommés » et « … supprimés » dans la fenêtre.
+- Test : `test_bilan_d_import_annonce_elements_et_familles_renommes_ou_supprimes`.
+
+## 2026-11-26 — Listes : la liste des familles prise à l'ouverture de la fenêtre était périmée après un renommage
+- Où : `index.html`, `contenuListes`, `ajouterFamille`.
+- Bug : le contrôle « famille déjà existante » lisait `fams`, figée au dessin de la fenêtre ; le renommage ne redessine pas. Renommer « Lumineux » en « Coffret » acceptait alors une 2e « Coffret » et refusait « Lumineux » à tort.
+- À garder : tout contrôle de nom de famille lit `index.fams` (comme le renommage), jamais une copie prise plus tôt.
+- Test : `test_famille_renommee_libere_son_ancien_nom_et_prend_le_nouveau`.
+
+## 2026-11-26 — `outils/csp.py` disait « déjà à jour » quand la balise CSP n'avait plus d'empreinte
+- Où : `outils/csp.py`, `main`.
+- Bug : sans le motif `script-src 'sha256-…'`, le remplacement ne change rien et le script concluait « Empreinte déjà à jour. » alors que le script de la page était bloqué par le navigateur.
+- À garder : le script sort en erreur (message clair, rien d'écrit) si le motif est absent.
+- Test : `test_csp_refuse_une_page_sans_empreinte_au_lieu_de_dire_a_jour`.
+
+## 2026-11-26 — `--zoom` redéclaré sur l'en-tête et les titres de fenêtre
+- Où : `index.html`, bloc de palette `:root, .entete, .dlg-tete`.
+- Bug : `--zoom: 1` et `--tactile` étaient dans le bloc partagé avec la palette, donc redonnés à `.entete` et `.dlg-tete` : une règle qui y divise par `var(--zoom)` aurait reçu 1 même en « Très grand » (sans effet visible tant qu'aucune règle n'existait).
+- À garder : `--zoom` et `--tactile` se déclarent sur `:root` seul (bloc « Mesures »), jamais dans le bloc de palette.
+- Test : `test_le_grossissement_du_texte_arrive_jusqu_a_l_entete_et_aux_titres_de_fenetre`.
+
+## 2026-11-26 — Serveur de test : tout le dossier du projet était servi, `prive/` compris
+- Où : `tests/conftest.py`, `_Serveur.send_head`, `FICHIERS_DU_SITE`.
+- Bug : le serveur local des tests (127.0.0.1, port au hasard) servait tout le dossier : les vrais forfaits de `prive/`, `.git`, `CLAUDE.md` étaient lisibles par toute page ouverte pendant la suite.
+- À garder : seuls les fichiers du site sont servis (ceux de `FICHIERS` dans `sw.js`) ; un nouveau fichier du site s'ajoute aux deux listes (un test les compare).
+- Test : `test_serveur_de_test_ne_sert_que_les_fichiers_du_site`, `test_les_fichiers_servis_aux_tests_sont_ceux_que_le_service_worker_garde`.
+
+## 2026-11-26 — `.gitignore` : `cloud/wrangler.jsonc` et `cloud/.dev.vars.<environnement>` n'étaient pas ignorés
+- Où : `.gitignore`, bloc « Cloud de synchro » (le même bloc, identique, sur la branche synchro).
+- Bug : seuls `cloud/wrangler.toml` et `cloud/.dev.vars` étaient ignorés ; une config en `.jsonc` ou un `.dev.vars.staging` aurait pu partir dans ce dépôt public avec le vrai nom du Worker.
+- À garder : les deux lignes ajoutées, et les deux blocs « Cloud de synchro » (main et synchro) restent identiques.
+- Test : `test_gitignore_couvre_la_config_privee_du_cloud`.
+
+## 2026-11-26 — Recherche : un nom d'élément cachait les références et désignations qui l'écrivent
+- Où : `index.html`, `analyserRecherche`, `correspond`, `construireIndex` (`motsRefDes`).
+- Bug : un mot égal au nom ou au surnom d'un élément devenait un filtre exact sur l'élément ; un forfait dont la référence ou la désignation contenait ce mot, sans avoir l'élément, disparaissait (roadmap#752).
+- À garder : l'élément OU le mot entier dans la référence ou la désignation (`suiteDeMots` : « 3Q » ne ramène pas « 13Q »), jamais par le nom d'un autre élément.
+- Test : `test_nom_d_element_trouve_aussi_la_reference_ou_la_designation_qui_l_ecrit`.
+
+## 2026-11-26 — Total jeté à la relecture au-dessus d'un plafond plus bas que la saisie
+- Où : `index.html`, `lireLigneTotal`.
+- Bug : la relecture refusait un prix que la saisie et `valider` acceptaient ; au rechargement, la ligne (et le total) disparaissait (roadmap#751).
+- À garder : `PRIX_MAX` pour la saisie et la relecture, la même valeur que la borne de `valider` (999999999).
+- Test : `test_total_relu_jusqu_au_plafond_de_la_saisie`.
+
+## 2026-11-26 — « + » au total : l'ancien prix gardé sans le dire
+- Où : `index.html`, `ajouterAuTotal`, `totalContenu`, `prixChange`.
+- Bug : un forfait dont le prix a changé depuis l'ajout restait à l'ancien prix dans le total, sans que rien ne le montre (roadmap#751).
+- À garder : l'ancien prix reste (voulu), mais la ligne l'écrit en ambre avec le prix du moment, et le message du « + » le dit.
+- Test : `test_prix_change_depuis_l_ajout_se_voit_dans_le_total`.
+
+## 2026-11-26 — Message avec « Annuler » serré dans la moitié de l'écran
+- Où : `index.html`, `.toast` (`width: max-content`).
+- Bug : le message, posé à `left: 50 %`, prenait la largeur qui restait à droite ; au téléphone il passait sur trois lignes.
+- À garder : `.toast { width: max-content; }` (la largeur maximale le garde dans l'écran).
+- Test : `test_message_de_suppression_tient_dans_le_telephone_en_tres_grand`.
+
+## 2026-11-26 — Quantité du total jamais annoncée par un lecteur d'écran
+- Où : `index.html`, `totalContenu` (`.total-qte`, boutons « − » et « + »).
+- Bug : chaque ligne avait sa zone `role=status`, mais le total est recréé à chaque appui (`replaceChildren`) : une zone live neuve n'est pas annoncée, et il y en avait une par ligne.
+- À garder : pas de `role=status` dans les lignes ; la quantité est dans le nom du « − » et du « + » (« Plus : …, quantité 2 »), où le focus revient après l'appui.
+- Test : `test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus`.

@@ -281,3 +281,15 @@
 - Bug (trouvé pendant la construction des packs) : le `ht`/`ttc` d'un pack est un cache, et il entre dans `canonique`. À date égale, deux appareils dont l'un n'a pas encore reçu le nouveau prix d'un forfait avaient deux caches différents : `gagne` départageait par le contenu et le bilan comptait le pack « modifié », avec un « prix qui change ».
 - À garder : `fusionner` rend des copies de packs aux caches recalculés sur l'union, et `bilanFusion` recalcule lui-même les deux côtés (l'union pour « Mettre à jour », le fichier seul pour « Remplacer tout »), sur des copies : aucun appelant (fichier, tableau, synchro) n'a à y penser. `recalculerPacks` ne touche jamais à `maj`.
 - Test : `test_meme_pack_qui_ne_differe_que_par_le_cache_n_est_pas_modifie` (échoue sans le recalcul dans `bilanFusion`), `test_le_prix_d_un_forfait_remonte_dans_le_pack_sans_toucher_a_sa_date`.
+
+## 2026-11-26 — « Annuler » d'une suppression : muet si déjà rétabli, surnom repris à un autre
+- Où : `index.html`, `annulerSuppression`.
+- Bug (roadmap#1251) : le forfait déjà rétabli ailleurs (autre onglet, import) : le bouton ne disait rien. Un surnom libéré par la suppression et donné entre-temps à autre chose revenait avec le forfait rétabli, qui le reprenait (plus petit identifiant, ou premier surnom perso) : un surnom désignait deux choses.
+- À garder : « Forfait … déjà rétabli » ; chaque surnom (équipe et perso) repasse `surnomRefuse` avant le retour, les refusés restent à l'autre et le message le dit.
+- Test : `test_annuler_une_suppression_deja_retablie_ailleurs_le_dit`, `test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps`.
+
+## 2026-11-26 — Total : une remise au HT négatif et TTC à 0 comptée comme article
+- Où : `index.html`, `nbArticlesTotal`.
+- Bug (roadmap#1251) : seul le TTC négatif marquait une remise ; la relecture du total accepte une ligne libre HT négatif, TTC 0, qui comptait dans « N articles ».
+- À garder : HT OU TTC négatif = pas un article.
+- Test : `test_remise_au_ht_negatif_et_ttc_a_zero_ne_compte_pas_comme_article`.

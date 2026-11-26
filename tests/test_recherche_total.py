@@ -6,6 +6,7 @@ Idées de l'essai du 10/11/2026 et points de l'audit (roadmap#752, #759, #751).
 import json
 import re
 
+from conftest import CAPTURES
 from playwright.sync_api import expect
 from test_forfaits import (
     AVEC_3Q,
@@ -95,6 +96,34 @@ def test_un_prix_tape_trouve_les_forfaits_de_ce_montant_et_le_texte_des_referenc
     assert refs(page) == {"EX-T2-3Q"}
     chercher(page, "zorba 5,3q")  # ailleurs, la virgule sépare toujours deux mots
     assert refs(page) == {"EX-T1-Z5-3Q", "EX-T2-Z5-3Q", "EX-T1-Z5-3Q-P"}
+
+
+def test_un_prix_ecrit_par_milliers_trouve_aussi_ce_montant_sans_rien_perdre(page, tmp_path):
+    """roadmap#1251 : « 1 140 » n'était pas lu comme un prix ; il l'est en plus de la recherche du texte."""
+    ajouter_donnees(
+        page,
+        tmp_path,
+        forfaits=[
+            {"id": "fft-ref-1140", "ref": "REF-1140", "ht": 1000, "ttc": 1200},
+            {"id": "fft-t1-petit", "ref": "T1-PETIT", "ht": 11700, "ttc": 14000, "elements": {"fam-taximetre": "elt-t1demo"}},
+            {"id": "fft-z5-300", "ref": "Z5-300", "ht": 25000, "ttc": 30000, "elements": {"fam-boitier": "elt-zorba5"}},
+            {"id": "fft-z5-gros", "ref": "Z5-GROS", "ht": 441700, "ttc": 530000, "elements": {"fam-boitier": "elt-zorba5"}},
+        ],
+    )  # fmt: skip
+    # EX-T1-KPX-3Q vaut 1 140,00 € TTC ; REF-1140 (« 1 » et « 140 » dans sa référence) et T1-PETIT (« 1 » dans sa
+    # référence, 140 € TTC) étaient déjà trouvés mot par mot : ils le restent.
+    chercher(page, "1 140")
+    assert refs(page) == {"EX-T1-KPX-3Q", "REF-1140", "T1-PETIT"}
+    for saisie in ("1 140,00", "1 140,00 €", "1 140,00 €"):  # tel qu'affiché sur une fiche, copié
+        chercher(page, saisie)
+        assert "EX-T1-KPX-3Q" in refs(page), saisie
+    chercher(page, "1 234,50")  # le HT de EX-T1-Z5-3Q
+    assert refs(page) == {"EX-T1-Z5-3Q"}
+    chercher(page, "T1 140")  # « T1 » n'est pas un nombre : rien ne change
+    assert refs(page) == {"T1-PETIT"}
+    # « Zorba 5 » est un élément : son « 5 » n'est pas le début d'un prix « 5 300 » (Z5-GROS vaut 5 300 €).
+    chercher(page, "zorba 5 300")
+    assert refs(page) == {"Z5-300"}
 
 
 # ---------------------------------------------------------------- total : nom de la ligne (roadmap#759)
@@ -309,3 +338,133 @@ def test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus(page):
     total.get_by_role("button", name=f"Moins : {DESIGNATION_T2_3Q}").click()
     expect(total.get_by_role("button", name=f"Moins : {DESIGNATION_T2_3Q}, quantité 1", exact=True)).to_be_attached()
     expect(total.locator("[role=status]")).to_have_count(0)  # pas une zone live par ligne
+
+
+# ---------------------------------------------------------------- annuler une suppression : petits restes (roadmap#1251)
+
+
+def autre_onglet(page, script, argument):
+    """Un autre onglet du même appareil change le stockage ; la page le reçoit par l'événement « storage »."""
+    autre = page.context.new_page()
+    autre.goto(page.url)
+    autre.wait_for_selector("#resultats .carte")
+    autre.evaluate(script, argument)
+    autre.close()
+
+
+def test_annuler_une_suppression_deja_retablie_ailleurs_le_dit(page):
+    activer_modif(page)
+    supprimer_forfait(page, "EX-LUM-POSE")
+    autre_onglet(
+        page,
+        """cle => {
+            const d = JSON.parse(localStorage.getItem(cle));
+            const f = d.forfaits.find((x) => x.ref === 'EX-LUM-POSE');
+            delete f.supprime;
+            f.maj = Date.now() + 1000;
+            localStorage.setItem(cle, JSON.stringify(d));
+        }""",
+        CLE_DONNEES,
+    )
+    expect(page.locator("#resultats .carte-ref", has_text="EX-LUM-POSE")).to_have_count(1)  # la page a suivi
+    page.locator("#toast").get_by_role("button", name="Annuler", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("Forfait EX-LUM-POSE déjà rétabli")  # avant : aucun message
+    assert refs(page) == TOUS
+
+
+def test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps(page, tmp_path):
+    donnees = exporter_json(page, tmp_path / "depart.json")
+    for f in donnees["forfaits"]:
+        if f["ref"] == "EX-LUM-POSE":
+            f["surnoms"] = ["le gros", "pack nuit"]
+    page.evaluate(
+        "([cd, d, ca]) => { localStorage.setItem(cd, JSON.stringify(d)); localStorage.setItem(ca, JSON.stringify({ surnoms: { 'fft-exlumpose': ['ma pose'] } })); }",
+        [CLE_DONNEES, donnees, CLE_APPAREIL],
+    )
+    page.reload()
+    page.wait_for_selector("#resultats .carte")
+    activer_modif(page)
+    supprimer_forfait(page, "EX-LUM-POSE")
+    # Pendant la suppression, un autre onglet donne « le gros » (équipe) et « ma pose » (perso) à EX-T2-3Q.
+    # Son identifiant (fft-ext23q) est plus grand que celui du forfait supprimé (fft-exlumpose) : sans contrôle,
+    # le forfait rétabli lui reprendrait les deux (le plus petit identifiant, ou le premier perso, gagne).
+    autre_onglet(
+        page,
+        """([cd, ca]) => {
+            const d = JSON.parse(localStorage.getItem(cd));
+            Object.assign(d.forfaits.find((x) => x.ref === 'EX-T2-3Q'), { surnoms: ['le gros'], maj: Date.now() });
+            localStorage.setItem(cd, JSON.stringify(d));
+            const a = JSON.parse(localStorage.getItem(ca));
+            a.surnoms['fft-ext23q'] = ['ma pose'];
+            localStorage.setItem(ca, JSON.stringify(a));
+        }""",
+        [CLE_DONNEES, CLE_APPAREIL],
+    )
+    rangee_t2 = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text=re.compile("^EX-T2-3Q$")))
+    expect(rangee_t2.locator(".carte-surnoms")).to_have_text("dit « le gros, ma pose »")
+    page.locator("#toast").get_by_role("button", name="Annuler", exact=True).click()
+    expect(page.locator("#toast")).to_have_text(
+        "Forfait EX-LUM-POSE rétabli, sans ses surnoms « le gros », « ma pose » : ils désignent maintenant autre chose"
+    )
+    assert refs(page) == TOUS
+    stocke = json.loads(page.evaluate("cle => localStorage.getItem(cle)", CLE_DONNEES))
+    surnoms = {f["ref"]: f.get("surnoms") for f in stocke["forfaits"]}
+    assert surnoms["EX-LUM-POSE"] == ["pack nuit"]  # celui que personne n'a pris revient avec lui
+    assert surnoms["EX-T2-3Q"] == ["le gros"]
+    assert json.loads(page.evaluate("cle => localStorage.getItem(cle)", CLE_APPAREIL))["surnoms"] == {"fft-ext23q": ["ma pose"]}
+    expect(rangee_t2.locator(".carte-surnoms")).to_have_text("dit « le gros, ma pose »")  # EX-T2-3Q les garde
+
+
+# ---------------------------------------------------------------- total : petits restes (roadmap#1251)
+
+
+def test_remise_au_ht_negatif_et_ttc_a_zero_ne_compte_pas_comme_article(page):
+    page.set_viewport_size(HAUT)
+    poser_total(
+        page,
+        [
+            {"id": "fft-ext23q", "nom": "EX-T2-3Q", "qte": 1, "ht": 70000, "ttc": 84000},
+            {"id": None, "nom": "Geste", "qte": 2, "ht": -1, "ttc": 0},  # relue telle quelle (la relecture l'accepte)
+        ],
+    )
+    total = page.locator("#total")
+    expect(total.locator(".total-ligne")).to_have_count(2)
+    expect(total.locator(".total-tete")).to_contain_text("1 article")  # avant : 3 articles
+
+
+def test_deux_forfaits_de_meme_designation_se_distinguent_par_leur_reference(page, tmp_path, navigateur):
+    page.set_viewport_size(HAUT)
+    nom = "Kit Zorba nuit"
+    ajouter_donnees(
+        page,
+        tmp_path,
+        forfaits=[
+            {"id": "fft-kit-a", "ref": "KIT-A", "designation": nom, "ht": 1000, "ttc": 1200},
+            {"id": "fft-kit-b", "ref": "KIT-B", "designation": nom, "ht": 2000, "ttc": 2400},
+            {"id": "fft-kit-c", "ref": "KIT-C", "designation": nom, "ht": 3000, "ttc": 3600, "supprime": True},
+        ],
+    )  # fmt: skip
+    total = page.locator("#total")
+    page.get_by_role("button", name="Ajouter KIT-A au total", exact=True).click()
+    expect(total.locator(".total-ligne")).to_have_count(1)
+    expect(total.locator(".total-ligne-ref")).to_have_count(0)  # une seule ligne de ce nom : rien de plus
+    page.get_by_role("button", name="Ajouter KIT-B au total", exact=True).click()
+    page.get_by_role("button", name="Ajouter EX-T2-3Q au total", exact=True).click()
+    expect(total.locator(".total-ligne-ref")).to_have_text(["KIT-A", "KIT-B"])
+    expect(total.get_by_role("button", name=f"Retirer {nom} (KIT-B)", exact=True)).to_be_attached()
+    expect(total.get_by_role("button", name=f"Retirer {DESIGNATION_T2_3Q}", exact=True)).to_be_attached()
+    # Lignes déjà enregistrées (le total enregistré n'a rien de plus), dont une d'un forfait supprimé depuis :
+    # la référence est lue sur le forfait.
+    poser_total(
+        page,
+        [
+            {"id": "fft-kit-a", "nom": nom, "qte": 1, "ht": 1000, "ttc": 1200},
+            {"id": "fft-kit-c", "nom": nom, "qte": 1, "ht": 3000, "ttc": 3600},
+            {"id": None, "nom": nom, "qte": 1, "ht": 500, "ttc": 600},  # ligne libre : pas de référence
+        ],
+    )
+    expect(total.locator(".total-ligne-nom")).to_have_text([f"{nom}KIT-A", f"{nom}KIT-C", nom])
+    CAPTURES.mkdir(exist_ok=True)
+    total.screenshot(path=str(CAPTURES / f"{navigateur.nom}-total-meme-designation.png"))
+    total.get_by_role("button", name=f"Retirer {nom} (KIT-C)", exact=True).click()
+    expect(total.locator(".total-ligne-ref")).to_have_text(["KIT-A"])

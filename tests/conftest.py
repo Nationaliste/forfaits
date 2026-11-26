@@ -17,6 +17,18 @@ CAPTURES = RACINE / "captures"
 NAVIGATEURS = os.environ.get("NAVIGATEURS", "chromium,msedge,firefox").split(",")
 
 
+# Les fichiers que la page et son service worker demandent vraiment (voir `FICHIERS` dans sw.js) : rien d'autre n'est servi.
+FICHIERS_DU_SITE = {
+    "/",
+    "/index.html",
+    "/sw.js",
+    "/manifest.webmanifest",
+    "/icon-192.png",
+    "/icon-512.png",
+    "/icon-maskable-512.png",
+}
+
+
 class _Serveur(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
 
@@ -24,6 +36,10 @@ class _Serveur(http.server.SimpleHTTPRequestHandler):
         pass
 
     def send_head(self):
+        if self.path.split("?")[0].split("#")[0] not in FICHIERS_DU_SITE:
+            # Le dossier du projet contient aussi prive/, les tests, .git… : seuls les fichiers du site sortent.
+            self.send_error(404)
+            return None
         if self.server.page_lente and self.path.split("?")[0] == "/sw.js":
             # Le service worker du dépôt, qui répond à une demande de page avec un peu de retard (voir _ServeurTcp).
             sw = (RACINE / "sw.js").read_text(encoding="utf-8")

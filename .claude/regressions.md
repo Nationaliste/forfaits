@@ -161,3 +161,33 @@
 - Bug : à 360 px de large (courant sur Android) il manquait quelques pixels pour les trois pastilles et « Autres » ; « Autres » passait seul sur une 2e ligne et prenait la place d'un forfait (50 px). Reste de la refonte (roadmap#1032).
 - À garder : sous 375 px, pastilles resserrées (marges de 6 px, écart de 4 px, texte inchangé). À 320 px la 2e ligne reste, choix de l'utilisateur.
 - Test : `test_telephone_etroit_garde_les_filtres_sur_une_ligne`.
+
+## 2026-11-26 — Listes : la liste des familles prise à l'ouverture de la fenêtre était périmée après un renommage
+- Où : `index.html`, `contenuListes`, `ajouterFamille`.
+- Bug : le contrôle « famille déjà existante » lisait `fams`, figée au dessin de la fenêtre ; le renommage ne redessine pas. Renommer « Lumineux » en « Coffret » acceptait alors une 2e « Coffret » et refusait « Lumineux » à tort.
+- À garder : tout contrôle de nom de famille lit `index.fams` (comme le renommage), jamais une copie prise plus tôt.
+- Test : `test_famille_renommee_libere_son_ancien_nom_et_prend_le_nouveau`.
+
+## 2026-11-26 — `outils/csp.py` disait « déjà à jour » quand la balise CSP n'avait plus d'empreinte
+- Où : `outils/csp.py`, `main`.
+- Bug : sans le motif `script-src 'sha256-…'`, le remplacement ne change rien et le script concluait « Empreinte déjà à jour. » alors que le script de la page était bloqué par le navigateur.
+- À garder : le script sort en erreur (message clair, rien d'écrit) si le motif est absent.
+- Test : `test_csp_refuse_une_page_sans_empreinte_au_lieu_de_dire_a_jour`.
+
+## 2026-11-26 — `--zoom` redéclaré sur l'en-tête et les titres de fenêtre
+- Où : `index.html`, bloc de palette `:root, .entete, .dlg-tete`.
+- Bug : `--zoom: 1` et `--tactile` étaient dans le bloc partagé avec la palette, donc redonnés à `.entete` et `.dlg-tete` : une règle qui y divise par `var(--zoom)` aurait reçu 1 même en « Très grand » (sans effet visible tant qu'aucune règle n'existait).
+- À garder : `--zoom` et `--tactile` se déclarent sur `:root` seul (bloc « Mesures »), jamais dans le bloc de palette.
+- Test : `test_le_grossissement_du_texte_arrive_jusqu_a_l_entete_et_aux_titres_de_fenetre`.
+
+## 2026-11-26 — Serveur de test : tout le dossier du projet était servi, `prive/` compris
+- Où : `tests/conftest.py`, `_Serveur.send_head`, `FICHIERS_DU_SITE`.
+- Bug : le serveur local des tests (127.0.0.1, port au hasard) servait tout le dossier : les vrais forfaits de `prive/`, `.git`, `CLAUDE.md` étaient lisibles par toute page ouverte pendant la suite.
+- À garder : seuls les fichiers du site sont servis (ceux de `FICHIERS` dans `sw.js`) ; un nouveau fichier du site s'ajoute aux deux listes (un test les compare).
+- Test : `test_serveur_de_test_ne_sert_que_les_fichiers_du_site`, `test_les_fichiers_servis_aux_tests_sont_ceux_que_le_service_worker_garde`.
+
+## 2026-11-26 — `.gitignore` : `cloud/wrangler.jsonc` et `cloud/.dev.vars.<environnement>` n'étaient pas ignorés
+- Où : `.gitignore`, bloc « Cloud de synchro » (le même bloc, identique, sur la branche synchro).
+- Bug : seuls `cloud/wrangler.toml` et `cloud/.dev.vars` étaient ignorés ; une config en `.jsonc` ou un `.dev.vars.staging` aurait pu partir dans ce dépôt public avec le vrai nom du Worker.
+- À garder : les deux lignes ajoutées, et les deux blocs « Cloud de synchro » (main et synchro) restent identiques.
+- Test : `test_gitignore_couvre_la_config_privee_du_cloud`.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-HX6p8cdeN88vdi7j0eqfYBdU3jbXshGTTqLy+ggpflk='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-/bZ6/Mlh01bi0+GLwtTHwvMSLpun+JZvxNoEqQ/Uc+E='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -45,8 +45,6 @@
   /* Polices déjà présentes sur les appareils : l'outil marche sans internet. */
   --police: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --police-titre: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  --tactile: 46px; /* boutons carrés des fenêtres */
-  --zoom: 1;       /* grossissement du texte, posé par data-texte sur <html> */
 }
 /* Palette claire : choisie dans le Menu (ou suivant l'appareil), posée par le script sur <html>.
    La liste des suggestions est dans l'en-tête noir mais se pose sur la page : elle suit le thème. */
@@ -81,6 +79,10 @@
   --r-grand: 20px;
   --rond: 999px;
   --sortie: cubic-bezier(0.16, 1, 0.3, 1);
+  --tactile: 46px;      /* boutons carrés des fenêtres */
+  /* Grossissement du texte, posé par data-texte sur <html>. Surtout pas dans le bloc de palette plus haut :
+     il est aussi sur .entete et .dlg-tete, et y redonnerait 1 à tout ce qui s'y divise par var(--zoom). */
+  --zoom: 1;
 }
 /* Écran tactile (décidé une fois, au démarrage) : des commandes de 44 px. Surtout pas d'après
    data-geste : elles grossiraient au contact du doigt, le contenu bougerait et l'appui serait perdu. */
@@ -2613,7 +2615,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const ajouterFamille = () => {
       const nom = champFamille.value.trim();
       if (!nom) return;
-      if (!nomLibre(nom, fams)) { signaler(`La famille « ${nom} » existe déjà.`); return; }
+      if (!nomLibre(nom, index.fams)) { signaler(`La famille « ${nom} » existe déjà.`); return; } // index.fams : `fams` est périmée après un renommage
       signaler('');
       const ordre = Math.max(0, ...donnees.familles.map((f) => f.ordre)) + 1;
       donnees.familles.push({ id: nouvelId('fam'), nom, ordre, maj: Date.now() });

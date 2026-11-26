@@ -282,3 +282,30 @@ def test_message_de_suppression_tient_dans_le_telephone_en_tres_grand(appareils)
     expect(message).to_have_text("Forfait EX-LUM-POSE rétabli")
     page.wait_for_function("() => document.getElementById('toast').getAnimations().length === 0")
     assert message.bounding_box()["width"] > 360 / 2, message.bounding_box()
+
+
+def test_ligne_libre_moins_zero_ne_s_affiche_pas_en_zero_negatif(page):
+    page.set_viewport_size(HAUT)
+    page.get_by_role("button", name="Ajouter EX-T2-3Q au total", exact=True).click()
+    d = ouvrir_ligne_libre(page)
+    d.get_by_label("Nom de la ligne libre").fill("Geste")
+    d.get_by_label("Prix TTC de la ligne libre").fill("-0")
+    expect(d.get_by_label("Prix HT de la ligne libre")).to_have_value("0,00")  # pas « -0,00 »
+    d.get_by_role("button", name="Ajouter à la liste").click()
+    d.get_by_role("button", name="Terminé").click()
+    prix = page.locator("#total .total-ligne-prix")
+    expect(prix).to_have_count(2)
+    assert not re.search(r"[-−]", prix.last.text_content())
+
+
+def test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus(page):
+    # Le total est recréé à chaque appui : une zone role=status neuve ne serait pas annoncée.
+    page.set_viewport_size(HAUT)
+    page.get_by_role("button", name="Ajouter EX-T2-3Q au total", exact=True).click()
+    total = page.locator("#total")
+    total.get_by_role("button", name=f"Plus : {DESIGNATION_T2_3Q}").click()
+    plus = total.get_by_role("button", name=f"Plus : {DESIGNATION_T2_3Q}, quantité 2", exact=True)
+    expect(plus).to_be_focused()
+    total.get_by_role("button", name=f"Moins : {DESIGNATION_T2_3Q}").click()
+    expect(total.get_by_role("button", name=f"Moins : {DESIGNATION_T2_3Q}, quantité 1", exact=True)).to_be_attached()
+    expect(total.locator("[role=status]")).to_have_count(0)  # pas une zone live par ligne

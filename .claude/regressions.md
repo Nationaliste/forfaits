@@ -171,7 +171,7 @@
 ## 2026-11-26 — Total jeté à la relecture au-dessus d'un plafond plus bas que la saisie
 - Où : `index.html`, `lireLigneTotal`.
 - Bug : la relecture refusait un prix que la saisie et `valider` acceptaient ; au rechargement, la ligne (et le total) disparaissait (roadmap#751).
-- À garder : un seul plafond, `PRIX_MAX`, pour la saisie, la relecture et `valider`.
+- À garder : `PRIX_MAX` pour la saisie et la relecture, la même valeur que la borne de `valider` (999999999).
 - Test : `test_total_relu_jusqu_au_plafond_de_la_saisie`.
 
 ## 2026-11-26 — « + » au total : l'ancien prix gardé sans le dire
@@ -185,3 +185,9 @@
 - Bug : le message, posé à `left: 50 %`, prenait la largeur qui restait à droite ; au téléphone il passait sur trois lignes.
 - À garder : `.toast { width: max-content; }` (la largeur maximale le garde dans l'écran).
 - Test : `test_message_de_suppression_tient_dans_le_telephone_en_tres_grand`.
+
+## 2026-11-26 — Quantité du total jamais annoncée par un lecteur d'écran
+- Où : `index.html`, `totalContenu` (`.total-qte`, boutons « − » et « + »).
+- Bug : chaque ligne avait sa zone `role=status`, mais le total est recréé à chaque appui (`replaceChildren`) : une zone live neuve n'est pas annoncée, et il y en avait une par ligne.
+- À garder : pas de `role=status` dans les lignes ; la quantité est dans le nom du « − » et du « + » (« Plus : …, quantité 2 »), où le focus revient après l'appui.
+- Test : `test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus`.

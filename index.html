@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Qj7fejIjknmRtxmXKie8UWREcCun/6PmLQFDDWPcNIY='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-j994JvtfkIq+1MEkvNIYmgP8ZtxNp7vMnXBESfH81Xw='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -897,7 +897,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const t = String(saisie ?? '').trim();
     const moins = /^[-−]/.test(t);
     const v = lirePrix(moins ? t.slice(1) : t);
-    return v !== null && moins ? -v : v; // « -0 » vaut 0 : pas de « −0,00 € » à l'écran
+    return v !== null && moins && v !== 0 ? -v : v; // « -0 » vaut 0 : pas de « −0,00 € » à l'écran
   }
   // Pourquoi une saisie n'est pas un prix (lirePrix a renvoyé null), dans un message qui dit quoi corriger.
   function erreurPrix(saisie) {
@@ -2157,9 +2157,11 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
           nouveau ? h('span', { class: 'total-ligne-ecart' },
             `Ancien prix : le forfait vaut maintenant ${formatPrix(nouveau.ttc)} TTC (${formatPrix(nouveau.ht)} HT). Retire la ligne pour le nouveau prix.`) : null,
           h('span', { class: 'total-ligne-commandes' },
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
-            h('span', { class: 'total-qte', role: 'status', 'aria-label': `Quantité ${l.qte}` }, String(l.qte)),
-            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'moins', 'data-i': i, 'aria-label': `Moins : ${l.nom}, quantité ${l.qte}`, disabled: l.qte <= 1, onclick: () => changer(l, () => { l.qte -= 1; }, 'moins', i) }, icone('moins')),
+            // Pas de zone role=status : le total est recréé à chaque appui, et une zone neuve n'est pas annoncée.
+            // La quantité est dans le nom du « − » et du « + », où le focus revient après l'appui.
+            h('span', { class: 'total-qte' }, String(l.qte)),
+            h('button', { type: 'button', class: 'btn-icone', 'data-cmd': 'plus', 'data-i': i, 'aria-label': `Plus : ${l.nom}, quantité ${l.qte}`, disabled: l.qte >= QTE_MAX, onclick: () => changer(l, () => { l.qte += 1; }, 'plus', i) }, icone('plus')),
             l.qte > 1 ? h('span', { class: 'total-ligne-unite' }, `${formatPrix(l.ttc)} l'unité`) : null,
             h('button', { type: 'button', class: 'btn-icone total-retirer', 'data-cmd': 'retirer', 'data-i': i, 'aria-label': `Retirer ${l.nom}`, onclick: () => changer(l, () => { appareil.total.splice(appareil.total.indexOf(l), 1); }, 'retirer', i) }, icone('croix'))));
         if (l !== ajoutee) li.style.animation = 'none';

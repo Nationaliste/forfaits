@@ -11,7 +11,7 @@ from conftest import CAPTURES, RACINE
 from playwright.sync_api import expect
 from test_forfaits import HAUT, dialogue, ecrire_tableau, espaces, ouvrir_tableau, refs
 from test_fusion_import import ecrire_fichier, forfait, stockage
-from test_packs import LUM_POSE, T1_Z5_3Q, T2_3Q, depart, du_stockage, ligne, libre, pack, poser
+from test_packs import LUM_POSE, T1_Z5_3Q, T2_3Q, depart, du_stockage, id_de, ligne, libre, pack, poser
 
 EN_TETE = "Référence;Désignation;Prix HT;Prix TTC;Surnoms;Taximètre;Contenu"
 
@@ -186,6 +186,47 @@ def test_reference_qui_contient_un_x_se_lit_avec_sa_quantite(page, tmp_path):
     poser(page, d)
     importer_tableau(page, tableau(tmp_path, ["PK-A;;;;;;T1-X2 + T1-X2 x3"]))
     assert [x["qte"] for x in du_stockage(page, "PK-A")["contenu"]] == [1, 3]
+
+
+def test_case_contenu_piegee_refusee_sans_figer_l_onglet(page, tmp_path):
+    """Des milliers d'espaces dans une ligne libre ou de « x » à la suite figeaient l'onglet : l'import est refusé tout
+    de suite (la fenêtre doit s'ouvrir dans le délai de expect)."""
+    problemes = refus_tableau(
+        page,
+        tableau(tmp_path, ["PK-1;;;;;;[a:" + " " * 5000 + "]", "PK-2;;;;;;" + "x" * 100000, "PK-3;;;;;;+ +"]),
+    )
+    assert len(problemes) == 3
+    assert problemes[0].startswith("Ligne 2 (PK-1) : Contenu, ligne trop longue « [a:")
+    assert problemes[1].startswith("Ligne 3 (PK-2) : Contenu, ligne trop longue « xxx")
+    assert all(p.endswith("» (200 caractères au maximum).") for p in problemes[:2])
+    assert problemes[2] == "Ligne 4 (PK-3) : Contenu, aucun forfait (exemple : REF-A + REF-B ×2)."
+
+
+def test_reference_avec_un_plus_ne_bloque_que_la_lecture_fausse(page, tmp_path):
+    d = depart(page, tmp_path)
+    d["forfaits"] += [forfait("fft-a", "A1"), forfait("fft-b", "B1"), forfait("fft-ab", "A1+B1"), forfait("fft-p", "EX-T2-3Q+")]
+    d["forfaits"].append(pack("pck-ab", "PK-AB", [ligne(d, "A1+B1")]))
+    poser(page, d)
+    # « EX-T2-3Q + … » ressemble à la référence « EX-T2-3Q+ », et « A1 + B1 » se lit A1 puis B1 dans un pack neuf : la
+    # case dit bien ce qu'elle veut dire, rien n'est bloqué.
+    importer_tableau(page, tableau(tmp_path, ["PK-1;;;;;;EX-T2-3Q + EX-LUM-POSE ×2", "PK-2;;;;;;A1 + B1"]))
+    assert [x["id"] for x in du_stockage(page, "PK-1")["contenu"]] == [id_de(d, "EX-T2-3Q"), id_de(d, "EX-LUM-POSE")]
+    assert [x["id"] for x in du_stockage(page, "PK-2")["contenu"]] == ["fft-a", "fft-b"]
+    # Le pack qui contient « A1+B1 » le perdrait (relu A1 puis B1) : refusé.
+    problemes = refus_tableau(page, tableau(tmp_path, ["PK-AB;;;;;;A1 + B1"], nom="ab.csv"))
+    assert problemes == [
+        "Ligne 2 (PK-AB) : Contenu, la référence « A1+B1 » contient un « + » : renomme-la, ou assemble ce pack dans l'appli."
+    ]
+
+
+def test_pack_present_deux_fois_dans_l_outil_annonce(page, tmp_path):
+    """Deux packs de même référence (fusion de deux appareils) : un seul est mis à jour, la fenêtre le dit."""
+    d = depart(page, tmp_path)
+    d["forfaits"] += [pack("pck-1", "PK-D", [ligne(d, "EX-T2-3Q")]), pack("pck-2", "PK-D", [ligne(d, "EX-LUM-POSE")])]
+    poser(page, d)
+    d2 = ouvrir_tableau(page, tableau(tmp_path, ["PK-D;;;;;;EX-T1-Z5-3Q"]))
+    expect(d2).to_contain_text("PK-D (2 forfaits)")
+    d2.get_by_role("button", name="Annuler").click()
 
 
 # ---------------------------------------------------------------- mettre à jour un pack existant

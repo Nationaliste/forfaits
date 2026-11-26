@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-jQ3xtHpwwo+t6EqsLkAvPhUsxwjL+p0GT8zckLDtRmE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-KdY4x5OwlWDy2GPac965Z/hsCA4saZcmJE5U55PXCKo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -3324,6 +3324,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       return l.qte > 1 ? `${quoi} ×${l.qte}` : quoi;
     }).join(' + ');
   }
+  // Une ligne de la case : référence (80 caractères) ou ligne libre [nom (80) : prix HT / prix TTC], et sa quantité.
+  const MORCEAU_MAX = 200;
   // Morceaux d'une case Contenu : un « + » entre crochets (nom d'une ligne libre) ne sépare rien.
   function decouperContenu(texte) {
     const morceaux = [];
@@ -3342,10 +3344,13 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // connue, donc une référence qui contient elle-même un « x » se lit sans erreur.
   function lireContenu(texte, trouver) {
     const morceaux = decouperContenu(texte);
+    if (!morceaux.length) return { erreur: 'aucun forfait (exemple : REF-A + REF-B ×2)' };
     if (morceaux.length > TOTAL_MAX) return { erreur: `${morceaux.length} lignes, ${TOTAL_MAX} au maximum` };
     const lignes = [];
     for (const m of morceaux) {
       const court = m.length > 60 ? m.slice(0, 60) + '…' : m;
+      // Borne avant toute lecture : une case piégée de milliers de caractères figeait l'onglet (expressions, quantité).
+      if (m.length > MORCEAU_MAX) return { erreur: `ligne trop longue « ${court} » (${MORCEAU_MAX} caractères au maximum)` };
       let ligne, qteTexte = null;
       if (m.startsWith('[')) {
         const crochet = m.match(/^\[([^]*)\]\s*(?:[×xX]\s*([^]*))?$/);
@@ -3508,6 +3513,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const pack = !!contenuTexte || (!colonnes.has('contenu') && !!actif?.contenu);
       if (actif?.contenu && !pack) { erreurs.push(`${lieu} : c'est un pack et sa case Contenu est vide : écris ses forfaits (exemple : REF-A + REF-B ×2), ou retire la ligne du tableau.`); continue; }
       if (pack && actif && !actif.contenu) { erreurs.push(`${lieu} : cette référence est un forfait ordinaire, pas un pack : vide sa case Contenu, ou donne une autre référence au pack.`); continue; }
+      // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
+      const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
+      if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
       if (pack) {
         // Un pack supprimé revient avec son identifiant (comme un forfait), jamais un forfait ordinaire supprimé.
         const existant = actif || donnees.forfaits.find((f) => f.contenu && memeRef(f.ref, ref));
@@ -3532,9 +3540,6 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
       // Un pack supprimé n'est pas repris : la ligne crée un forfait neuf.
       const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => !f.contenu && memeRef(f.ref, ref));
-      // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
-      const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
-      if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
       // Une famille absente du tableau n'est pas touchée ; une cellule vide retire l'élément.
       const elements = { ...(existant?.elements ?? {}) };
       for (const fam of toutesFamilles) {
@@ -3578,16 +3583,32 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const parRef = new Map();
     for (const b of brouillons) parRef.set(cleDeRef(b.ref), { id: b.id, ref: b.ref, nom: b.designation || b.ref, ht: b.ht, ttc: b.ttc });
     for (const f of index.forfaits) if (!parRef.has(cleDeRef(f.ref))) parRef.set(cleDeRef(f.ref), { id: f.id, ref: f.ref, nom: f.designation || f.ref, ht: f.ht, ttc: f.ttc });
-    // « A+B » ne se lit pas dans une case où « + » sépare les forfaits : refusé plutôt que lu « A » puis « B ».
-    const compact = (s) => s.replace(/\s*\+\s*/g, '+').toLocaleUpperCase('fr');
-    const refsAvecPlus = [...parRef.values()].filter((r) => r.ref.includes('+'));
+    // « A+B » ne se lit pas dans une case où « + » sépare les forfaits : refusé plutôt que lu « A » puis « B », quand
+    // la case aligne ses morceaux et que cette lecture est fausse (un morceau inconnu, ou le pack contenait « A+B »).
+    // Une simple ressemblance de texte (« 3Q + A » à côté d'une référence « 3Q+ ») ne bloque rien.
+    const refsAvecPlus = [...parRef.values()].filter((r) => r.ref.includes('+'))
+      .map((r) => ({ ...r, parts: r.ref.split('+').map(cleDeRef).filter(Boolean) })).filter((r) => r.parts.length);
+    const aligne = (cles, parts) => cles.some((_, k) => parts.every((p, j) => {
+      const c = cles[k + j];
+      if (c === undefined) return false;
+      return c === p || (j === parts.length - 1 && c.startsWith(p) && /^\s*[×X]/.test(c.slice(p.length)));
+    }));
+    const avecPlusDans = (b) => {
+      const cles = decouperContenu(b.pack.texte).map(cleDeRef);
+      if (cles.length > TOTAL_MAX) return null; // lireContenu le refuse
+      return refsAvecPlus.find((r) => aligne(cles, r.parts)
+        && (r.parts.some((p) => !parRef.has(p)) || b.existant?.contenu?.some((l) => l.id === r.id)));
+    };
+    // Forfaits supprimés par référence : relus seulement si le pack a déjà leur ligne (voir trouver).
+    const supprimesParRef = new Map();
+    for (const f of donnees.forfaits) if (f.supprime) supprimesParRef.set(cleDeRef(f.ref), [...(supprimesParRef.get(cleDeRef(f.ref)) || []), f]);
     const contenusLus = new Set(); // contenus lus dans le tableau (lignes neuves, jamais celles de l'outil)
     const cleContenu = (c) => c.map((l) => (l.id ? `f:${l.id}` : `l:${l.nom}:${l.ht}:${l.ttc}`) + '×' + l.qte).join('|');
     for (const b of brouillons) {
       if (!b.pack) continue;
       if (!b.pack.texte) { b.contenu = b.existant.contenu; continue; } // sans la colonne : le contenu ne bouge pas
       const lieu = `${b.pack.lieu} : Contenu`;
-      const avecPlus = refsAvecPlus.find((r) => compact(b.pack.texte).includes(compact(r.ref)));
+      const avecPlus = avecPlusDans(b);
       if (avecPlus) { erreurs.push(`${lieu}, la référence « ${avecPlus.ref} » contient un « + » : renomme-la, ou assemble ce pack dans l'appli.`); continue; }
       // Une référence du tableau en erreur a déjà son message ; le forfait supprimé d'une ligne que le pack a déjà
       // (« à revoir ») se relit, pour que l'aller-retour ne bloque pas sur lui.
@@ -3596,7 +3617,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         if (!cle) return null;
         if (parRef.has(cle)) return parRef.get(cle);
         if (lignesParRef.has(cle)) return { id: null, nom: texte, ht: 0, ttc: 0 };
-        const g = donnees.forfaits.find((f) => f.supprime && memeRef(f.ref, texte) && b.existant?.contenu?.some((l) => l.id === f.id));
+        const g = (supprimesParRef.get(cle) || []).find((f) => b.existant?.contenu?.some((l) => l.id === f.id));
         return g ? { id: g.id, nom: g.designation || g.ref, ht: g.ht, ttc: g.ttc } : null;
       };
       const { lignes: contenu, erreur } = lireContenu(b.pack.texte, trouver);

@@ -140,11 +140,11 @@ def test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union(page, 
     # Forfaits affichés : 5 000 au plus, comme le tableau (à 20 000, l'ouverture prenait 40 s).
     trop = [forfait(f"fft-n{i:05d}", f"N-{i}") for i in range(5001)]
     texte = refus(page, ecrire_fichier(tmp_path / "trop.json", forfaits=trop))
-    assert "beaucoup trop d'enregistrements" in texte
+    assert "Trop d'enregistrements" in texte
     # Les marques de suppression ne comptent que dans le plafond total de 20 000.
     supprimes = [{**forfait(f"fft-s{i:05d}", f"S-{i}"), "supprime": True} for i in range(20001)]
     texte = refus(page, ecrire_fichier(tmp_path / "total.json", forfaits=supprimes))
-    assert "beaucoup trop d'enregistrements" in texte
+    assert "Trop d'enregistrements" in texte
 
     # 4 995 forfaits passent seuls, mais pas avec les 11 de l'appareil.
     juste = ecrire_fichier(tmp_path / "juste.json", forfaits=trop[:4995])
@@ -153,13 +153,38 @@ def test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union(page, 
     dialogue(page).get_by_role("button", name="Mettre à jour", exact=True).click()
     d = dialogue(page)
     expect(d).to_contain_text("Import impossible")
-    expect(d).to_contain_text("beaucoup trop d'enregistrements")
+    expect(d).to_contain_text("Trop d'enregistrements")
+    expect(d).to_contain_text(re.compile(r"5\s000 au maximum"))
     d.get_by_role("button", name="Compris").click()
     assert refs(page) == TOUS
 
     # 6 000 suppressions et 10 forfaits : accepté (un appareil en service accumule les suppressions).
     importer(page, ecrire_fichier(tmp_path / "supprimes.json", forfaits=trop[:10] + supprimes[:6000]))
     assert len(stockage(page)["forfaits"]) == 11 + 10 + 6000
+
+
+def test_formulaire_refuse_un_forfait_de_plus_que_le_plafond_du_chargement(page):
+    """À 5 000 forfaits, un ajout enregistré rendait les données illisibles à l'ouverture suivante."""
+    plein = [forfait(f"fft-p{i:05d}", f"P-{i}") for i in range(5000)]
+    donnees = {"format": "forfaits-comptoir", "version": 2, "familles": [], "elements": [], "forfaits": plein}
+    page.evaluate("([c, v]) => localStorage.setItem(c, v)", [CLE_DONNEES, json.dumps(donnees)])
+    page.reload()
+    activer_modif(page)
+    page.click("#btn-ajouter")
+    d = dialogue(page)
+    d.locator("#f-ref").fill("T1 DEMO PLEIN")
+    d.locator("#f-ht").fill("100")
+    d.locator("#f-ttc").fill("120")
+    d.locator("#f-enregistrer").click()
+    expect(d).to_contain_text(re.compile(r"5\s000 forfaits au maximum"))
+    d.get_by_role("button", name="Annuler").click()
+
+    page.reload()
+    expect(page.locator("#resultats .carte").first).to_be_visible()
+    expect(page.get_by_text("étaient abîmées")).to_have_count(0)
+    lues = stockage(page)
+    assert len(lues["forfaits"]) == 5000
+    assert not page.evaluate("cle => Object.keys(localStorage).some((k) => k.startsWith(cle + '.illisible.'))", CLE_DONNEES)
 
 
 def test_ancien_fichier_sans_surnoms_ni_plafond_reste_lisible(page, tmp_path):
@@ -315,5 +340,5 @@ def test_modele_excel_controle_autant_de_lignes_que_l_import():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     html = (RACINE / "index.html").read_text(encoding="utf-8")
-    lignes_max = int(re.search(r"const LIGNES_TABLEAU_MAX = (\d+);", html).group(1))
+    lignes_max = int(re.search(r"const FORFAITS_MAX = (\d+);", html).group(1))
     assert module.DERNIERE_LIGNE == lignes_max + 1  # la ligne des titres, puis un forfait par ligne

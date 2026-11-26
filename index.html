@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-yUobIKUmyGzv0a4h7jX/d5p90u8t4pzSUsFZqCJEvQE='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-EOvM8FkiNeyOAqERuPNZs1AxxEhsXgPw4kI3pXvc16s='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -807,6 +807,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const QTE_MAX = 99;
   const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
+  // Plafonds des données, vérifiés par valider (donc au chargement) : tout ce qui écrit doit les respecter,
+  // sinon l'ouverture suivante déclarerait les données illisibles. Ici, avant le premier chargement.
+  const FORFAITS_MAX = 5000;       // forfaits affichés (non supprimés) ; à 20 000, l'ouverture prenait 40 s
+  const FORFAITS_TOTAL_MAX = 20000; // marques de suppression comprises (elles s'accumulent)
   const FORMAT = 'forfaits-comptoir';          // signature des fichiers exportés
   const VERSION_FORMAT = 2;        // 2 : surnoms des éléments et des forfaits
   const VERSION_OUTIL = '1.0';
@@ -1007,13 +1011,16 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     // Chaque enregistrement est borné, mais pas leur NOMBRE : un fichier à 45 000 forfaits passait
     // tous les contrôles, s'enregistrait, puis figeait l'appli à chaque ouverture (une carte par
     // forfait), menu compris — donc plus aucune réparation depuis l'outil. Les forfaits affichés
-    // (non supprimés) sont plafonnés comme l'import du tableau (LIGNES_TABLEAU_MAX, déclaré plus bas,
-    // trop tard pour le chargement) : à 20 000, l'ouverture prenait encore 40 s (mesuré, Chromium).
-    // Les marques de suppression, qui s'accumulent, ne comptent que dans le plafond total.
+    // sont plafonnés comme l'import du tableau (FORFAITS_MAX) ; les marques de suppression, qui
+    // s'accumulent, ne comptent que dans le plafond total. Le message dit la limite : une union
+    // (tableau ou fichier ajouté à cet appareil) peut la dépasser sans que le fichier soit aberrant.
     const affiches = obj.forfaits.filter((f) => f?.supprime !== true).length;
-    if (affiches > 5000 || obj.forfaits.length > 20000 || obj.elements.length > 20000 || obj.familles.length > 500) {
-      echec("Ce fichier contient beaucoup trop d'enregistrements pour être un fichier de forfaits.");
-    }
+    const nb = (n) => n.toLocaleString('fr-FR');
+    const trop = affiches > FORFAITS_MAX ? `${nb(affiches)} forfaits, pour ${nb(FORFAITS_MAX)} au maximum`
+      : obj.forfaits.length > FORFAITS_TOTAL_MAX ? `${nb(obj.forfaits.length)} forfaits en comptant les supprimés, pour ${nb(FORFAITS_TOTAL_MAX)} au maximum`
+      : obj.elements.length > 20000 ? `${nb(obj.elements.length)} éléments, pour ${nb(20000)} au maximum`
+      : obj.familles.length > 500 ? `${nb(obj.familles.length)} familles, pour 500 au maximum` : '';
+    if (trop) echec(`Trop d'enregistrements : ${trop}.`);
     const motifId = /^[a-z]{2,6}-[a-z0-9-]{1,64}$/;
     const vus = new Set();
     const id = (v) => {
@@ -2535,7 +2542,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       // Seuls les surnoms ajoutés sont contrôlés : un ancien doublon (déjà ignoré par la recherche) ne bloque pas un changement de prix.
       const ajoutes = nouveaux(surnoms, existant?.surnoms);
       const surnomPris = (ajoutes.length && tropDeSurnoms(surnoms)) || ajoutes.map((s) => surnomRefuse(s, existant?.id, true)).find(Boolean);
-      const [probleme, champFautif] = !ref ? ['La référence est obligatoire.', champRef]
+      const plein = existant ? null : pasDePlace();
+      const [probleme, champFautif] = plein ? [plein, champRef]
+        : !ref ? ['La référence est obligatoire.', champRef]
         : doublon ? [`${dejaPrise(doublon)} Choisis-en une autre.`, champRef]
         : ht === null ? ['Prix HT invalide (exemple : 1 234,50).', champHt]
         : ttc === null ? ['Prix TTC invalide (exemple : 1 481,40).', champTtc]
@@ -2603,6 +2612,13 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     champRef.focus();
   }
 
+  // Un nouveau forfait dépasserait-il les plafonds de valider ? Le message, ou null.
+  function pasDePlace() {
+    if (index.forfaits.length >= FORFAITS_MAX) return `${FORFAITS_MAX.toLocaleString('fr-FR')} forfaits au maximum : supprime ceux qui ne servent plus avant d'en ajouter.`;
+    if (donnees.forfaits.length >= FORFAITS_TOTAL_MAX) return `${FORFAITS_TOTAL_MAX.toLocaleString('fr-FR')} forfaits au maximum en comptant les supprimés : l'outil ne peut plus en ajouter.`;
+    return null;
+  }
+
   async function supprimerForfait(f) {
     const ok = await demander({
       titre: 'Supprimer ce forfait ?',
@@ -2625,6 +2641,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const actuel = donnees.forfaits.find((x) => x.id === id);
     if (!actuel?.supprime) return;
     if (index.forfaits.some((x) => memeRef(x.ref, actuel.ref))) { toast(`Impossible : un autre forfait porte déjà la référence ${actuel.ref}`, true); return; }
+    if (index.forfaits.length >= FORFAITS_MAX) { toast(`Impossible : ${FORFAITS_MAX.toLocaleString('fr-FR')} forfaits au maximum. Supprimes-en un autre d'abord.`, true); return; }
     const rendu = { ...actuel, maj: Date.now() };
     delete rendu.supprime;
     remplacer(donnees.forfaits, rendu);
@@ -2999,7 +3016,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
     ['surnoms', 'surnoms'], ['exemple', 'exemple'], ['modifiele', null],
   ]);
-  const LIGNES_TABLEAU_MAX = 5000;
+  const LIGNES_TABLEAU_MAX = FORFAITS_MAX;
   const FAMILLES_TABLEAU_MAX = 10; // nouvelles familles par import : au-delà, c'est sans doute un mauvais fichier
 
   // Texte d'un fichier : UTF-8 (« CSV UTF-8 » d'Excel), sinon Windows-1252 (ancien « CSV » d'Excel).

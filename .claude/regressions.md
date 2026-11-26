@@ -181,10 +181,10 @@
 - Test : `test_import_json_qui_casserait_le_stockage_est_refuse`, `test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union`.
 
 ## 2026-11-26 — Nombre d'enregistrements non plafonné dans `valider`
-- Où : `index.html`, `valider` (même message que la branche synchro).
+- Où : `index.html`, `valider`, `pasDePlace` (formulaire), `annulerSuppression`.
 - Bug : un fichier à 45 000 forfaits passait et figeait l'appli à chaque ouverture (roadmap#573, #711).
-- À garder : au-delà de 5 000 forfaits non supprimés (comme le tableau ; à 20 000, l'ouverture prenait encore 40 s), 20 000 forfaits en tout (marques de suppression comprises), 20 000 éléments ou 500 familles : « beaucoup trop d'enregistrements ». Plafond différent de la branche synchro, qui doit le reprendre.
-- Test : `test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union`.
+- À garder : au-delà de `FORFAITS_MAX` (5 000) forfaits non supprimés (comme le tableau ; à 20 000, l'ouverture prenait encore 40 s), `FORFAITS_TOTAL_MAX` (20 000, marques de suppression comprises), 20 000 éléments ou 500 familles : « Trop d'enregistrements », avec la limite. Tout ce qui écrit un forfait la respecte (formulaire, `annulerSuppression`), sinon le chargement suivant déclare les données illisibles. Plafond différent de la branche synchro, qui doit le reprendre.
+- Test : `test_trop_d_enregistrements_refuse_dans_le_fichier_comme_dans_l_union`, `test_formulaire_refuse_un_forfait_de_plus_que_le_plafond_du_chargement`.
 
 ## 2026-11-26 — Copies `.illisible.<date>` jamais purgées
 - Où : `index.html`, `rangerIllisibles`, appelée par `charger`.

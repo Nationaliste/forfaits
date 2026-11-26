@@ -1,6 +1,6 @@
 """Liste limitée : les premières rangées, puis « Afficher plus » (roadmap#1252).
 
-Rendre une carte par forfait prenait 8 à 13 s à l'ouverture avec 5 000 forfaits (outils/mesure_liste.py).
+Rendre une carte par forfait prenait 13 s à l'ouverture et 1 à 7 s par lettre avec 5 000 forfaits (outils/mesure_liste.py).
 """
 
 import re

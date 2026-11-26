@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-K31cvb/G/CwoEelJFPCAqxAOmjqs+ObjBKgUNBCxKQ8='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-M/STxZQKBrLdnCsC830EGX8+Z95YrFSCAI2OOatkhrs='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -826,8 +826,8 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   const QTE_MAX = 99;
   const PRIX_MAX = 999999999;      // 9 999 999,99 € en centimes : ce que lirePrix lit (7 chiffres) et ce qu'un forfait peut valoir
   const USAGE_MAX = 300;          // favoris et compteurs d'usage gardés par appareil
-  // Rangées rendues d'un coup dans la liste, puis « Afficher plus » : rendre les 5 000 forfaits prenait 8 à 13 s
-  // à l'ouverture et 1 à 3 s par lettre tapée (mesuré par outils/mesure_liste.py).
+  // Rangées rendues d'un coup dans la liste, puis « Afficher plus » : rendre les 5 000 forfaits prenait 13 s
+  // à l'ouverture et 1 à 7 s par lettre tapée (PC chargé, mesuré par outils/mesure_liste.py) ; 100 : 0,4 s et 80 ms.
   const LIGNES_LISTE = 100;
   // Plafonds des données, vérifiés par valider (donc au chargement) : tout ce qui écrit doit les respecter,
   // sinon l'ouverture suivante déclarerait les données illisibles. Ici, avant le premier chargement.
@@ -2993,9 +2993,10 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const perdus = (actuel.surnoms || []).filter((s) => surnomRefuse(s, id, true));
     const miens = appareil.surnoms[id] || [];
     const persoPerdus = miens.filter((s) => surnomRefuse(s, id));
-    const rendu = { ...actuel, maj: Date.now(), ...avecSurnoms((actuel.surnoms || []).filter((s) => !perdus.includes(s))) };
+    const gardes = (actuel.surnoms || []).filter((s) => !perdus.includes(s));
+    const rendu = { ...actuel, maj: Date.now(), surnoms: gardes };
     delete rendu.supprime;
-    if (!rendu.surnoms?.length) delete rendu.surnoms;
+    if (!gardes.length) delete rendu.surnoms; // tous repris : sinon la liste d'origine restait
     remplacer(donnees.forfaits, rendu);
     if (!sauver()) return;
     if (persoPerdus.length) {

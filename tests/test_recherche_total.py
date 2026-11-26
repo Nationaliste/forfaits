@@ -415,6 +415,39 @@ def test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps(page, tmp_p
     expect(rangee_t2.locator(".carte-surnoms")).to_have_text("dit « le gros, ma pose »")  # EX-T2-3Q les garde
 
 
+def test_annuler_une_suppression_dont_tous_les_surnoms_ont_ete_repris(page, tmp_path):
+    """Revue : quand TOUS les surnoms étaient repris, le forfait rétabli gardait quand même sa liste d'origine."""
+    donnees = exporter_json(page, tmp_path / "depart.json")
+    for f in donnees["forfaits"]:
+        if f["ref"] == "EX-LUM-POSE":
+            f["surnoms"] = ["le gros"]
+    page.evaluate("([cd, d]) => localStorage.setItem(cd, JSON.stringify(d))", [CLE_DONNEES, donnees])
+    page.reload()
+    page.wait_for_selector("#resultats .carte")
+    activer_modif(page)
+    supprimer_forfait(page, "EX-LUM-POSE")
+    autre_onglet(
+        page,
+        """cd => {
+            const d = JSON.parse(localStorage.getItem(cd));
+            Object.assign(d.forfaits.find((x) => x.ref === 'EX-T2-3Q'), { surnoms: ['le gros'], maj: Date.now() });
+            localStorage.setItem(cd, JSON.stringify(d));
+        }""",
+        CLE_DONNEES,
+    )
+    rangee_t2 = page.locator("#resultats .carte", has=page.locator(".carte-ref", has_text=re.compile("^EX-T2-3Q$")))
+    expect(rangee_t2.locator(".carte-surnoms")).to_have_text("dit « le gros »")
+    page.locator("#toast").get_by_role("button", name="Annuler", exact=True).click()
+    expect(page.locator("#toast")).to_have_text(
+        "Forfait EX-LUM-POSE rétabli, sans son surnom « le gros » : il désigne maintenant autre chose"
+    )
+    stocke = json.loads(page.evaluate("cle => localStorage.getItem(cle)", CLE_DONNEES))
+    surnoms = {f["ref"]: f.get("surnoms") for f in stocke["forfaits"]}
+    assert surnoms["EX-LUM-POSE"] is None  # avant : ["le gros"], le même surnom sur deux forfaits
+    assert surnoms["EX-T2-3Q"] == ["le gros"]
+    expect(rangee_t2.locator(".carte-surnoms")).to_have_text("dit « le gros »")
+
+
 # ---------------------------------------------------------------- total : petits restes (roadmap#1251)
 
 

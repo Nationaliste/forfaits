@@ -286,7 +286,7 @@
 - Où : `index.html`, `annulerSuppression`.
 - Bug (roadmap#1251) : le forfait déjà rétabli ailleurs (autre onglet, import) : le bouton ne disait rien. Un surnom libéré par la suppression et donné entre-temps à autre chose revenait avec le forfait rétabli, qui le reprenait (plus petit identifiant, ou premier surnom perso) : un surnom désignait deux choses.
 - À garder : « Forfait … déjà rétabli » ; chaque surnom (équipe et perso) repasse `surnomRefuse` avant le retour, les refusés restent à l'autre et le message le dit.
-- Test : `test_annuler_une_suppression_deja_retablie_ailleurs_le_dit`, `test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps`.
+- Test : `test_annuler_une_suppression_deja_retablie_ailleurs_le_dit`, `test_annuler_une_suppression_laisse_un_surnom_repris_entre_temps`, `test_annuler_une_suppression_dont_tous_les_surnoms_ont_ete_repris` (tous repris : la liste d'origine revenait, vu en revue).
 
 ## 2026-11-26 — Total : une remise au HT négatif et TTC à 0 comptée comme article
 - Où : `index.html`, `nbArticlesTotal`.

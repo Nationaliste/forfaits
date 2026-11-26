@@ -275,3 +275,9 @@
 - Bug : chaque ligne avait sa zone `role=status`, mais le total est recréé à chaque appui (`replaceChildren`) : une zone live neuve n'est pas annoncée, et il y en avait une par ligne.
 - À garder : pas de `role=status` dans les lignes ; la quantité est dans le nom du « − » et du « + » (« Plus : …, quantité 2 »), où le focus revient après l'appui.
 - Test : `test_quantite_du_total_annoncee_par_le_bouton_qui_garde_le_focus`.
+
+## 2026-11-26 — Pack « modifié » et « prix qui change » à cause de son seul cache de prix
+- Où : `index.html`, `fusionner` et `bilanFusion` (recalcul sur des copies), `recalculerPacks`, `canonique`.
+- Bug (trouvé pendant la construction des packs) : le `ht`/`ttc` d'un pack est un cache, et il entre dans `canonique`. À date égale, deux appareils dont l'un n'a pas encore reçu le nouveau prix d'un forfait avaient deux caches différents : `gagne` départageait par le contenu et le bilan comptait le pack « modifié », avec un « prix qui change ».
+- À garder : `fusionner` rend des copies de packs aux caches recalculés sur l'union, et `bilanFusion` recalcule lui-même les deux côtés (l'union pour « Mettre à jour », le fichier seul pour « Remplacer tout »), sur des copies : aucun appelant (fichier, tableau, synchro) n'a à y penser. `recalculerPacks` ne touche jamais à `maj`.
+- Test : `test_meme_pack_qui_ne_differe_que_par_le_cache_n_est_pas_modifie` (échoue sans le recalcul dans `bilanFusion`), `test_le_prix_d_un_forfait_remonte_dans_le_pack_sans_toucher_a_sa_date`.

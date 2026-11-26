@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-FuWuDffFrSmK6M09f/nTPoUI5bKC2u9LHxOKb3guYRo='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-9zj2axZebxsZ2wd+oMnA1Moly/KsAWgNFTnaqnMo4mU='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://*.a-remplir.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -1081,6 +1081,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // à une ancienne page) : elles sont bonnes, c'est cette page qui est en retard. Elle n'en affiche rien et n'écrit plus rien.
   let donneesFutures = false;
   let nouvelleVersion = false; // le service worker a téléchargé une version plus récente de la page
+  // Même retard, vu par la mise à jour automatique : les forfaits du cloud viennent d'une version plus récente. Les
+  // forfaits de l'appareil restent lisibles et affichés, mais la page ne reçoit, n'envoie ni ne modifie plus rien.
+  let cloudFutur = false;
 
   // Vrai si ce texte du stockage a été écrit par une version de l'outil plus récente que cette page.
   function estFutur(brut) {
@@ -1138,7 +1141,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     // Relu juste avant d'écrire : un onglet endormi a pu manquer l'annonce (événement « storage ») d'un onglet à jour.
     let brut = null;
     try { brut = localStorage.getItem(CLE_DONNEES); } catch { /* stockage refusé : rien à protéger */ }
-    if (donneesFutures || estFutur(brut)) {
+    if (donneesFutures || cloudFutur || estFutur(brut)) {
       refuserFutur();
       return false;
     }
@@ -1152,6 +1155,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   const MSG_FUTUR = "Cette page est une ancienne version de l'outil : elle ne sait pas lire les forfaits de cet appareil. Recharge-la, avec Internet. Tes forfaits sont intacts.";
+  const MSG_CLOUD_FUTUR = "Les forfaits de la mise à jour viennent d'une version plus récente de l'outil : recharge la page, avec Internet. D'ici là, cet appareil garde ses forfaits et ne modifie rien.";
   const REFUS_FUTUR = "Impossible sur cette ancienne version de l'outil : recharge la page.";
 
   function fermerFenetres() {
@@ -1169,7 +1173,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   // Vrai, avec un mot à l'écran, quand cette page n'a pas le droit de toucher aux données (voir donneesFutures).
   function lectureSeule() {
-    if (!donneesFutures) return false;
+    if (!donneesFutures && !cloudFutur) return false;
     toast(REFUS_FUTUR, true);
     return true;
   }
@@ -1177,7 +1181,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // Comme lectureSeule(), mais sans mot à l'écran et en relisant le stockage : pour ce qui tourne tout seul (la mise à
   // jour automatique). L'onglet endormi qui a manqué l'annonce d'un onglet à jour passe ici en lecture seule.
   function pageEnRetard() {
-    if (donneesFutures) return true;
+    if (donneesFutures || cloudFutur) return true;
     let brut = null;
     try { brut = localStorage.getItem(CLE_DONNEES); } catch { /* stockage refusé : rien à protéger */ }
     if (!estFutur(brut)) return false;
@@ -1652,7 +1656,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   function rendreEntete() {
     const derniere = derniereModif(donnees);
-    $('etat-donnees').textContent = donneesFutures ? 'Outil à mettre à jour'
+    $('etat-donnees').textContent = donneesFutures || cloudFutur ? 'Outil à mettre à jour'
       : (derniere ? `Données du ${dateCourte(derniere)}` : "Données d'exemple") + texteSynchro();
     $('barre-modif').hidden = !appareil.modeModif;
   }
@@ -1672,6 +1676,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       $('bandeaux').replaceChildren(...liste);
       return;
     }
+    if (cloudFutur) liste.push(bandeau(MSG_CLOUD_FUTUR, h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-recharger-futur', onclick: () => location.reload() }, 'Recharger'), true));
     if (donneesIllisibles) liste.push(bandeau('Les données de cet appareil étaient abîmées : elles ont été mises de côté. Importe le dernier fichier.', h('button', { type: 'button', class: 'btn btn-bord', onclick: lancerImport }, 'Importer'), true));
     // Sans ce bandeau, la nouveauté n'apparaît qu'à la deuxième ouverture (le service worker sert d'abord la copie gardée).
     if (nouvelleVersion) liste.push(bandeau("Une nouvelle version de l'outil est prête. Les forfaits de cet appareil ne changent pas.", h('button', { type: 'button', class: 'btn btn-bord', id: 'btn-recharger', onclick: () => location.reload() }, 'Recharger')));
@@ -2977,7 +2982,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   function ouvrirExport() {
-    if (lectureSeule()) return;  // le fichier serait vide : importé ailleurs en « Remplacer », il effacerait tout
+    if (donneesFutures && lectureSeule()) return;  // le fichier serait vide : importé ailleurs en « Remplacer », il effacerait tout
     const dlg = ouvrirDialogue({
       titre: 'Exporter',
       corps: [
@@ -3284,14 +3289,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
   // L'union passe le même contrôle que le stockage relu au prochain chargement : un identifiant pris dans deux listes
   // (fichier retouché) ou trop d'enregistrements y seraient refusés, et toutes les données mises de côté.
-  async function unionValable(union) {
+  // La fusion venue du cloud passe le même contrôle (erreurUnion), sans fenêtre : elle tourne toute seule.
+  function erreurUnion(union) {
     try {
       valider({ format: FORMAT, version: VERSION_FORMAT, ...union });
-      return true;
+      return '';
     } catch (err) {
-      await informer('Import impossible', `${err.message} Rien n'a changé sur cet appareil.`);
-      return false;
+      return err.message;
     }
+  }
+  async function unionValable(union) {
+    const erreur = erreurUnion(union);
+    if (erreur) await informer('Import impossible', `${erreur} Rien n'a changé sur cet appareil.`);
+    return !erreur;
   }
 
   async function importerTableau(fichier) {
@@ -3427,6 +3437,11 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     sauverAppareil();
     rafraichir();
     toast(choix === 'fusion' ? 'Mise à jour terminée' : 'Données remplacées');
+    await signalerACorriger(aCorrigerApresFusion());
+  }
+
+  // Après une fusion (fichier ou cloud) : ce qu'un responsable doit corriger à la main.
+  function aCorrigerApresFusion() {
     // Deux responsables ont pu créer la même référence, ou le même élément, chacun de leur côté.
     const vues = new Map();
     const compter = (cle, libelle) => vues.set(cle, { libelle, n: (vues.get(cle)?.n || 0) + 1 });
@@ -3449,6 +3464,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         if (index.famParId.has(famId) && index.elParId.get(eltId)?.familleId === famId) continue;
         orphelins.push(`Forfait ${f.ref} : ${famillesToutes.get(famId)?.nom ?? 'famille inconnue'} « ${elementsTous.get(eltId)?.nom ?? 'élément inconnu'} » supprimé`);
       }
+    }
+    return { doublons, orphelins };
+  }
+
+  // sauf : ce qui était déjà à corriger avant la fusion, déjà signalé (la fusion par le cloud revient toutes les 5 min).
+  async function signalerACorriger({ doublons, orphelins }, sauf = null) {
+    if (sauf) {
+      doublons = doublons.filter((l) => !sauf.doublons.includes(l));
+      orphelins = orphelins.filter((l) => !sauf.orphelins.includes(l));
     }
     const aCorriger = [...doublons, ...orphelins];
     // 50 lignes au plus : un fichier piégé ne doit pas figer la page avec des milliers de lignes.
@@ -3868,12 +3892,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
   const horlogeFausse = () => Math.abs(ecartHorloge) > ECART_HORLOGE_MAX;
 
-  // Vrai si « a » contient quelque chose de plus récent que « b » (ou d'absent de b).
-  // Les données d'exemple jamais touchées (maj 0) ne comptent pas : tous les appareils les ont.
+  // Vrai si la fusion de « a » dans « b » changerait b : un enregistrement qui gagne (gagne : plus récent, ou à date égale
+  // le même départage que fusionner), ou absent de b. Les exemples jamais touchés (maj 0) ne comptent pas : tous les
+  // appareils les ont. Mais un enregistrement à maj 0 qui n'est pas un exemple (fichier d'avant les dates) compte :
+  // ignoré, il n'arrivait jamais sur les autres appareils.
   function apporte(a, b) {
     return ['familles', 'elements', 'forfaits'].some((cle) => {
       const dansB = new Map(b[cle].map((x) => [x.id, x]));
-      return a[cle].some((x) => (dansB.has(x.id) ? x.maj > dansB.get(x.id).maj : x.maj > 0));
+      return a[cle].some((x) => (dansB.has(x.id) ? gagne(x, dansB.get(x.id)) : x.maj > 0 || !x.exemple));
     });
   }
 
@@ -3901,8 +3927,19 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         if (r.status === 401) { await refusDeLecture(r); return; }
         if (r.status === 200) {
           const etat = await r.json();
-          const distant = etat.blob ? valider(await dechiffrer(etat.blob, c.cle)) : { familles: [], elements: [], forfaits: [] };
+          const clair = etat.blob ? await dechiffrer(etat.blob, c.cle) : null;
           if (cloud !== c) return; // déconnecté pendant l'échange
+          // Un autre appareil a déjà la version suivante de l'outil : cette page ne sait pas lire ses forfaits, et en
+          // envoyer d'autres les écraserait. Lecture seule jusqu'au rechargement (sans noter la version du cloud).
+          if (clair?.format === FORMAT && Number.isInteger(clair.version) && clair.version > VERSION_FORMAT) {
+            cloudFutur = true;
+            etatSynchro = '';
+            erreurSynchro = MSG_CLOUD_FUTUR;
+            fermerFenetres();
+            rafraichir();
+            return;
+          }
+          const distant = clair ? valider(clair) : { familles: [], elements: [], forfaits: [] };
           majRole(c, etat.role);
           if (c.role === 'consultation') {
             // Appareil de consultation : les données de l'équipe remplacent les siennes. Il ne peut
@@ -3911,12 +3948,21 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
             if (etat.blob) remplacerParEquipe(distant);
           } else if (apporte(distant, donnees)) {
             const bilan = bilanFusion(distant);
-            donnees = fusionner(donnees, distant);
+            const avant = aCorrigerApresFusion();
+            // Les mêmes contrôles que l'import d'un fichier : chaque côté passe valider, pas forcément leur union.
+            const union = fusionner(donnees, distant);
+            const refus = erreurUnion(union);
+            if (refus) throw new Error(`${refus} Les forfaits du cloud n'ont pas été pris : rien n'a changé sur cet appareil.`);
+            donnees = union;
+            // L'équipe a retiré ses exemples : ceux de cet appareil partent aussi (même règle que l'import).
+            if (distant.forfaits.some((f) => f.exemple && f.supprime) && !distant.forfaits.some((f) => f.exemple && !f.supprime)) marquerExemplesSupprimes(true);
             donneesIllisibles = false;
             if (!sauver()) { etatSynchro = ''; return; }
             rafraichir();
             const changes = bilan.nouveaux + bilan.modifies + bilan.supprimes;
             toast(changes ? `Forfaits mis à jour : ${pluriel(changes, 'changement')}` : 'Listes mises à jour');
+            // Sans attendre : la mise à jour ne reste pas suspendue à la fenêtre. Seul ce que la fusion a ajouté est dit.
+            signalerACorriger(aCorrigerApresFusion(), avant);
           }
           // Écriture refusée, ou page passée en retard pendant l'échange : on s'arrête sans noter la version du
           // cloud, sinon elle passerait pour déjà lue après le rechargement et ces forfaits n'arriveraient jamais.
@@ -3981,7 +4027,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   }
 
   function remplacerParEquipe(distant) {
-    if (!apporte(distant, donnees) && !apporte(donnees, distant)) return;
+    // Le contenu, pas les dates : un exemple jamais touché (maj 0) que l'équipe n'a pas restait sinon pour toujours.
+    const contenu = (d) => canonique([d.familles, d.elements, d.forfaits]);
+    if (contenu(distant) === contenu(donnees)) return;
     const bilan = bilanFusion(distant);
     donnees = distant;
     donneesIllisibles = false;

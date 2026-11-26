@@ -15,7 +15,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# -rs : la raison de chaque test sauté s'affiche (sans elle, des tests de synchro sautés passaient pour réussis).
+addopts = "-q -rs"
 
 [tool.ruff]
 line-length = 130

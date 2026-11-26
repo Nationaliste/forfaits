@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Sécurité : seul le script de cette page peut s'exécuter (empreinte mise à jour par outils/csp.py). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-M/STxZQKBrLdnCsC830EGX8+Z95YrFSCAI2OOatkhrs='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-w+2fgfBOne8KImy87hkG3Va3yUCcIpkSieXdRBrfvDU='; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#000000">
@@ -3289,14 +3289,15 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // empêche Excel d'exécuter une formule
       return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', 'Surnoms', ...fams.map((f) => f.nom), 'Exemple', 'Modifié le']];
+    const lignes = [['Référence', 'Désignation', 'Prix HT', 'Prix TTC', 'Surnoms', ...fams.map((f) => f.nom), 'Contenu', 'Exemple', 'Modifié le']];
+    const parId = new Map(donnees.forfaits.map((f) => [f.id, f])); // supprimés compris : leur ligne de pack se relit
     for (const f of [...index.forfaits].sort((a, b) => tri.compare(a.ref, b.ref))) {
-      // Pack : son prix calculé, sans les éléments de ses forfaits (ce ne sont pas les siens).
+      // Pack : son prix calculé (pour la lecture : ignoré à l'import), sans les éléments de ses forfaits (ce ne sont pas les siens).
       const els = f.contenu ? [] : index.elementsForfait.get(f.id);
       lignes.push([
         f.ref, f.designation, prixSaisie(f.ht), prixSaisie(f.ttc), (f.surnoms || []).join(', '),
         ...fams.map((fam) => els.find((e) => e.familleId === fam.id)?.nom ?? ''),
-        f.exemple ? 'oui' : '', f.maj ? dateCourte(f.maj) : '',
+        f.contenu ? celluleContenu(f, parId) : '', f.exemple ? 'oui' : '', f.maj ? dateCourte(f.maj) : '',
       ]);
     }
     return '﻿' + lignes.map((l) => l.map(cellule).join(';')).join('\r\n');
@@ -3397,8 +3398,76 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
   // les autres sont créées à l'import (et annoncées avant, pour repérer une faute de frappe).
   const COLONNES_TABLEAU = new Map([
     ['reference', 'ref'], ['designation', 'designation'], ['prixht', 'ht'], ['ht', 'ht'], ['prixttc', 'ttc'], ['ttc', 'ttc'],
-    ['surnoms', 'surnoms'], ['exemple', 'exemple'], ['modifiele', null],
+    ['surnoms', 'surnoms'], ['contenu', 'contenu'], ['exemple', 'exemple'], ['modifiele', null],
   ]);
+
+  // Case « Contenu » d'un pack : « REF-A + REF-B ×2 + [Pose : 45,00 HT / 54,00 TTC] ». Séparateur « + » ou retour à la
+  // ligne, quantité « ×2 » ou « x2 ». Une ligne libre s'écrit entre crochets avec ses deux prix : relue telle quelle à
+  // l'import, l'aller-retour export → Excel → import n'en perd aucune. Ligne d'un forfait qui n'est plus nulle part sur
+  // cet appareil : écrite comme une ligne libre à son prix de secours (il n'y a plus de référence à écrire).
+  function celluleContenu(p, parId) {
+    return p.contenu.map((l) => {
+      const g = l.id ? parId.get(l.id) : null;
+      const quoi = g ? g.ref : `[${l.nom} : ${prixSaisie(l.ht)} HT / ${prixSaisie(l.ttc)} TTC]`;
+      return l.qte > 1 ? `${quoi} ×${l.qte}` : quoi;
+    }).join(' + ');
+  }
+  // Une ligne de la case : référence (80 caractères) ou ligne libre [nom (80) : prix HT / prix TTC], et sa quantité.
+  const MORCEAU_MAX = 200;
+  // Morceaux d'une case Contenu : un « + » entre crochets (nom d'une ligne libre) ne sépare rien. Pas d'imbrication :
+  // un nom « Pose [b » (crochet jamais fermé) laissait la suite de la case collée à sa ligne, l'aller-retour échouait.
+  function decouperContenu(texte) {
+    const morceaux = [];
+    let courant = '', entre = false;
+    for (const c of texte) {
+      if (c === '[') entre = true;
+      else if (c === ']') entre = false;
+      if (!entre && (c === '+' || c === '\n' || c === '\r')) { morceaux.push(courant.trim()); courant = ''; }
+      else courant += c;
+    }
+    morceaux.push(courant.trim());
+    return morceaux.filter(Boolean);
+  }
+  // Lignes d'un pack lues dans sa case Contenu : { lignes } ou { erreur }. trouver(texte) rend le forfait de cette
+  // référence ({ id, nom, ht, ttc }) ou rien. Quantité : le « × » (ou « x ») le plus à droite derrière une référence
+  // connue, donc une référence qui contient elle-même un « x » se lit sans erreur.
+  function lireContenu(texte, trouver) {
+    const morceaux = decouperContenu(texte);
+    if (!morceaux.length) return { erreur: 'aucun forfait (exemple : REF-A + REF-B ×2)' };
+    if (morceaux.length > TOTAL_MAX) return { erreur: `${morceaux.length} lignes, ${TOTAL_MAX} au maximum` };
+    const lignes = [];
+    for (const m of morceaux) {
+      const court = m.length > 60 ? m.slice(0, 60) + '…' : m;
+      // Borne avant toute lecture : une case piégée de milliers de caractères figeait l'onglet (expressions, quantité).
+      if (m.length > MORCEAU_MAX) return { erreur: `ligne trop longue « ${court} » (${MORCEAU_MAX} caractères au maximum)` };
+      let ligne, qteTexte = null;
+      if (m.startsWith('[')) {
+        const crochet = m.match(/^\[([^]*)\]\s*(?:[×xX]\s*([^]*))?$/);
+        const lu = crochet?.[1].match(/^([^]*\S)\s*:\s*([^:]*?)\s*HT\s*\/\s*([^:/]*?)\s*TTC\s*$/i);
+        const ht = lu ? lirePrix(lu[2]) : null, ttc = lu ? lirePrix(lu[3]) : null;
+        if (ht === null || ttc === null) return { erreur: `ligne libre illisible « ${court} » : écris-la [Nom : 45,00 HT / 54,00 TTC]` };
+        const nom = lu[1].trim();
+        if (nom.length > 80) return { erreur: `ligne libre « ${court} » : nom trop long (80 caractères au maximum)` };
+        ligne = { id: null, nom, ht, ttc };
+        qteTexte = crochet[2] ?? null;
+      } else {
+        let cible = trouver(m);
+        for (let i = m.length - 1; !cible && i > 0; i--) {
+          if ('×xX'.includes(m[i]) && (cible = trouver(m.slice(0, i).trim()))) qteTexte = m.slice(i + 1).trim();
+        }
+        if (!cible) return { erreur: `référence inconnue « ${court.replace(/\s*[×xX]\s*\d+$/, '')} »` };
+        ligne = { id: cible.id, nom: cible.nom.slice(0, 80), ht: cible.ht, ttc: cible.ttc };
+      }
+      let qte = 1;
+      if (qteTexte !== null) {
+        if (!/^\d+$/.test(qteTexte)) return { erreur: `quantité illisible « ${court} » (exemple : REF ×2)` };
+        qte = Number(qteTexte);
+        if (qte < 1 || qte > QTE_MAX) return { erreur: `quantité ${qte} pour « ${court} » : de 1 à ${QTE_MAX}` };
+      }
+      lignes.push({ ...ligne, qte });
+    }
+    return { lignes };
+  }
   const LIGNES_TABLEAU_MAX = FORFAITS_MAX;
   const FAMILLES_TABLEAU_MAX = 10; // nouvelles familles par import : au-delà, c'est sans doute un mauvais fichier
 
@@ -3508,7 +3577,7 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
     const forfaits = [];
     const brouillons = []; // lignes lues, avant le contrôle des surnoms
     let avecExemples = false;
-    const packsIgnores = [];
+    const ignoresPacks = []; // prix et éléments tapés sur une ligne de pack : un pack prend ceux de ses forfaits
     for (let n = 1; n < lignes.length; n++) {
       const ligne = lignes[n];
       if (ligne.every((c) => !String(c).trim())) continue;
@@ -3525,9 +3594,32 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       const cleRef = ref.toLocaleUpperCase('fr');
       if (lignesParRef.has(cleRef)) { erreurs.push(`${lieu} : cette référence est déjà à la ligne ${lignesParRef.get(cleRef)}.`); continue; }
       lignesParRef.set(cleRef, n + 1);
-      // Un pack ne se modifie pas encore par le tableau (sa colonne Contenu viendra) : sa ligne, celle de l'export
-      // par exemple, est laissée de côté et annoncée, sans quoi elle en ferait un forfait ordinaire et perdrait son contenu.
-      if (donnees.forfaits.some((f) => !f.supprime && f.contenu && memeRef(f.ref, ref))) { packsIgnores.push(ref); continue; }
+      // Une ligne dont la case Contenu est remplie est un pack. Sans la colonne, la ligne d'un pack existant le reste
+      // (une colonne absente ne touche à rien). Jamais de changement de nature en silence : un pack deviendrait un
+      // forfait ordinaire et perdrait son contenu, un forfait deviendrait un pack et perdrait ses éléments.
+      const contenuTexte = lire('contenu');
+      const actif = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref));
+      const pack = !!contenuTexte || (!colonnes.has('contenu') && !!actif?.contenu);
+      if (actif?.contenu && !pack) { erreurs.push(`${lieu} : c'est un pack et sa case Contenu est vide : écris ses forfaits (exemple : REF-A + REF-B ×2), ou retire la ligne du tableau.`); continue; }
+      if (pack && actif && !actif.contenu) { erreurs.push(`${lieu} : cette référence est un forfait ordinaire, pas un pack : vide sa case Contenu, ou donne une autre référence au pack.`); continue; }
+      // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
+      const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
+      if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
+      if (pack) {
+        // Un pack supprimé revient avec son identifiant (comme un forfait), jamais un forfait ordinaire supprimé.
+        const existant = actif || donnees.forfaits.find((f) => f.contenu && memeRef(f.ref, ref));
+        const tapes = toutesFamilles.filter((fam) => lire('fam:' + fam.id)).map((fam) => `${fam.nom} « ${lire('fam:' + fam.id).slice(0, 30)} »`);
+        if (tapes.length) ignoresPacks.push(`${ref} : ${tapes.join(', ')}`);
+        const designation = colonnes.has('designation') || !existant ? lire('designation') : existant.designation;
+        const exemple = colonnes.has('exemple') || !existant ? norm(lire('exemple')) === 'oui' : !!existant.exemple;
+        if (exemple) avecExemples = true;
+        const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms'), Infinity) : null;
+        brouillons.push({
+          existant, id: existant?.id ?? nouvelId('fft'), ref, designation, ht: 0, ttc: 0, elements: {}, exemple, surnomsLus,
+          pack: { texte: contenuTexte, lieu, ht: lire('ht'), ttc: lire('ttc') },
+        });
+        continue;
+      }
       const ht = lirePrix(lire('ht'));
       const ttc = lirePrix(lire('ttc'));
       if (ht === null) erreurs.push(`${lieu} : prix HT ${lire('ht') ? `illisible « ${lire('ht').slice(0, 30)} »` : 'manquant'}.`);
@@ -3537,9 +3629,6 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
 
       // Un pack supprimé n'est pas repris : la ligne crée un forfait neuf.
       const existant = donnees.forfaits.find((f) => !f.supprime && memeRef(f.ref, ref)) || donnees.forfaits.find((f) => !f.contenu && memeRef(f.ref, ref));
-      // Référence en double dans l'outil (née d'une fusion) : un seul des forfaits est mis à jour, l'autre garde son prix.
-      const memeReference = nbParRef.get(ref.trim().toLocaleUpperCase('fr')) || 0;
-      if (memeReference > 1) refsEnDouble.add(`${ref} (${memeReference} forfaits)`);
       // Une famille absente du tableau n'est pas touchée ; une cellule vide retire l'élément.
       const elements = { ...(existant?.elements ?? {}) };
       for (const fam of toutesFamilles) {
@@ -3574,7 +3663,60 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
       if (exemple) avecExemples = true;
       // Surnoms : la case remplace ceux de l'équipe (vide = aucun) ; sans la colonne, on garde. Contrôlés après la lecture de tout le tableau.
       const surnomsLus = colonnes.has('surnoms') || !existant ? lireSurnoms(lire('surnoms'), Infinity) : null;
-      brouillons.push({ existant, ref, designation, ht, ttc, elements, exemple, surnomsLus });
+      brouillons.push({ existant, id: existant?.id ?? nouvelId('fft'), ref, designation, ht, ttc, elements, exemple, surnomsLus });
+    }
+
+    // Contenu des packs, lu une fois tout le tableau connu : un composant peut être un forfait (ou un pack) du tableau,
+    // plus haut ou plus bas, ou de l'outil. Le prix noté sur une ligne n'est que son secours (voir recalculerPacks).
+    const cleDeRef = (r) => r.trim().toLocaleUpperCase('fr'); // même clé que memeRef
+    const parRef = new Map();
+    for (const b of brouillons) parRef.set(cleDeRef(b.ref), { id: b.id, ref: b.ref, nom: b.designation || b.ref, ht: b.ht, ttc: b.ttc });
+    for (const f of index.forfaits) if (!parRef.has(cleDeRef(f.ref))) parRef.set(cleDeRef(f.ref), { id: f.id, ref: f.ref, nom: f.designation || f.ref, ht: f.ht, ttc: f.ttc });
+    // « A+B » ne se lit pas dans une case où « + » sépare les forfaits : refusé plutôt que lu « A » puis « B », quand
+    // la case aligne ses morceaux et que cette lecture est fausse (un morceau inconnu, ou le pack contenait « A+B »).
+    // Une simple ressemblance de texte (« 3Q + A » à côté d'une référence « 3Q+ ») ne bloque rien.
+    const refsAvecPlus = [...parRef.values()].filter((r) => r.ref.includes('+'))
+      .map((r) => ({ ...r, parts: r.ref.split('+').map(cleDeRef).filter(Boolean) })).filter((r) => r.parts.length);
+    const aligne = (cles, parts) => cles.some((_, k) => parts.every((p, j) => {
+      const c = cles[k + j];
+      if (c === undefined) return false;
+      return c === p || (j === parts.length - 1 && c.startsWith(p) && /^\s*[×X]/.test(c.slice(p.length)));
+    }));
+    const avecPlusDans = (b) => {
+      const cles = decouperContenu(b.pack.texte).map(cleDeRef);
+      if (cles.length > TOTAL_MAX) return null; // lireContenu le refuse
+      return refsAvecPlus.find((r) => aligne(cles, r.parts)
+        && (r.parts.some((p) => !parRef.has(p)) || b.existant?.contenu?.some((l) => l.id === r.id)));
+    };
+    // Forfaits supprimés par référence : relus seulement si le pack a déjà leur ligne (voir trouver).
+    const supprimesParRef = new Map();
+    for (const f of donnees.forfaits) if (f.supprime) supprimesParRef.set(cleDeRef(f.ref), [...(supprimesParRef.get(cleDeRef(f.ref)) || []), f]);
+    const contenusLus = new Set(); // contenus lus dans le tableau (lignes neuves, jamais celles de l'outil)
+    const cleContenu = (c) => c.map((l) => (l.id ? `f:${l.id}` : `l:${l.nom}:${l.ht}:${l.ttc}`) + '×' + l.qte).join('|');
+    for (const b of brouillons) {
+      if (!b.pack) continue;
+      if (!b.pack.texte) { b.contenu = b.existant.contenu; continue; } // sans la colonne : le contenu ne bouge pas
+      const lieu = `${b.pack.lieu} : Contenu`;
+      const avecPlus = avecPlusDans(b);
+      if (avecPlus) { erreurs.push(`${lieu}, la référence « ${avecPlus.ref} » contient un « + » : renomme-la, ou assemble ce pack dans l'appli.`); continue; }
+      // Une référence du tableau en erreur a déjà son message ; le forfait supprimé d'une ligne que le pack a déjà
+      // (« à revoir ») se relit, pour que l'aller-retour ne bloque pas sur lui.
+      const trouver = (texte) => {
+        const cle = cleDeRef(texte);
+        if (!cle) return null;
+        if (parRef.has(cle)) return parRef.get(cle);
+        if (lignesParRef.has(cle)) return { id: null, nom: texte, ht: 0, ttc: 0 };
+        const g = (supprimesParRef.get(cle) || []).find((f) => b.existant?.contenu?.some((l) => l.id === f.id));
+        return g ? { id: g.id, nom: g.designation || g.ref, ht: g.ht, ttc: g.ttc } : null;
+      };
+      const { lignes: contenu, erreur } = lireContenu(b.pack.texte, trouver);
+      if (erreur) { erreurs.push(`${lieu}, ${erreur}.`); continue; }
+      if (contenu.some((l) => l.id === b.id)) { erreurs.push(`${lieu}, un pack ne peut pas se contenir lui-même (« ${b.ref} »).`); continue; }
+      // Même contenu qu'avant (mêmes forfaits, quantités et lignes libres, dans le même ordre) : les lignes de
+      // l'outil restent, avec leurs prix de secours, et le pack n'est pas « modifié ».
+      const pareil = b.existant?.contenu && cleContenu(b.existant.contenu) === cleContenu(contenu);
+      b.contenu = pareil ? b.existant.contenu : contenu;
+      if (!pareil) contenusLus.add(contenu);
     }
 
     // Un surnom désigne une seule chose : pas le nom ni le surnom d'un élément, ni le surnom d'un autre forfait
@@ -3598,26 +3740,47 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         pris.set(norm(s), `forfait ${b.ref}`);
         return true;
       });
-      const { existant, ref, designation, ht, ttc, elements, exemple } = b;
+      const { existant, id, ref, designation, ht, ttc, elements, exemple, contenu } = b;
+      if (b.pack && !contenu) continue; // case Contenu en erreur : déjà dite
+      // Un pack : son prix est un cache (recalculé), il n'entre pas dans la comparaison ; son contenu, si.
       const inchange = existant && !existant.supprime && existant.ref === ref && existant.designation === designation
-        && existant.ht === ht && existant.ttc === ttc && !existant.exemple === !exemple
+        && (b.pack ? existant.contenu === contenu : existant.ht === ht && existant.ttc === ttc) && !existant.exemple === !exemple
         && (existant.surnoms || []).join('|') === surnoms.join('|')
         && JSON.stringify(Object.entries(existant.elements).sort()) === JSON.stringify(Object.entries(elements).sort());
       forfaits.push(inchange ? existant : {
-        id: existant?.id ?? nouvelId('fft'), ref, designation, ...avecSurnoms(surnoms), ht, ttc, elements,
+        id, ref, designation, ...avecSurnoms(surnoms), ht, ttc, elements, ...(b.pack ? { contenu } : {}),
         maj: Math.max(maintenant, (existant?.maj ?? 0) + 1), ...(exemple ? { exemple: true } : {}),
       });
     }
-    if (!erreurs.length && !forfaits.length) {
-      erreurs.push(packsIgnores.length ? "Le tableau ne contient que des packs, et l'import du tableau ne modifie pas encore les packs : rien à importer." : 'Le tableau ne contient aucun forfait.');
-    }
+    if (!erreurs.length && !forfaits.length) erreurs.push('Le tableau ne contient aucun forfait.');
     if (erreurs.length) return { erreurs };
+    // Prix des packs sur l'union (ce que l'outil affichera après l'import) : secours des lignes qui sont des packs du
+    // tableau, prix tapés à annoncer quand ils diffèrent (l'export en écrit un, juste, qui ne doit rien annoncer),
+    // packs « à revoir » (boucle entre packs, plus de NIVEAUX_PACK niveaux).
+    const union = fusionner(donnees, { familles: [], elements: [], forfaits });
+    const aRevoir = recalculerPacks(union);
+    const parIdUnion = new Map(union.forfaits.map((f) => [f.id, f]));
+    for (const contenu of contenusLus) {
+      for (const l of contenu) if (l.id && parIdUnion.get(l.id)?.contenu) Object.assign(l, { ht: parIdUnion.get(l.id).ht, ttc: parIdUnion.get(l.id).ttc });
+    }
+    for (const b of brouillons) {
+      if (!b.pack) continue;
+      const calcule = parIdUnion.get(b.id);
+      const tapes = [[b.pack.ht, calcule.ht, 'HT'], [b.pack.ttc, calcule.ttc, 'TTC']].filter(([t, c]) => t && lirePrix(t) !== c);
+      if (tapes.length) ignoresPacks.push(`${b.ref} : ${tapes.map(([t, , nom]) => `${t.slice(0, 20)} ${nom}`).join(' et ')} tapé${tapes.length > 1 ? 's' : ''} (calculé : ${formatPrix(calcule.ht)} HT, ${formatPrix(calcule.ttc)} TTC)`);
+    }
+    const packsARevoirTableau = forfaits.filter((f) => f.contenu && aRevoir.has(f.id)).map((f) => f.ref);
+    // Ce qui a été lu dans les cases Contenu, à vérifier avant d'importer : packs nouveaux ou modifiés seulement.
+    const deLOutil = new Set(donnees.forfaits);
+    const packsEcrits = forfaits.filter((f) => f.contenu && !deLOutil.has(f))
+      .map((f) => `${f.ref} : ${pluriel(f.contenu.length, 'ligne')}, ${formatPrix(parIdUnion.get(f.id).ttc)} TTC`);
+    const nbPacks = forfaits.filter((f) => f.contenu).length;
     try {
       // Même contrôle que pour un fichier de sauvegarde : longueurs, identifiants, prix.
       const entrant = valider({ format: FORMAT, version: VERSION_FORMAT, familles: [...donnees.familles, ...famillesCreees], elements: [...donnees.elements, ...elementsCrees], forfaits });
       return {
         entrant, nbForfaits: forfaits.length, nouvellesFamilles: famillesCreees.map((f) => f.nom), nouveauxElements, avertissements, avecExemples, surnomsRefuses,
-        rattaches: [...rattaches], refsEnDouble: [...refsEnDouble], packsIgnores,
+        rattaches: [...rattaches], refsEnDouble: [...refsEnDouble], ignoresPacks, packsARevoirTableau, packsEcrits, nbPacks,
       };
     } catch (err) {
       return { erreurs: [err.message] };
@@ -3654,14 +3817,14 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         [...analyse.erreurs.slice(0, max), ...(analyse.erreurs.length > max ? [`… et ${analyse.erreurs.length - max} autre(s) problème(s).`] : [])]);
       return;
     }
-    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses, rattaches, refsEnDouble, packsIgnores } = analyse;
+    const { entrant, nbForfaits, nouvellesFamilles, nouveauxElements, avertissements, avecExemples, surnomsRefuses, rattaches, refsEnDouble, ignoresPacks, packsARevoirTableau, packsEcrits, nbPacks } = analyse;
     const bilan = bilanFusion(entrant);
     const inchanges = nbForfaits - bilan.nouveaux - bilan.modifies;
     // Premier remplissage : le tableau ne contient pas d'exemples, et il en reste dans l'outil.
     const exemplesRestants = !avecExemples && donnees.forfaits.some((f) => f.exemple && !f.supprime);
     const choix = await demander({
       titre: 'Importer ce tableau ?',
-      message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}.`,
+      message: `${fichier.name} — ${pluriel(nbForfaits, 'forfait')}${nbPacks ? `, dont ${pluriel(nbPacks, 'pack')}` : ''}.`,
       liste: [
         `${bilan.nouveaux} nouveau${bilan.nouveaux > 1 ? 'x' : ''}, ${pluriel(bilan.modifies, 'modifié')}, ${inchanges} inchangé${inchanges > 1 ? 's' : ''}. Les autres forfaits de cet appareil ne bougent pas.`,
         resume('Prix qui changent', bilan.prix),
@@ -3671,7 +3834,9 @@ body:has(.barre-total.colonne:not([hidden])) .rappel { right: 392px; } /* le rap
         resume("Références présentes plusieurs fois dans l'outil : un seul de ces forfaits sera mis à jour, supprime l'autre", refsEnDouble),
         resume(`TTC à vérifier (différent de HT + ${TAUX_TVA})`, avertissements),
         resume("Surnoms ignorés (un surnom ne désigne qu'une seule chose, 3 au maximum)", surnomsRefuses),
-        resume("Packs laissés tels quels (le tableau ne modifie pas encore un pack : fais-le dans l'outil)", packsIgnores),
+        resume('Packs créés ou modifiés (vérifie leur contenu)', packsEcrits),
+        resume("Ignoré sur les packs (un pack prend le prix et les éléments de ses forfaits)", ignoresPacks),
+        resume(`Packs au prix à revoir (ils se contiennent l'un l'autre, ou sur plus de ${NIVEAUX_PACK} niveaux)`, packsARevoirTableau),
       ].filter(Boolean),
       boutons: [
         { texte: 'Importer', valeur: 'fusion', classe: exemplesRestants ? 'btn-bord' : 'btn-rouge' },

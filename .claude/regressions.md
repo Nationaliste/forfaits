@@ -299,3 +299,9 @@
 - Bug (roadmap#1252) : toutes les cartes étaient rendues : 5 000 forfaits, 13 s à l'ouverture et 1 à 7 s par lettre tapée (PC chargé, `outils/mesure_liste.py`).
 - À garder : `LIGNES_LISTE` (100) rangées, puis « Afficher plus » (bouton en bas, jamais au défilement) ; le compteur, les nombres des filtres, le tri et le forfait choisi portent sur TOUS les forfaits trouvés ; une autre recherche (texte, filtres, tri) repart de 100 (`etatUi.cleListe`).
 - Test : `tests/test_liste_limitee.py`.
+
+## 2026-11-26 — Case « Contenu » piégée : onglet figé, faux refus, aller-retour cassé
+- Où : `index.html`, `lireContenu`, `decouperContenu`, `avecPlusDans` (dans `analyserTableau`).
+- Bug (trouvé par la relecture du lot 2, avant fusion) : une ligne libre `[a:` suivie de milliers d'espaces faisait s'emballer l'expression des prix (temps cubique), et des milliers de « x » à la suite faisaient chercher une référence à chaque « x » (temps quadratique, avec un parcours de tous les forfaits) : l'onglet restait figé avant la fenêtre d'import. Une référence « 3Q+ » faisait refuser toute case contenant « 3Q + … » (comparaison de texte). Un nom de ligne libre « Pose [b » collait la suite de la case à sa ligne (crochets comptés comme imbriqués).
+- À garder : `MORCEAU_MAX` (200) contrôlé avant toute expression ; `supprimesParRef` (pas de `donnees.forfaits.find` dans `trouver`) ; `avecPlusDans` ne refuse que quand les morceaux s'alignent ET que la lecture séparée est fausse ; `decouperContenu` sans imbrication.
+- Test : `test_case_contenu_piegee_refusee_sans_figer_l_onglet`, `test_reference_avec_un_plus_ne_bloque_que_la_lecture_fausse`, `test_ligne_libre_au_crochet_jamais_ferme_se_relit`, `test_pack_present_deux_fois_dans_l_outil_annonce`.

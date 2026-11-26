@@ -6,7 +6,7 @@ Portée : toute l'appli (ordi et téléphone), écran principal d'abord ; les fe
 - Palettes épinglées par l'utilisateur : sombre et claire actuelles, inchangées.
 - Moment à retenir : le forfait dessiné comme une ligne, ses éléments en arrêts, son prix TTC au terminus.
 - Directions déjà montrées et refusées : le tarif de catalogue de pièces (tirage 1, 5, 7 du 13/11, « trop industriel », puis sa version adoucie). Ne pas y revenir : ni rail de filtres à gauche, ni tableau à en-têtes de colonnes.
-- Non décidé : police embarquée (aujourd'hui polices du système, l'outil marche sans internet).
+- Décidé le 26/11/2026 : pas de police embarquée, l'outil garde les polices du système (il marche sans internet et ne télécharge rien).
 
 ## Direction contract
 
@@ -22,7 +22,7 @@ FORM: la signalétique de transport d'aujourd'hui, n° 7 de la liste ; tirage 7,
 
 FINISH: relecture de fin faite le 16/11/2026, `disposition: fix` (4 points), `DESIGN.md` écrit. Suites données :
 - Dix lignes sur un écran d'ordi : rangées serrées de 58 à 50 px sur choix de l'utilisateur (10 entières à 1280×720, 11 à 1366×768 ; dans Edge sur un portable 1366×768, page de ~640 px de haut : 9).
-- Police sur Android (`system-ui`, donc pas Segoe) : non décidé, idée roadmap#1030 ; aucune capture d'un vrai téléphone n'a été jugée.
+- Police sur Android (`system-ui`, donc pas Segoe) : celle du téléphone, acceptée le 26/11/2026 (roadmap#1030) ; aucune capture d'un vrai téléphone n'a encore été jugée.
 - Filtre posé : la pastille pleine affiche l'élément seul, comme la maquette validée (la famille reste lue par les lecteurs d'écran) ; l'utilisateur garde aussi le retrait par « Tous » (pas de croix).
 - Pastille « Exemple » au-dessus du nom dans la fiche : gardée (marque de donnée déjà présente dans l'ancien outil et sur la maquette validée ; absente des vrais forfaits) ; le relecteur la tient pour un surtitre à retirer.
 - Page d'ordi peu haute (moins de 900 px, multiplié par la taille du texte) : le total sortait de l'écran sous la fiche (trouvé par la relecture du code). Maquette montrée et validée le 16/11/2026 : le total devient une barre rangée sous le panneau, qui ouvre sa feuille ; la fiche se serre.

@@ -57,10 +57,12 @@ FICHIERS_DU_SITE = {
 class _Serveur(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
     connect_src = b""  # adresse ajoutée à la CSP de la page (tests de mise à jour avec un cloud local)
+    # Servie à la place d'index.html le temps d'un test (voir servir_autre_page) ; None : le fichier du projet.
+    page_servie = None
 
     def do_GET(self):
         if self.connect_src and self.path.split("?")[0] in ("/", "/index.html"):
-            html = (RACINE / "index.html").read_bytes()
+            html = self.page_servie or (RACINE / "index.html").read_bytes()
             assert CONNECT_SRC in html, "CSP de index.html changée : mettre à jour CONNECT_SRC"
             corps = html.replace(CONNECT_SRC, CONNECT_SRC + b" " + self.connect_src)
             self.send_response(200)
@@ -296,6 +298,18 @@ def url_site_cloud(cloud):
     yield url
     serveur.shutdown()
     serveur.server_close()
+
+
+@pytest.fixture
+def servir_autre_page():
+    """Sert ce HTML (en octets) à la place d'index.html sur la page du cloud local, le temps du test : une page
+    restée à la version d'avant. page.route ne convient pas : Chromium refuse alors à la page l'accès au cloud local."""
+
+    def servir(html):
+        _Serveur.page_servie = html
+
+    yield servir
+    _Serveur.page_servie = None
 
 
 @pytest.fixture

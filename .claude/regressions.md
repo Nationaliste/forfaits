@@ -322,3 +322,9 @@
 - Bug (trouvé pendant la construction des packs) : le `ht`/`ttc` d'un pack est un cache, et il entre dans `canonique`. À date égale, deux appareils dont l'un n'a pas encore reçu le nouveau prix d'un forfait avaient deux caches différents : `gagne` départageait par le contenu et le bilan comptait le pack « modifié », avec un « prix qui change ».
 - À garder : `fusionner` rend des copies de packs aux caches recalculés sur l'union, et `bilanFusion` recalcule lui-même les deux côtés (l'union pour « Mettre à jour », le fichier seul pour « Remplacer tout »), sur des copies : aucun appelant (fichier, tableau, synchro) n'a à y penser. `recalculerPacks` ne touche jamais à `maj`.
 - Test : `test_meme_pack_qui_ne_differe_que_par_le_cache_n_est_pas_modifie` (échoue sans le recalcul dans `bilanFusion`), `test_le_prix_d_un_forfait_remonte_dans_le_pack_sans_toucher_a_sa_date`.
+
+## 2026-11-26 — Pack renvoyé au cloud pour son seul cache de prix
+- Où : `index.html`, `apporte` et `remplacerParEquipe` (synchro), `avecCaches`.
+- Bug (trouvé en fusionnant les packs dans la branche de synchro, avant toute mise en ligne) : ces deux fonctions comparaient par `gagne` et `canonique` les données du cloud telles quelles. Un pack qui ne différait que par son cache (`ht`/`ttc` recalculés) gagnait le départage à date égale : le responsable le renvoyait au cloud, l'appareil de consultation annonçait « Forfaits mis à jour » pour rien.
+- À garder : les deux côtés comparés sur des copies aux caches recalculés (`avecCaches`, sur l'union pour `apporte`, sur lui-même pour `remplacerParEquipe`).
+- Test : `test_un_pack_qui_ne_differe_que_par_son_cache_ne_repart_pas_au_cloud` (tests/test_synchro_fusion.py).

@@ -11,6 +11,7 @@ import time
 from conftest import CODE_SECOURS, RACINE, appel_cloud
 from playwright.sync_api import expect
 from test_forfaits import activer_modif, dialogue
+from test_packs import pack, page_de_la_version_d_avant
 from test_synchro import (
     ajouter_forfait,
     attendre_envoi,
@@ -22,6 +23,7 @@ from test_synchro import (
     fermer,
     ouvrir_maj,
     sonde,
+    ttc_de,
     verifier_maintenant,
 )
 
@@ -245,3 +247,75 @@ def test_une_page_plus_ancienne_que_le_cloud_passe_en_lecture_seule(cloud_vide, 
     dialogue(patron.page).get_by_role("button", name=re.compile("^Exporter")).click()
     expect(dialogue(patron.page)).to_contain_text("Exporter")
     expect(patron.page.locator("#toast")).not_to_contain_text("recharge la page")
+
+
+# Les messages passés dans #toast à partir de maintenant (le dernier message reste écrit : vidé d'abord).
+NOTER_LES_MESSAGES = """() => {
+    window.__messages = [];
+    const toast = document.getElementById('toast');
+    toast.textContent = '';
+    new MutationObserver(() => window.__messages.push(toast.textContent))
+        .observe(toast, { childList: true, characterData: true, subtree: true });
+}"""
+
+
+def pack_zorba():
+    ligne = {"id": "fft-zorba", "nom": "ZORBA 1", "qte": 1, "ht": 10000, "ttc": 12000}
+    return pack("pck-zorba", "PK-ZORBA", [ligne], "Pack Zorba", maj=maintenant() - 60000)
+
+
+def test_un_pack_qui_ne_differe_que_par_son_cache_ne_repart_pas_au_cloud(cloud_vide, appareils_maj):
+    """Le prix d'un pack est un cache recalculé sur chaque appareil, et il entre dans canonique : comparé tel quel
+    (apporte, remplacerParEquipe), un cache vieilli dans le cloud faisait renvoyer le pack, ou annoncer une mise à jour
+    qui ne changeait rien."""
+    patron = appareils_maj()
+    poser_donnees(patron.page, forfaits=[forfait("fft-zorba", "ZORBA 1"), pack_zorba()])
+    connecter_premier(patron.page, cloud_vide)
+    vendeur = appareils_maj()
+    connecter_avec_lien(vendeur.page, creer_lien(patron.page))
+    attendre_forfait(vendeur.page, "PK-ZORBA")
+
+    # Les mêmes données, sauf le cache du pack (un appareil qui ne l'avait pas encore recalculé). Le vrai cache vaut
+    # 10000 HT : à date égale, celui de l'appareil gagne le départage de canonique, donc il repartait au cloud.
+    vieilli = donnees(patron.page)
+    p = next(f for f in vieilli["forfaits"] if f["id"] == "pck-zorba")
+    p["ht"], p["ttc"] = 1, 1
+    version = envoyer_au_cloud(cloud_vide, patron.page.evaluate(CHIFFRER, [CLE_CLOUD, vieilli]))
+
+    for a in (patron, vendeur):
+        a.page.evaluate(NOTER_LES_MESSAGES)
+        verifier_maintenant(a.page)
+    assert sonde(cloud_vide)["version"] == version  # rien n'est reparti au cloud
+    for a in (patron, vendeur):
+        messages = a.page.evaluate("window.__messages")
+        assert not any("mis à jour" in m for m in messages), messages
+        expect(ttc_de(a.page, "PK-ZORBA")).to_contain_text("120,00")
+
+
+def test_une_page_restee_au_format_2_refuse_un_pack_venu_du_cloud(cloud_vide, appareils_maj, servir_autre_page):
+    """Un onglet resté sur la page d'avant les packs reçoit, par le cloud, des données au format 3 avec un pack :
+    lecture seule (cloudFutur), bandeau « Recharger », ni le pack affiché, ni rien d'écrit, ni rien d'envoyé."""
+    patron = appareils_maj()
+    servir_autre_page(page_de_la_version_d_avant().encode("utf-8"))
+    contenu = {"format": "forfaits-comptoir", "version": VERSION_FORMAT - 1, "familles": [], "elements": [],
+               "forfaits": [forfait("fft-zorba", "ZORBA 1")]}
+    patron.page.evaluate("([c, v]) => localStorage.setItem(c, v)", [CLE_DONNEES, json.dumps(contenu)])
+    patron.page.reload()
+    patron.page.wait_for_selector("#resultats .carte")
+    assert f"const VERSION_FORMAT = {VERSION_FORMAT - 1};" in patron.page.content()
+    connecter_premier(patron.page, cloud_vide)
+    attendre_forfait(patron.page, "ZORBA 1")
+    avant = donnees(patron.page)
+
+    suivant = {"format": "forfaits-comptoir", "version": VERSION_FORMAT, "familles": [], "elements": [],
+               "forfaits": [forfait("fft-zorba", "ZORBA 1"), pack_zorba()]}
+    version = envoyer_au_cloud(cloud_vide, patron.page.evaluate(CHIFFRER, [CLE_CLOUD, suivant]))
+    ouvrir_maj(patron.page).locator("#maj-maintenant").click()
+    expect(patron.page.locator("#bandeaux")).to_contain_text("version plus récente de l'outil", timeout=20000)
+    expect(patron.page.locator("#btn-recharger-futur")).to_be_visible()
+    expect(patron.page.locator("dialog[open]")).to_have_count(0)
+    attendre_forfait(patron.page, "ZORBA 1")  # ses forfaits restent lisibles
+    attendre_sans_forfait(patron.page, "PK-ZORBA")
+    patron.page.evaluate("window.dispatchEvent(new Event('online'))")  # la synchro repartirait
+    assert sonde(cloud_vide)["version"] == version
+    assert donnees(patron.page) == avant
